@@ -1,5 +1,6 @@
 import type { CursorClient } from "./cursor-client.js";
-import { buildFlowMxfile, hasDrawioDiagram } from "./diagrams.js";
+import { buildFlowMxfile } from "./diagrams.js";
+import { analyzeDraftHeuristics, enforceStrictJudgment } from "./judge.js";
 import { renderTemplate } from "./template.js";
 import type {
   BriefInput,
@@ -161,9 +162,15 @@ export class WritingOrchestrator {
             passed: false,
             route: "revise",
             feedback:
-              "Manager returned unparseable JSON. Revise for clarity and add draw.io diagram blocks.",
+              "Manager returned unparseable JSON. Revise for clarity; add code+output+explanation, draw.io diagram, and a stronger hook.",
             summary: "Parse failure — forcing revise",
           };
+          // Strict user-perspective enforcement: hard-cap soft LLM scores
+          evaluation = enforceStrictJudgment(
+            this.config,
+            evaluation,
+            state.draft || "",
+          );
           if (
             evaluation.route === "done" &&
             !criteriaMet(this.config, evaluation)
@@ -455,52 +462,98 @@ Readers want clarity, credible framing, and something they can use today.
 
 ![Framework overview](image-brief:plan-research-write-loop "Place after intro")
 
-${brief} rewards a disciplined loop: plan what matters, research what is true, and write what helps.
+What if your writing system refused to soft-exit?
+
+${brief} rewards a disciplined loop: plan what matters, research what is true, and write what helps — then prove it with code, output, and a diagram the reader can feel.
 
 \`\`\`drawio
 ${mx}
 \`\`\`
 
 ## Why this matters
-Readers do not need more noise. They need a path from confusion to a usable next step.
+Readers do not need more noise. They need a path from confusion to a usable next step — and a reason to keep scrolling.
+
+## Try this snippet
+Here is a tiny quality gate you can run mentally (or in a REPL) whenever a draft claims it is "done":
+
+\`\`\`javascript
+function clearsBar(scores, thresholds) {
+  return Object.entries(thresholds).every(
+    ([id, min]) => Number(scores[id] ?? 0) >= min
+  );
+}
+
+const thresholds = {
+  correctness: 0.85,
+  clarity: 0.85,
+  helpfulness: 0.85,
+  code_output: 0.85,
+  visual_feedback: 0.85,
+  addictive: 0.8,
+};
+
+console.log(
+  clearsBar(
+    { correctness: 0.9, clarity: 0.88, helpfulness: 0.9, code_output: 0.9, visual_feedback: 0.9, addictive: 0.85 },
+    thresholds
+  )
+);
+\`\`\`
+
+Output:
+
+\`\`\`text
+true
+\`\`\`
+
+Explanation: every criterion must clear its floor. If any score is missing or soft, \`clearsBar\` returns false — the same posture as Quill's manager: revise by default.
 
 ## The playbook
-1. **Plan** — name the audience, outline the sections, list research questions.
+1. **Plan** — name the audience, outline the sections, list research questions, and plant open loops.
 2. **Research** — gather durable facts; mark uncertainty honestly.
-3. **Write** — turn the plan into scannable prose with one clear idea per section.
-4. **Judge** — score correctness, helpfulness, clarity, images, and diagrams; revise until the bar is met.
+3. **Write** — turn the plan into scannable prose with code, output, explanation, and visual feedback.
+4. **Judge** — score correctness, clarity, helpfulness, code_output, visual_feedback, and addictive pull; revise until the bar is met.
 
 ## Pitfalls
 - Inventing citations
-- Skipping visuals and draw.io workflow graphs
+- Shipping prose without code+output+explanation
+- Skipping draw.io workflow graphs or image briefs
 - Writing before the questions are clear
+- Flat tone with no hook or challenge
 
-## Takeaway
-Treat writing as an iterative system, not a single flash of inspiration.
+## Your turn
+Run one draft through a hard gate today. If any criterion fails, revise — do not publish on vibes.
 ${feedback ? `\n<!-- addressed feedback: ${feedback.slice(0, 200)} -->` : ""}
 `;
   }
 
   if (agentKey === "manager") {
-    const hasImage = /!\[/.test(prompt) || /image-brief:/.test(prompt);
-    const hasDiagram = hasDrawioDiagram(prompt);
+    const draftMatch = prompt.match(/Draft:\n([\s\S]*?)(?:\n\nIteration:|$)/);
+    const draft = draftMatch?.[1] ?? prompt;
+    const report = analyzeDraftHeuristics(draft);
     const draftSection = prompt.includes("Draft:");
     const scores = {
-      correctness: draftSection ? 0.88 : 0.4,
-      helpfulness: draftSection ? 0.86 : 0.4,
-      clarity: draftSection ? 0.84 : 0.4,
-      images: hasImage ? 0.9 : 0.3,
-      diagrams: hasDiagram ? 0.92 : 0.2,
+      correctness: draftSection ? 0.9 : 0.4,
+      clarity: draftSection ? 0.88 : 0.4,
+      helpfulness: draftSection ? 0.88 : 0.4,
+      code_output:
+        report.hasCodeFence && report.hasOutputSignal && report.hasCodeExplanation
+          ? 0.9
+          : 0.35,
+      visual_feedback:
+        report.hasDrawio && report.hasImageBrief ? 0.9 : 0.4,
+      addictive: report.hasAddictiveHooks ? 0.86 : 0.45,
     };
     const thresholds: Record<string, number> = {
-      correctness: 0.8,
-      helpfulness: 0.8,
-      clarity: 0.75,
-      images: 0.7,
-      diagrams: 0.8,
+      correctness: 0.85,
+      clarity: 0.85,
+      helpfulness: 0.85,
+      code_output: 0.85,
+      visual_feedback: 0.85,
+      addictive: 0.8,
     };
     const passed = Object.entries(scores).every(
-      ([k, s]) => s >= (thresholds[k] ?? 0.75),
+      ([k, s]) => s >= (thresholds[k] ?? 0.85),
     );
     return JSON.stringify(
       {
@@ -509,10 +562,23 @@ ${feedback ? `\n<!-- addressed feedback: ${feedback.slice(0, 200)} -->` : ""}
         route: passed ? "done" : "revise",
         feedback: passed
           ? ""
-          : "Add a fenced ```drawio mxfile workflow diagram, keep at least one image brief, tighten the intro, and ensure each section answers a research question.",
+          : [
+              !report.hasCodeFence || !report.hasOutputSignal || !report.hasCodeExplanation
+                ? "Add a real code fence, show sample output, and explain it."
+                : "",
+              !report.hasDrawio || !report.hasImageBrief
+                ? "Add ```drawio mxfile visual feedback AND an image brief."
+                : "",
+              !report.hasAddictiveHooks
+                ? "Strengthen the hook, open loops, and closing challenge (addictive)."
+                : "",
+              "Tighten correctness and clarity from the reader's seat.",
+            ]
+              .filter(Boolean)
+              .join(" "),
         summary: passed
-          ? "Draft meets publish criteria including draw.io diagrams."
-          : "Draft needs another revision pass (check diagrams criterion).",
+          ? "Draft clears the strict user-perspective bar."
+          : "Draft failed strict gates — revise required.",
       },
       null,
       2,

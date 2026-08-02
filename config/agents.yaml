@@ -31,47 +31,66 @@ app:
   public_dir: public
 
 # Quality goal the manager must satisfy before the graph exits.
+# Criteria are written from the reader's point of view and enforced strictly
+# (YAML thresholds + heuristic caps in src/judge.ts).
 goal:
   name: publishable_article
-  max_iterations: 5
+  max_iterations: 6
   # Manager must return route "done" AND every criterion score >= threshold
   require_all_criteria: true
   criteria:
     - id: correctness
       label: Correctness
       description: >
-        Claims are accurate, sources are respected, no invented facts or
-        citations. Numbers and names match research notes when present.
-      weight: 1.0
-      threshold: 0.8
-    - id: helpfulness
-      label: Helpfulness
-      description: >
-        The piece answers the reader's intent, is actionable, well-structured,
-        and complete for the requested format/length.
-      weight: 1.0
-      threshold: 0.8
+        From the reader's seat: can I trust this? No invented facts, fake
+        citations, or hand-wavy claims. Every concrete claim should be backed
+        by the research notes or clearly marked as opinion/uncertainty.
+        Deduct heavily for confidence without evidence.
+      weight: 1.2
+      threshold: 0.85
     - id: clarity
       label: Clarity
       description: >
-        Prose is clear, scannable, and free of fluff. Headings and paragraphs
-        guide the reader.
-      weight: 0.8
-      threshold: 0.75
-    - id: images
-      label: Images
+        A busy reader can skim headings and still get the point. Short
+        paragraphs, unambiguous words, one idea per section. Fail if the
+        piece feels dense, vague, or requires re-reading to understand.
+      weight: 1.0
+      threshold: 0.85
+    - id: helpfulness
+      label: Helpfulness
       description: >
-        Includes at least one concrete image brief or markdown image placeholder
-        with alt text and placement notes that fit the article.
-      weight: 0.6
-      threshold: 0.7
-    - id: diagrams
-      label: Diagrams (draw.io)
+        The reader leaves with something they can use today — a playbook,
+        checklist, decision rule, or worked example that matches the brief.
+        Fail if the piece is generic advice without a concrete next step.
+      weight: 1.0
+      threshold: 0.85
+    - id: code_output
+      label: Code · Output · Explanation
       description: >
-        Includes at least one draw.io (diagrams.net) workflow, architecture, or
-        explanation graph as a fenced ```drawio mxfile block. The diagram must
-        clarify a process or structure in the article — not decorative filler.
-        Prefer labeled boxes and arrows (flowchart / pipeline / decision tree).
+        For technical or how-to briefs (and whenever code would help): include
+        (1) a real fenced code block, (2) the expected or sample output/
+        result shown nearby, and (3) a plain-language explanation of what
+        the code does and why the output looks that way. All three must
+        appear together. Score near zero if any leg is missing.
+      weight: 1.2
+      threshold: 0.85
+    - id: visual_feedback
+      label: Visual feedback
+      description: >
+        The reader gets visual confirmation of the system or story: at least
+        one draw.io (```drawio mxfile) workflow/architecture diagram AND at
+        least one image brief/markdown image with alt text. Diagrams must
+        explain a process (not decoration). Fail if either is missing or
+        disconnected from the prose.
+      weight: 1.1
+      threshold: 0.85
+    - id: addictive
+      label: Addictive
+      description: >
+        The piece creates a pull to keep reading and try the idea: a strong
+        hook, open loops that pay off, progressive reveals, direct "you"
+        address, and a memorable close or challenge. Fail if it reads flat,
+        academic-only, or easy to abandon mid-scroll.
       weight: 1.0
       threshold: 0.8
 
@@ -96,14 +115,16 @@ agents:
       Target length: {{length}}
 
       Produce a concise writing plan with:
-      1. Working title options (2–3)
-      2. Audience insight (1 short paragraph)
-      3. Outline with H2/H3 sections
+      1. Working title options (2–3) — lead with a hook title
+      2. Audience insight (1 short paragraph) — what they fear / want
+      3. Outline with H2/H3 sections and where curiosity pays off
       4. Research questions that must be answered
-      5. Success criteria for the final article
-      6. Suggested image opportunities (where visuals help)
-      7. Required draw.io diagrams — list each workflow / architecture /
-         explanation graph the Writer must include (name, purpose, placement)
+      5. Success criteria for the final article (user-perspective)
+      6. Code · output · explanation beats — which snippets and sample
+         results the Writer must show
+      7. Visual feedback — required draw.io diagrams + image briefs
+         (name, purpose, placement)
+      8. Addictive devices — hook, open loops, challenge/close
 
       Output markdown only. No preamble.
 
@@ -133,6 +154,8 @@ agents:
       - Image research notes (what to depict, style hints)
       - Diagram specs for draw.io: node labels, edge labels, and the story
         each workflow/architecture graph should tell
+      - Code · output pairs worth demonstrating (language, snippet intent,
+        what the reader should see when it runs)
 
       Output markdown only. No preamble.
 
@@ -170,18 +193,23 @@ agents:
       {{draft}}
       {% endif %}
 
-      Write a complete article in markdown.
+      Write a complete article in markdown optimized for a busy reader who
+      should feel pulled to keep reading and then try something.
+
       Requirements:
       - Follow the plan structure unless feedback says otherwise
       - Ground claims in the research notes; do not invent facts
+      - Open with a hook (tension, question, or surprising claim)
       - Include at least one image using markdown image syntax with descriptive
         alt text, e.g. ![alt](image-brief:short-slug "placement note")
       - Include at least one draw.io diagram as a fenced ```drawio block with
-        valid <mxfile>…</mxfile> XML. Use it to explain a workflow, architecture,
-        or decision graph (boxes + arrows). Place it next to the section it
-        clarifies. Prefer draw.io over mermaid for this requirement.
+        valid <mxfile>…</mxfile> XML explaining a workflow/architecture
+      - Include at least one fenced code block (real language, not drawio) PLUS
+        a nearby sample/expected output (fenced text/output or labeled Output:)
+        PLUS a short explanation of what the code does and why the output
+        looks that way
       - Use clear headings and scannable paragraphs
-      - End with a short takeaway or next step when appropriate
+      - Close with a memorable takeaway or challenge that creates urge to act
 
       Draw.io tips:
       - Root cells id="0" and parent id="1" are required
@@ -201,9 +229,9 @@ agents:
     # Manager must emit structured JSON the orchestrator can parse
     response_format: json
     instruction: |
-      You are the Manager / quality gate for a writing pipeline.
-      Your job is to decide whether the draft meets the publish goal or must
-      be revised. Be strict but fair.
+      You are a STRICT Manager / quality gate judging from the READER's seat.
+      Default posture: revise. Only pass when the draft would delight a busy,
+      skeptical user — not when it is merely "good enough."
 
       Brief:
       {{brief}}
@@ -217,10 +245,10 @@ agents:
       Draft:
       {{draft}}
 
-      Quality criteria (score each from 0.0 to 1.0):
+      Quality criteria (score each from 0.0 to 1.0 — be harsh):
       {% for c in criteria %}
       - {{c.id}} ({{c.label}}): {{c.description}}
-        Threshold: {{c.threshold}}
+        Threshold: {{c.threshold}} — scores below this MUST force route=revise
       {% endfor %}
 
       Iteration: {{iteration}} of {{max_iterations}}
@@ -229,10 +257,11 @@ agents:
       {
         "scores": {
           "correctness": 0.0,
-          "helpfulness": 0.0,
           "clarity": 0.0,
-          "images": 0.0,
-          "diagrams": 0.0
+          "helpfulness": 0.0,
+          "code_output": 0.0,
+          "visual_feedback": 0.0,
+          "addictive": 0.0
         },
         "passed": false,
         "route": "revise" | "done",
@@ -240,19 +269,20 @@ agents:
         "summary": "one-sentence verdict"
       }
 
-      Rules:
-      - Set route to "done" ONLY if every criterion score >= its threshold
-        AND passed is true.
-      - Otherwise route must be "revise" with concrete feedback the Writer
-        can act on (call out missing draw.io diagrams, missing images, weak
-        sections, factual gaps).
-      - For the "diagrams" criterion: score high only if the draft contains a
-        fenced ```drawio (or ```diagrams.net / ```mxfile) block with mxfile XML
-        that explains a process or structure. Mermaid alone is not enough for
-        a passing diagrams score.
+      Strict rules:
+      - Set route to "done" ONLY if EVERY criterion score >= its threshold
+        AND passed is true. When in doubt, revise.
+      - Do NOT inflate scores for effort or length. Score the reader experience.
+      - code_output: require code fence + shown output/result + explanation.
+        Missing any leg → score <= 0.5.
+      - visual_feedback: require ```drawio mxfile AND an image brief. Missing
+        either → score <= 0.5. Mermaid alone does not pass.
+      - addictive: require hook, payoff loops, and a close that creates urge
+        to try/share. Flat or purely academic tone → score <= 0.55.
+      - Feedback must name the failing criteria and exact fixes (where to add
+        code+output, which diagram, how to sharpen the hook).
       - If this is the final allowed iteration and quality is still below bar,
-        still return route "revise" unless criteria are met; the orchestrator
-        will stop on max iterations.
+        still return route "revise"; the orchestrator stops on max iterations.
 
 # Graph flow — deterministic edges + conditional manager routing.
 # Inspired by ADK-style workflow graphs: nodes + edges + route maps.
