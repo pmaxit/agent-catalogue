@@ -33,6 +33,10 @@
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 4h9l3 3v13H6z" stroke="currentColor" stroke-width="1.6"/><path d="M9 12h6M9 16h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
             Draft
           </a>
+          <span class="side-label">Library</span>
+          <div id="articles-list" class="articles-list" aria-live="polite">
+            <p class="side-hint">Loading articles…</p>
+          </div>
           <span class="side-label">Workspace</span>
           <button type="button" class="side-link" id="menu-new-piece">
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
@@ -292,6 +296,8 @@
                 </div>
                 <div class="draft-actions">
                   <button type="button" class="btn btn-primary sm" id="publish-btn">Publish</button>
+                  <button type="button" class="btn btn-ghost sm" id="save-btn" hidden>Save edit</button>
+                  <button type="button" class="btn btn-ghost sm" id="history-btn" hidden>History</button>
                   <button type="button" class="btn btn-ghost sm" id="copy-btn">Copy</button>
                   <button type="button" class="btn btn-ghost sm" id="download-btn">Download MD</button>
                 </div>
@@ -307,9 +313,17 @@
                 <div class="editor-bar-left">
                   <span class="mono-stamp">Block editor</span>
                   <span class="blocks-count" id="blocks-count">0 blocks</span>
+                  <span class="mono-stamp" id="article-meta"></span>
                 </div>
                 <button type="button" class="btn btn-ghost sm" id="add-block-btn">Add paragraph</button>
               </div>
+              <aside class="history-panel" id="history-panel" hidden>
+                <div class="panel-head">
+                  <div class="head-title"><span>Revision history</span></div>
+                  <button type="button" class="btn btn-ghost sm" id="close-history-btn">Close</button>
+                </div>
+                <ol class="history-list" id="history-list"></ol>
+              </aside>
             </div>
           </div>
         </section>

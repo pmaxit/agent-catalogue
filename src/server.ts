@@ -4,6 +4,13 @@ import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
 import { isMockMode, loadConfig, resolveApiKey } from "./config.js";
 import { CursorClient } from "./cursor-client.js";
+import {
+  ArticleStore,
+  SAMPLE_ARTICLES,
+  blocksToMarkdown,
+  type Block,
+  type PublishInput,
+} from "./db.js";
 import { WritingOrchestrator } from "./orchestrator.js";
 import type { BriefInput, PipelineEvent } from "./types.js";
 
@@ -22,6 +29,9 @@ const client =
     : null;
 
 const orchestrator = new WritingOrchestrator(config, client, mock);
+const store = new ArticleStore();
+const seeded = store.seedIfEmpty(SAMPLE_ARTICLES);
+
 const port = Number(config.app.port) || 8080;
 const publicDir = resolve(process.cwd(), config.app.public_dir);
 
@@ -39,6 +49,11 @@ app.get("/api/health", async () => ({
   workflow: config.workflow.name,
   goal: config.goal.name,
   agents: Object.keys(config.agents),
+  sqlite: {
+    path: store.path,
+    articles: store.list(1000).length,
+    seeded,
+  },
 }));
 
 app.get("/api/config", async () => ({
@@ -81,6 +96,154 @@ app.get("/api/config", async () => ({
   },
 }));
 
+type ArticleBody = {
+  id?: string;
+  slug?: string;
+  title?: string;
+  bodyMarkdown?: string;
+  bodyHtml?: string;
+  blocks?: Block[];
+  brief?: string;
+  audience?: string;
+  tone?: string;
+  format?: string;
+  length?: string;
+  theme?: string;
+  goal?: string;
+  changeSummary?: string;
+  status?: "draft" | "published";
+};
+
+function toPublishInput(body: ArticleBody): PublishInput {
+  const blocks = body.blocks;
+  const bodyMarkdown =
+    body.bodyMarkdown?.trim() ||
+    (blocks && blocks.length ? blocksToMarkdown(blocks) : "");
+  return {
+    id: body.id,
+    slug: body.slug,
+    title: body.title,
+    bodyMarkdown,
+    bodyHtml: body.bodyHtml,
+    blocks,
+    changeSummary: body.changeSummary,
+    status: body.status ?? "published",
+    meta: {
+      brief: body.brief,
+      audience: body.audience,
+      tone: body.tone,
+      format: body.format,
+      length: body.length,
+      theme: body.theme,
+      goal: body.goal,
+    },
+  };
+}
+
+app.get("/api/articles", async () => {
+  const articles = store.list().map((a) => ({
+    id: a.id,
+    slug: a.slug,
+    title: a.title,
+    status: a.status,
+    revision: a.revision,
+    theme: a.theme,
+    goal: a.goal,
+    updated_at: a.updated_at,
+    published_at: a.published_at,
+    created_at: a.created_at,
+  }));
+  return { articles };
+});
+
+app.get<{ Params: { id: string } }>("/api/articles/:id", async (req, reply) => {
+  const article = store.get(req.params.id);
+  if (!article) return reply.code(404).send({ error: "Article not found" });
+  let blocks: Block[] = [];
+  try {
+    blocks = JSON.parse(article.blocks_json) as Block[];
+  } catch {
+    blocks = [];
+  }
+  return { article: { ...article, blocks } };
+});
+
+app.get<{ Params: { id: string } }>(
+  "/api/articles/:id/history",
+  async (req, reply) => {
+    const article = store.get(req.params.id);
+    if (!article) return reply.code(404).send({ error: "Article not found" });
+    const revisions = store.history(article.id).map((r) => ({
+      id: r.id,
+      revision: r.revision,
+      title: r.title,
+      change_summary: r.change_summary,
+      created_at: r.created_at,
+    }));
+    return { articleId: article.id, revisions };
+  },
+);
+
+app.get<{ Params: { id: string; rev: string } }>(
+  "/api/articles/:id/revisions/:rev",
+  async (req, reply) => {
+    const article = store.get(req.params.id);
+    if (!article) return reply.code(404).send({ error: "Article not found" });
+    const rev = Number(req.params.rev);
+    if (!Number.isFinite(rev)) {
+      return reply.code(400).send({ error: "Invalid revision" });
+    }
+    const revision = store.getRevision(article.id, rev);
+    if (!revision) return reply.code(404).send({ error: "Revision not found" });
+    let blocks: Block[] = [];
+    try {
+      blocks = JSON.parse(revision.blocks_json) as Block[];
+    } catch {
+      blocks = [];
+    }
+    return { revision: { ...revision, blocks } };
+  },
+);
+
+app.post<{ Body: ArticleBody }>("/api/articles", async (req, reply) => {
+  try {
+    const article = store.publish(toPublishInput(req.body ?? {}));
+    let blocks: Block[] = [];
+    try {
+      blocks = JSON.parse(article.blocks_json) as Block[];
+    } catch {
+      blocks = [];
+    }
+    return reply.code(201).send({ article: { ...article, blocks } });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return reply.code(400).send({ error: message });
+  }
+});
+
+app.put<{ Params: { id: string }; Body: ArticleBody }>(
+  "/api/articles/:id",
+  async (req, reply) => {
+    const existing = store.get(req.params.id);
+    if (!existing) return reply.code(404).send({ error: "Article not found" });
+    try {
+      const article = store.publish(
+        toPublishInput({ ...(req.body ?? {}), id: existing.id }),
+      );
+      let blocks: Block[] = [];
+      try {
+        blocks = JSON.parse(article.blocks_json) as Block[];
+      } catch {
+        blocks = [];
+      }
+      return { article: { ...article, blocks } };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return reply.code(400).send({ error: message });
+    }
+  },
+);
+
 app.post<{ Body: BriefInput }>("/api/run", async (req, reply) => {
   const body = req.body ?? ({} as BriefInput);
   if (!body.brief || typeof body.brief !== "string" || !body.brief.trim()) {
@@ -100,7 +263,6 @@ app.post<{ Body: BriefInput }>("/api/run", async (req, reply) => {
     reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
   };
 
-  // Optional cancel: client abort closes the socket; we stop emitting.
   const ac = new AbortController();
   const stop = () => {
     if (!ac.signal.aborted) ac.abort();
@@ -145,6 +307,17 @@ app.post<{ Body: BriefInput }>("/api/run", async (req, reply) => {
   }
 });
 
+const shutdown = () => {
+  try {
+    store.close();
+  } catch {
+    /* ignore */
+  }
+  process.exit(0);
+};
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
+
 await app.listen({ port, host: "0.0.0.0" });
 app.log.info(
   {
@@ -152,6 +325,8 @@ app.log.info(
     mock,
     config: "config/agents.yaml",
     title: config.app.title,
+    sqlite: store.path,
+    seeded,
   },
   "writing-agent listening",
 );

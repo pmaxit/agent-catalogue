@@ -31,6 +31,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const iterationBadge = document.getElementById("iteration-badge");
   const publishedBadge = document.getElementById("published-badge");
   const publishBtn = document.getElementById("publish-btn");
+  const saveBtn = document.getElementById("save-btn");
+  const historyBtn = document.getElementById("history-btn");
+  const closeHistoryBtn = document.getElementById("close-history-btn");
+  const historyPanel = document.getElementById("history-panel");
+  const historyList = document.getElementById("history-list");
+  const articlesList = document.getElementById("articles-list");
+  const articleMeta = document.getElementById("article-meta");
   const copyBtn = document.getElementById("copy-btn");
   const downloadBtn = document.getElementById("download-btn");
   const editorBar = document.getElementById("editor-bar");
@@ -44,9 +51,13 @@ document.addEventListener("DOMContentLoaded", () => {
   let currentGoal = "Thought Leadership & Opinion Essay";
   let currentTheme = "Agentic Command";
   let currentDraftText = "";
+  let currentArticleId = null;
+  let currentArticleSlug = null;
   let isPublished = false;
   let blocks = [];
   let criterionThreshold = 0.75;
+  let saveTimer = null;
+  let saving = false;
 
   const escapeHtml = (str) =>
     String(str)
@@ -112,7 +123,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   menuPublishToggle.addEventListener("click", () => {
-    if (currentDraftText) enablePublishMode();
+    if (currentDraftText) enablePublishMode(true);
     else
       window.alert(
         "Run the agent pipeline to generate a draft before publishing.",
@@ -120,8 +131,8 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   menuAddBlock.addEventListener("click", () => {
-    if (!isPublished) enablePublishMode();
-    if (isPublished) addNewBlockBelow(blocks.length - 1);
+    if (!isPublished) enablePublishMode(true);
+    else addNewBlockBelow(blocks.length - 1);
   });
 
   menuExport.addEventListener("click", triggerDownload);
@@ -222,6 +233,13 @@ document.addEventListener("DOMContentLoaded", () => {
     publishedBadge.hidden = true;
     editorBar.hidden = true;
     isPublished = false;
+    currentArticleId = null;
+    currentArticleSlug = null;
+    blocks = [];
+    if (saveBtn) saveBtn.hidden = true;
+    if (historyBtn) historyBtn.hidden = true;
+    if (articleMeta) articleMeta.textContent = "";
+    if (historyPanel) historyPanel.hidden = true;
     articleCanvas.classList.remove("block-editor-active");
     streamStatus.textContent = "Pipeline active";
     liveDot.classList.add("pulsating");
@@ -362,10 +380,221 @@ document.addEventListener("DOMContentLoaded", () => {
     articleCanvas.innerHTML = `<p>${html}</p>`;
   }
 
-  publishBtn.addEventListener("click", enablePublishMode);
+  publishBtn.addEventListener("click", () => enablePublishMode(true));
+  saveBtn?.addEventListener("click", () => persistArticle("Manual save"));
+  historyBtn?.addEventListener("click", loadHistory);
+  closeHistoryBtn?.addEventListener("click", () => {
+    historyPanel.hidden = true;
+  });
   addBlockBtn.addEventListener("click", () => addNewBlockBelow(blocks.length - 1));
 
-  function enablePublishMode() {
+  function blocksToMarkdown(list) {
+    return list
+      .map((b) => {
+        const text = b.text ?? "";
+        if (b.type === "h1") return `# ${text}`;
+        if (b.type === "h2") return `## ${text}`;
+        if (b.type === "h3") return `### ${text}`;
+        if (b.type === "blockquote")
+          return text
+            .split("\n")
+            .map((line) => `> ${line}`)
+            .join("\n");
+        if (b.type === "list")
+          return text
+            .split("\n")
+            .filter(Boolean)
+            .map((line) => (line.startsWith("- ") ? line : `- ${line}`))
+            .join("\n");
+        return text;
+      })
+      .join("\n\n");
+  }
+
+  function scheduleSave() {
+    if (!currentArticleId) return;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => persistArticle("Autosave edit"), 900);
+  }
+
+  function setLibraryUi(article) {
+    currentArticleId = article.id;
+    currentArticleSlug = article.slug;
+    if (saveBtn) saveBtn.hidden = false;
+    if (historyBtn) historyBtn.hidden = false;
+    if (articleMeta) {
+      articleMeta.textContent = `${article.slug} · r${article.revision}`;
+    }
+  }
+
+  async function refreshArticlesList() {
+    if (!articlesList) return;
+    try {
+      const res = await fetch("/api/articles");
+      if (!res.ok) throw new Error("Failed to list articles");
+      const data = await res.json();
+      const articles = data.articles || [];
+      if (!articles.length) {
+        articlesList.innerHTML = `<p class="side-hint">No published articles yet</p>`;
+        return;
+      }
+      articlesList.innerHTML = "";
+      for (const a of articles) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = `article-link${a.id === currentArticleId ? " active" : ""}`;
+        btn.innerHTML = `
+          <span class="article-link-title">${escapeHtml(a.title)}</span>
+          <span class="article-link-meta">r${a.revision} · ${escapeHtml(a.status)}</span>
+        `;
+        btn.addEventListener("click", () => loadArticle(a.id));
+        articlesList.appendChild(btn);
+      }
+    } catch (err) {
+      articlesList.innerHTML = `<p class="side-hint">${escapeHtml(err.message)}</p>`;
+    }
+  }
+
+  async function persistArticle(changeSummary = "Publish") {
+    if (saving) return null;
+    const bodyMarkdown =
+      blocks.length > 0 ? blocksToMarkdown(blocks) : currentDraftText;
+    if (!bodyMarkdown?.trim()) {
+      window.alert("Nothing to publish yet.");
+      return null;
+    }
+    saving = true;
+    try {
+      const payload = {
+        id: currentArticleId || undefined,
+        title: bodyMarkdown.match(/^#\s+(.+)$/m)?.[1] || undefined,
+        bodyMarkdown,
+        blocks: blocks.length
+          ? blocks
+          : undefined,
+        brief: briefInput.value,
+        audience: audienceInput.value,
+        tone: toneInput.value,
+        format: formatInput.value,
+        length: lengthInput.value,
+        theme: currentTheme,
+        goal: currentGoal,
+        changeSummary,
+        status: "published",
+      };
+      const res = await fetch(
+        currentArticleId
+          ? `/api/articles/${currentArticleId}`
+          : "/api/articles",
+        {
+          method: currentArticleId ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Save failed");
+      const article = data.article;
+      setLibraryUi(article);
+      currentDraftText = article.body_markdown;
+      if (Array.isArray(article.blocks) && article.blocks.length) {
+        blocks = article.blocks;
+      }
+      addLog(
+        "DB",
+        `Saved “${article.title}” as revision ${article.revision}`,
+        "finish",
+      );
+      await refreshArticlesList();
+      return article;
+    } catch (err) {
+      addLog("ERROR", err.message, "eval");
+      window.alert(err.message);
+      return null;
+    } finally {
+      saving = false;
+    }
+  }
+
+  async function loadArticle(id) {
+    try {
+      const res = await fetch(`/api/articles/${id}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Load failed");
+      const article = data.article;
+      workspaceSection.hidden = false;
+      currentDraftText = article.body_markdown;
+      blocks = Array.isArray(article.blocks) ? article.blocks : [];
+      isPublished = true;
+      publishedBadge.hidden = false;
+      editorBar.hidden = false;
+      articleCanvas.classList.add("block-editor-active");
+      setLibraryUi(article);
+      if (article.theme) currentTheme = article.theme;
+      if (article.goal) currentGoal = article.goal;
+      if (article.brief) briefInput.value = article.brief;
+      if (article.audience) audienceInput.value = article.audience;
+      if (article.tone) toneInput.value = article.tone;
+      if (article.format) formatInput.value = article.format;
+      if (article.length) lengthInput.value = article.length;
+      renderBlockEditor();
+      historyPanel.hidden = true;
+      addLog("DB", `Loaded “${article.title}” (r${article.revision})`, "system");
+      workspaceSection.scrollIntoView({ behavior: "smooth" });
+      await refreshArticlesList();
+    } catch (err) {
+      window.alert(err.message);
+    }
+  }
+
+  async function loadHistory() {
+    if (!currentArticleId) return;
+    try {
+      const res = await fetch(`/api/articles/${currentArticleId}/history`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "History failed");
+      historyList.innerHTML = "";
+      for (const rev of data.revisions || []) {
+        const li = document.createElement("li");
+        li.innerHTML = `
+          <div>
+            <strong>r${rev.revision}</strong>
+            <div class="article-link-meta">${escapeHtml(rev.change_summary || "Revision")} · ${escapeHtml(rev.created_at)}</div>
+          </div>
+        `;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = "Restore";
+        btn.addEventListener("click", () => restoreRevision(rev.revision));
+        li.appendChild(btn);
+        historyList.appendChild(li);
+      }
+      historyPanel.hidden = false;
+    } catch (err) {
+      window.alert(err.message);
+    }
+  }
+
+  async function restoreRevision(revision) {
+    if (!currentArticleId) return;
+    try {
+      const res = await fetch(
+        `/api/articles/${currentArticleId}/revisions/${revision}`,
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Revision load failed");
+      const rev = data.revision;
+      blocks = Array.isArray(rev.blocks) ? rev.blocks : [];
+      currentDraftText = rev.body_markdown;
+      renderBlockEditor();
+      await persistArticle(`Restored from revision ${revision}`);
+      addLog("DB", `Restored r${revision} as a new revision`, "finish");
+    } catch (err) {
+      window.alert(err.message);
+    }
+  }
+
+  async function enablePublishMode(persist = true) {
     if (!currentDraftText) {
       window.alert("No draft content available to publish.");
       return;
@@ -374,21 +603,32 @@ document.addEventListener("DOMContentLoaded", () => {
     publishedBadge.hidden = false;
     editorBar.hidden = false;
     articleCanvas.classList.add("block-editor-active");
-    addLog("PUBLISH", "Article published. Block editor active.", "finish");
 
-    const rawParagraphs = currentDraftText
-      .split(/\n\s*\n/)
-      .filter((p) => p.trim());
-    blocks = rawParagraphs.map((pText, idx) => {
-      let type = "paragraph";
-      if (pText.startsWith("# ")) type = "h1";
-      else if (pText.startsWith("## ")) type = "h2";
-      else if (pText.startsWith("### ")) type = "h3";
-      else if (pText.startsWith("> ")) type = "blockquote";
-      const cleanText = pText.replace(/^#{1,3}\s+/, "").replace(/^>\s+/, "");
-      return { id: idx + 1, type, text: cleanText };
-    });
+    if (!blocks.length) {
+      const rawParagraphs = currentDraftText
+        .split(/\n\s*\n/)
+        .filter((p) => p.trim());
+      blocks = rawParagraphs.map((pText, idx) => {
+        let type = "paragraph";
+        if (pText.startsWith("# ")) type = "h1";
+        else if (pText.startsWith("## ")) type = "h2";
+        else if (pText.startsWith("### ")) type = "h3";
+        else if (pText.startsWith("> ")) type = "blockquote";
+        const cleanText = pText.replace(/^#{1,3}\s+/, "").replace(/^>\s+/gm, "");
+        return { id: idx + 1, type, text: cleanText };
+      });
+    }
     renderBlockEditor();
+    if (persist) {
+      const article = await persistArticle(
+        currentArticleId ? "Republish with edits" : "Initial publish",
+      );
+      if (article) {
+        addLog("PUBLISH", `Stored in SQLite · ${article.slug}`, "finish");
+      }
+    } else {
+      addLog("PUBLISH", "Block editor active.", "finish");
+    }
   }
 
   function renderBlockEditor() {
@@ -422,6 +662,7 @@ document.addEventListener("DOMContentLoaded", () => {
       contentElem.innerHTML = escapeHtml(block.text);
       contentElem.addEventListener("input", () => {
         blocks[index].text = contentElem.innerText;
+        scheduleSave();
       });
 
       controls.querySelector(".edit-btn").addEventListener("click", () =>
@@ -431,12 +672,14 @@ document.addEventListener("DOMContentLoaded", () => {
         if (index > 0) {
           [blocks[index - 1], blocks[index]] = [blocks[index], blocks[index - 1]];
           renderBlockEditor();
+          scheduleSave();
         }
       });
       controls.querySelector(".down-btn").addEventListener("click", () => {
         if (index < blocks.length - 1) {
           [blocks[index + 1], blocks[index]] = [blocks[index], blocks[index + 1]];
           renderBlockEditor();
+          scheduleSave();
         }
       });
       controls
@@ -445,6 +688,7 @@ document.addEventListener("DOMContentLoaded", () => {
       controls.querySelector(".del-btn").addEventListener("click", () => {
         blocks.splice(index, 1);
         renderBlockEditor();
+        scheduleSave();
       });
 
       blockItem.appendChild(controls);
@@ -460,6 +704,7 @@ document.addEventListener("DOMContentLoaded", () => {
       text: "Write your new paragraph content here…",
     });
     renderBlockEditor();
+    scheduleSave();
   }
 
   function renderEvaluation(evaluation) {
@@ -478,9 +723,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function getLatestArticleText() {
-    if (isPublished && blocks.length > 0) {
-      return blocks.map((b) => b.text).join("\n\n");
-    }
+    if (isPublished && blocks.length > 0) return blocksToMarkdown(blocks);
     return currentDraftText;
   }
 
@@ -504,10 +747,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `quill-article-${Date.now()}.md`;
+    a.download = `quill-article-${currentArticleSlug || Date.now()}.md`;
     a.click();
     URL.revokeObjectURL(url);
   }
 
   downloadBtn.addEventListener("click", triggerDownload);
+  refreshArticlesList();
 });
