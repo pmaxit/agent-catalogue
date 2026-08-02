@@ -2,6 +2,11 @@ import { resolve } from "node:path";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
+import {
+  renderArticlePage,
+  renderArticlesIndex,
+  renderNotFound,
+} from "./article-pages.js";
 import { isMockMode, loadConfig, resolveApiKey } from "./config.js";
 import { CursorClient } from "./cursor-client.js";
 import {
@@ -37,10 +42,18 @@ const publicDir = resolve(process.cwd(), config.app.public_dir);
 
 const app = Fastify({ logger: true });
 await app.register(cors, { origin: true });
-await app.register(fastifyStatic, {
-  root: publicDir,
-  prefix: "/",
-});
+
+function parseBlocks(blocksJson: string): Block[] {
+  try {
+    return JSON.parse(blocksJson) as Block[];
+  } catch {
+    return [];
+  }
+}
+
+function publishedOnly() {
+  return store.list(500).filter((a) => a.status === "published");
+}
 
 app.get("/api/health", async () => ({
   ok: true,
@@ -152,6 +165,7 @@ app.get("/api/articles", async () => {
     updated_at: a.updated_at,
     published_at: a.published_at,
     created_at: a.created_at,
+    url: `/articles/${a.slug}`,
   }));
   return { articles };
 });
@@ -159,13 +173,10 @@ app.get("/api/articles", async () => {
 app.get<{ Params: { id: string } }>("/api/articles/:id", async (req, reply) => {
   const article = store.get(req.params.id);
   if (!article) return reply.code(404).send({ error: "Article not found" });
-  let blocks: Block[] = [];
-  try {
-    blocks = JSON.parse(article.blocks_json) as Block[];
-  } catch {
-    blocks = [];
-  }
-  return { article: { ...article, blocks } };
+  const blocks = parseBlocks(article.blocks_json);
+  return {
+    article: { ...article, blocks, url: `/articles/${article.slug}` },
+  };
 });
 
 app.get<{ Params: { id: string } }>(
@@ -195,12 +206,7 @@ app.get<{ Params: { id: string; rev: string } }>(
     }
     const revision = store.getRevision(article.id, rev);
     if (!revision) return reply.code(404).send({ error: "Revision not found" });
-    let blocks: Block[] = [];
-    try {
-      blocks = JSON.parse(revision.blocks_json) as Block[];
-    } catch {
-      blocks = [];
-    }
+    const blocks = parseBlocks(revision.blocks_json);
     return { revision: { ...revision, blocks } };
   },
 );
@@ -208,13 +214,10 @@ app.get<{ Params: { id: string; rev: string } }>(
 app.post<{ Body: ArticleBody }>("/api/articles", async (req, reply) => {
   try {
     const article = store.publish(toPublishInput(req.body ?? {}));
-    let blocks: Block[] = [];
-    try {
-      blocks = JSON.parse(article.blocks_json) as Block[];
-    } catch {
-      blocks = [];
-    }
-    return reply.code(201).send({ article: { ...article, blocks } });
+    const blocks = parseBlocks(article.blocks_json);
+    return reply.code(201).send({
+      article: { ...article, blocks, url: `/articles/${article.slug}` },
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return reply.code(400).send({ error: message });
@@ -230,19 +233,34 @@ app.put<{ Params: { id: string }; Body: ArticleBody }>(
       const article = store.publish(
         toPublishInput({ ...(req.body ?? {}), id: existing.id }),
       );
-      let blocks: Block[] = [];
-      try {
-        blocks = JSON.parse(article.blocks_json) as Block[];
-      } catch {
-        blocks = [];
-      }
-      return { article: { ...article, blocks } };
+      const blocks = parseBlocks(article.blocks_json);
+      return {
+        article: { ...article, blocks, url: `/articles/${article.slug}` },
+      };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return reply.code(400).send({ error: message });
     }
   },
 );
+
+app.get("/articles", async (_req, reply) => {
+  const html = renderArticlesIndex(publishedOnly());
+  return reply.type("text/html; charset=utf-8").send(html);
+});
+
+app.get<{ Params: { slug: string } }>("/articles/:slug", async (req, reply) => {
+  const article = store.get(req.params.slug);
+  if (!article || article.status !== "published") {
+    return reply
+      .code(404)
+      .type("text/html; charset=utf-8")
+      .send(renderNotFound(req.params.slug));
+  }
+  const blocks = parseBlocks(article.blocks_json);
+  const html = renderArticlePage(article, blocks);
+  return reply.type("text/html; charset=utf-8").send(html);
+});
 
 app.post<{ Body: BriefInput }>("/api/run", async (req, reply) => {
   const body = req.body ?? ({} as BriefInput);
@@ -305,6 +323,11 @@ app.post<{ Body: BriefInput }>("/api/run", async (req, reply) => {
       reply.raw.end();
     }
   }
+});
+
+await app.register(fastifyStatic, {
+  root: publicDir,
+  prefix: "/",
 });
 
 const shutdown = () => {

@@ -423,7 +423,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (saveBtn) saveBtn.hidden = false;
     if (historyBtn) historyBtn.hidden = false;
     if (articleMeta) {
-      articleMeta.textContent = `${article.slug} · r${article.revision}`;
+      const url = `/articles/${article.slug}`;
+      articleMeta.innerHTML = `<a href="${url}" target="_blank" rel="noopener">/${escapeHtml(article.slug)}</a> · r${article.revision}`;
     }
   }
 
@@ -433,22 +434,38 @@ document.addEventListener("DOMContentLoaded", () => {
       const res = await fetch("/api/articles");
       if (!res.ok) throw new Error("Failed to list articles");
       const data = await res.json();
-      const articles = data.articles || [];
+      const articles = (data.articles || []).filter(
+        (a) => a.status === "published",
+      );
       if (!articles.length) {
         articlesList.innerHTML = `<p class="side-hint">No published articles yet</p>`;
         return;
       }
       articlesList.innerHTML = "";
       for (const a of articles) {
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = `article-link${a.id === currentArticleId ? " active" : ""}`;
-        btn.innerHTML = `
+        const row = document.createElement("div");
+        row.className = `article-link-row${a.id === currentArticleId ? " active" : ""}`;
+
+        const open = document.createElement("a");
+        open.className = "article-link";
+        open.href = a.url || `/articles/${a.slug}`;
+        open.target = "_blank";
+        open.rel = "noopener";
+        open.innerHTML = `
           <span class="article-link-title">${escapeHtml(a.title)}</span>
-          <span class="article-link-meta">r${a.revision} · ${escapeHtml(a.status)}</span>
+          <span class="article-link-meta">/${escapeHtml(a.slug)} · r${a.revision}</span>
         `;
-        btn.addEventListener("click", () => loadArticle(a.id));
-        articlesList.appendChild(btn);
+
+        const edit = document.createElement("button");
+        edit.type = "button";
+        edit.className = "article-edit-btn";
+        edit.textContent = "Edit";
+        edit.title = "Load in studio editor";
+        edit.addEventListener("click", () => loadArticle(a.id));
+
+        row.appendChild(open);
+        row.appendChild(edit);
+        articlesList.appendChild(row);
       }
     } catch (err) {
       articlesList.innerHTML = `<p class="side-hint">${escapeHtml(err.message)}</p>`;

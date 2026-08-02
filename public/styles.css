@@ -585,9 +585,22 @@ code {
 .articles-list {
   display: grid;
   gap: 2px;
-  max-height: 180px;
+  max-height: 220px;
   overflow: auto;
   margin-bottom: var(--space-2);
+}
+
+.article-link-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px;
+  align-items: stretch;
+}
+
+.article-link-row.active .article-link {
+  background: #fff;
+  color: var(--fg);
+  box-shadow: var(--elev-ring);
 }
 
 .article-link {
@@ -602,13 +615,31 @@ code {
   text-align: left;
   cursor: pointer;
   font: inherit;
+  text-decoration: none;
 }
 
-.article-link:hover,
-.article-link.active {
+.article-link:hover {
   background: #fff;
   color: var(--fg);
   box-shadow: var(--elev-ring);
+}
+
+.article-edit-btn {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0 8px;
+  cursor: pointer;
+}
+
+.article-edit-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
 .article-link-title {
@@ -622,6 +653,7 @@ code {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--muted);
+  word-break: break-all;
 }
 
 .history-panel {
