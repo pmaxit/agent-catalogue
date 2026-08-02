@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Quill Studio — Writing Agent Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/tokens.css" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body class="page-studio">
+    <div class="studio-shell">
+      <aside class="sidebar" data-od-id="studio-sidebar" aria-label="Studio navigation">
+        <a class="brand sidebar-brand" href="/">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span class="brand-name">Quill</span>
+        </a>
+        <nav class="side-nav">
+          <a href="/studio.html" class="side-link active" data-nav="compose">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 19h14M7 5h10v10H7z" stroke="currentColor" stroke-width="1.6"/></svg>
+            Compose
+          </a>
+          <a href="#workspace-section" class="side-link" data-nav="pipeline" id="nav-pipeline">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 8h6v8H4zM14 4h6v8h-6zM14 14h6v6h-6z" stroke="currentColor" stroke-width="1.6"/></svg>
+            Pipeline
+          </a>
+          <a href="#draft-panel" class="side-link" data-nav="draft" id="nav-draft">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 4h9l3 3v13H6z" stroke="currentColor" stroke-width="1.6"/><path d="M9 12h6M9 16h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            Draft
+          </a>
+          <span class="side-label">Workspace</span>
+          <button type="button" class="side-link" id="menu-new-piece">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            New piece
+          </button>
+          <button type="button" class="side-link" id="menu-publish-toggle">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12l5 5L20 7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Publish &amp; edit
+          </button>
+          <button type="button" class="side-link" id="menu-add-block">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M12 8v8M8 12h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            Add block
+          </button>
+          <button type="button" class="side-link" id="menu-export">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 4v10M8 10l4 4 4-4M5 18h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Export
+          </button>
+          <button type="button" class="side-link" id="menu-toggle-console">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 7h14v10H5zM8 17v2M16 17v2M9 11l2 2 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Toggle console
+          </button>
+          <span class="side-label">Explore</span>
+          <a href="/" class="side-link">Landing</a>
+          <a href="/article.html" class="side-link">Sample article</a>
+        </nav>
+        <div class="sidebar-foot">
+          <span class="mono-stamp" id="mode-badge">STATUS: READY</span>
+          <span class="mono-stamp muted" id="model-badge">MODEL: —</span>
+        </div>
+      </aside>
+
+      <div class="studio-main">
+        <header class="topbar" data-od-id="studio-topbar">
+          <div>
+            <p class="eyebrow">Writing agent studio</p>
+            <h1>Compose &amp; run</h1>
+          </div>
+          <div class="topbar-right">
+            <label class="search-field" for="studio-search">
+              <span class="sr-only">Search studio</span>
+              <input id="studio-search" type="search" placeholder="Search goals, themes…" autocomplete="off" />
+            </label>
+            <span class="status-pill" id="health-pill">Checking…</span>
+          </div>
+        </header>
+
+        <section class="kpi-row" data-od-id="studio-kpis" aria-label="Studio metrics">
+          <article class="kpi">
+            <span class="kpi-label">Agents in graph</span>
+            <span class="kpi-value" id="kpi-agents">4</span>
+            <span class="kpi-delta up" id="kpi-agents-delta">plan · research · write · manage</span>
+          </article>
+          <article class="kpi">
+            <span class="kpi-label">Max iterations</span>
+            <span class="kpi-value" id="kpi-iters">5</span>
+            <span class="kpi-delta" id="kpi-iters-delta">Quality loop ceiling</span>
+          </article>
+          <article class="kpi">
+            <span class="kpi-label">Criteria bar</span>
+            <span class="kpi-value" id="kpi-threshold">0.75</span>
+            <span class="kpi-delta" id="kpi-threshold-delta">All scores must clear</span>
+          </article>
+          <article class="kpi">
+            <span class="kpi-label">Runtime</span>
+            <span class="kpi-value" id="kpi-runtime">mock</span>
+            <span class="kpi-delta" id="kpi-runtime-delta">Cursor API or local mock</span>
+          </article>
+        </section>
+
+        <section class="wizard-panel" id="wizard-section" data-od-id="studio-wizard">
+          <div class="panel-card">
+            <div class="panel-head-inline">
+              <h2>I · Writing goal</h2>
+              <p>Strategic objective for planner and research agents.</p>
+            </div>
+            <div class="options-grid goals-grid" id="goals-selector" role="listbox" aria-label="Writing goals">
+              <button type="button" class="option-card active" data-goal="Thought Leadership & Opinion Essay" role="option" aria-selected="true">
+                <span class="card-title">Thought Leadership</span>
+                <span class="card-sub">Provocative analysis &amp; industry vision</span>
+              </button>
+              <button type="button" class="option-card" data-goal="Technical Case Study & Architecture Runbook" role="option" aria-selected="false">
+                <span class="card-title">Technical Deep Dive</span>
+                <span class="card-sub">Architecture breakdowns &amp; runbooks</span>
+              </button>
+              <button type="button" class="option-card" data-goal="Product Launch & Brand Storytelling" role="option" aria-selected="false">
+                <span class="card-title">Product Narrative</span>
+                <span class="card-sub">Feature announcements &amp; customer value</span>
+              </button>
+              <button type="button" class="option-card" data-goal="Executive Brief & Strategic Report" role="option" aria-selected="false">
+                <span class="card-title">Executive Brief</span>
+                <span class="card-sub">Decision-oriented takeaways</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="panel-card">
+            <div class="panel-head-inline">
+              <h2>II · Theme &amp; voice</h2>
+              <p>Narrative aesthetic for writer and evaluator agents.</p>
+            </div>
+            <div class="options-grid themes-grid" id="themes-selector" role="listbox" aria-label="Themes">
+              <button type="button" class="theme-card active" data-theme="Agentic Command" data-tone="precise, delegated, outcome-first, traceable" data-format="Long-form Agentic Essay">
+                <div class="theme-swatch agentic"></div>
+                <div class="theme-info">
+                  <span class="theme-title">Agentic Command</span>
+                  <span class="theme-sub">Dark command surfaces, clear outcomes, delegated task flows.</span>
+                </div>
+              </button>
+              <button type="button" class="theme-card" data-theme="Technical Trace" data-tone="sharp, analytical, code-dense, high-clarity" data-format="Technical Deep-Dive & Guide">
+                <div class="theme-swatch cyber"></div>
+                <div class="theme-info">
+                  <span class="theme-title">Technical Trace</span>
+                  <span class="theme-sub">Monospace density, evidence-first engineering voice.</span>
+                </div>
+              </button>
+              <button type="button" class="theme-card" data-theme="Editorial Signal" data-tone="authoritative, structured, reflective, formal" data-format="Research Report">
+                <div class="theme-swatch editorial"></div>
+                <div class="theme-info">
+                  <span class="theme-title">Editorial Signal</span>
+                  <span class="theme-sub">Structured arguments, formal scholarly cadence.</span>
+                </div>
+              </button>
+              <button type="button" class="theme-card" data-theme="Narrative Pulse" data-tone="vivid, narrative-driven, punchy, evocative" data-format="Narrative Feature">
+                <div class="theme-swatch narrative"></div>
+                <div class="theme-info">
+                  <span class="theme-title">Narrative Pulse</span>
+                  <span class="theme-sub">Story hooks, imagery, memorable rhythm.</span>
+                </div>
+              </button>
+              <button type="button" class="theme-card" data-theme="Executive Crisp" data-tone="concise, action-oriented, high impact, strategic" data-format="Executive Briefing">
+                <div class="theme-swatch executive"></div>
+                <div class="theme-info">
+                  <span class="theme-title">Executive Crisp</span>
+                  <span class="theme-sub">Scannable summaries, bold takeaways, zero fluff.</span>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <div class="panel-card">
+            <div class="panel-head-inline">
+              <h2>III · Brief &amp; parameters</h2>
+              <p>Core prompt and audience constraints.</p>
+            </div>
+            <form id="agent-form" class="agent-form">
+              <div class="field-full">
+                <label for="brief-input" class="field-label">
+                  <span>Article brief</span>
+                  <span class="field-hint">Required</span>
+                </label>
+                <textarea
+                  id="brief-input"
+                  name="brief"
+                  rows="5"
+                  required
+                  placeholder="Describe the subject, angle, and constraints for the agents…"
+                ></textarea>
+              </div>
+              <div class="params-row">
+                <div class="field-group">
+                  <label for="audience-input" class="field-label">Audience</label>
+                  <input id="audience-input" name="audience" value="Engineering leads & product directors" />
+                </div>
+                <div class="field-group">
+                  <label for="tone-input" class="field-label">Tone</label>
+                  <input id="tone-input" name="tone" value="precise, delegated, outcome-first, traceable" />
+                </div>
+                <div class="field-group">
+                  <label for="format-input" class="field-label">Format</label>
+                  <input id="format-input" name="format" value="Long-form Agentic Essay" />
+                </div>
+                <div class="field-group">
+                  <label for="length-input" class="field-label">Length</label>
+                  <input id="length-input" name="length" value="1000–1500 words" />
+                </div>
+              </div>
+              <div class="quality-bar">
+                <div class="quality-info">
+                  <span class="quality-label">Max loops</span>
+                  <span class="quality-val" id="max-iter-val">5</span>
+                </div>
+                <div class="quality-info">
+                  <span class="quality-label">Judge threshold</span>
+                  <span class="quality-val" id="threshold-val">0.75+</span>
+                </div>
+              </div>
+              <div class="actions-row">
+                <button type="submit" class="btn btn-primary" id="fire-btn">
+                  <span>Fire agents</span>
+                  <span class="mono-shortcut">Enter</span>
+                </button>
+                <button type="button" class="btn btn-ghost" id="reset-btn">Reset brief</button>
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <section class="workspace-section" id="workspace-section" data-od-id="studio-workspace" hidden>
+          <div class="section-divider">
+            <span class="mono-stamp">IV · MULTI-AGENT PIPELINE</span>
+          </div>
+
+          <div class="pipeline-map" id="pipeline-map" data-od-id="studio-pipeline-map">
+            <div class="stage-node" id="node-plan">
+              <span class="node-num">01</span>
+              <span class="node-name">Planner</span>
+              <span class="node-status">Pending</span>
+            </div>
+            <div class="stage-arrow" aria-hidden="true"></div>
+            <div class="stage-node" id="node-research">
+              <span class="node-num">02</span>
+              <span class="node-name">Researcher</span>
+              <span class="node-status">Pending</span>
+            </div>
+            <div class="stage-arrow" aria-hidden="true"></div>
+            <div class="stage-node" id="node-writer">
+              <span class="node-num">03</span>
+              <span class="node-name">Writer</span>
+              <span class="node-status">Pending</span>
+            </div>
+            <div class="stage-arrow" aria-hidden="true"></div>
+            <div class="stage-node" id="node-manager">
+              <span class="node-num">04</span>
+              <span class="node-name">Judge</span>
+              <span class="node-status">Pending</span>
+            </div>
+          </div>
+
+          <div class="workspace-grid" id="workspace-grid">
+            <div class="console-panel" id="console-panel" data-od-id="studio-console">
+              <div class="panel-head">
+                <div class="head-title">
+                  <span class="indicator-dot" id="live-dot"></span>
+                  <span>Live stream</span>
+                </div>
+                <span class="mono-badge" id="stream-status">Idle</span>
+              </div>
+              <div class="stream-box" id="stream-box" role="log" aria-live="polite">
+                <div class="stream-log-entry">
+                  <span class="log-time">[00:00:00]</span>
+                  <span class="log-tag system">SYSTEM</span>
+                  <span class="log-msg">Ready. Fire agents to start the pipeline.</span>
+                </div>
+              </div>
+              <div class="empty-state" id="console-empty" hidden>
+                <h3>No events yet</h3>
+                <p>Submit a brief to stream planner, research, write, and judge events here.</p>
+              </div>
+            </div>
+
+            <div class="draft-panel" id="draft-panel" data-od-id="studio-draft">
+              <div class="panel-head">
+                <div class="head-title">
+                  <span>Draft output</span>
+                  <span class="mono-badge" id="iteration-badge">Loop: 0</span>
+                  <span class="publish-badge" id="published-badge" hidden>Published · block editor</span>
+                </div>
+                <div class="draft-actions">
+                  <button type="button" class="btn btn-primary sm" id="publish-btn">Publish</button>
+                  <button type="button" class="btn btn-ghost sm" id="copy-btn">Copy</button>
+                  <button type="button" class="btn btn-ghost sm" id="download-btn">Download MD</button>
+                </div>
+              </div>
+              <div class="criteria-card-grid" id="criteria-card-grid"></div>
+              <div class="article-canvas" id="article-canvas">
+                <div class="placeholder-notice empty-state">
+                  <h3>Waiting for draft</h3>
+                  <p>The writer agent will stream the article here once planning and research finish.</p>
+                </div>
+              </div>
+              <div class="editor-bar" id="editor-bar" hidden>
+                <div class="editor-bar-left">
+                  <span class="mono-stamp">Block editor</span>
+                  <span class="blocks-count" id="blocks-count">0 blocks</span>
+                </div>
+                <button type="button" class="btn btn-ghost sm" id="add-block-btn">Add paragraph</button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

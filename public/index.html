@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Quill — Plan · Research · Write · Judge</title>
+    <meta
+      name="description"
+      content="Quill is a YAML-driven multi-agent writing pipeline. Delegate planning, research, drafting, and quality judgment — then publish."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/tokens.css" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body class="page-landing">
+    <div class="ambient" aria-hidden="true"></div>
+
+    <header class="site-nav" data-od-id="landing-nav">
+      <a class="brand" href="/">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-name">Quill</span>
+      </a>
+      <nav class="site-links" aria-label="Primary">
+        <a href="#features">Capabilities</a>
+        <a href="#pipeline">Pipeline</a>
+        <a href="#proof">Signal</a>
+        <a href="/article.html">Sample</a>
+        <a href="/studio.html" class="nav-cta">Open studio</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero" data-od-id="landing-hero">
+        <p class="eyebrow">Agentic writing system</p>
+        <h1>Delegate the draft.<br />Keep the judgment.</h1>
+        <p class="hero-lede">
+          Quill runs a YAML-configured loop — plan, research, write, judge —
+          until every quality criterion clears. Built for teams who want
+          publishable prose without babysitting every token.
+        </p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="/studio.html">Launch writing studio</a>
+          <a class="btn btn-ghost" href="#pipeline">See the agent graph</a>
+        </div>
+        <div class="hero-panel" data-od-id="landing-hero-demo" aria-hidden="true">
+          <div class="hero-panel-bar">
+            <span class="mono-stamp">PIPELINE · LIVE</span>
+            <span class="mono-stamp muted">plan → research → write → manage</span>
+          </div>
+          <div class="hero-trace">
+            <div class="trace-row"><span class="trace-tag">PLAN</span><span>Outline angle, sources, and constraints</span></div>
+            <div class="trace-row"><span class="trace-tag">RESEARCH</span><span>Pull evidence against the brief</span></div>
+            <div class="trace-row"><span class="trace-tag">WRITE</span><span>Draft long-form with theme voice</span></div>
+            <div class="trace-row active"><span class="trace-tag">JUDGE</span><span>Score correctness · helpfulness · clarity · images</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section features" id="features" data-od-id="landing-features">
+        <div class="section-head">
+          <p class="eyebrow">Capabilities</p>
+          <h2>What Quill takes off your plate</h2>
+          <p class="section-lede">Four agents. One config file. A quality bar you define.</p>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card">
+            <svg class="feature-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M4 6h16M4 12h10M4 18h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+            <h3>YAML-defined agents</h3>
+            <p>Names, models, prompts, graph edges, and thresholds live in <code>config/agents.yaml</code> — not buried in code.</p>
+          </article>
+          <article class="feature-card">
+            <svg class="feature-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.6"/>
+              <path d="M12 8v4l3 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+            <h3>Closed quality loop</h3>
+            <p>The manager revises until every criterion clears its threshold — or you hit the iteration ceiling with a clear report.</p>
+          </article>
+          <article class="feature-card">
+            <svg class="feature-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect x="4" y="5" width="16" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/>
+              <path d="M8 9h8M8 13h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+            <h3>Theme-driven voice</h3>
+            <p>Pick a writing goal and narrative theme; tone and format flow into the writer and evaluator prompts automatically.</p>
+          </article>
+          <article class="feature-card">
+            <svg class="feature-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M7 17L17 7M9 7h8v8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <h3>Cursor Cloud Agents</h3>
+            <p>Runs against the Cursor Agents API — or mock mode locally when no key is set, so the UI stays exerciseable.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section pipeline" id="pipeline" data-od-id="landing-pipeline">
+        <div class="section-head">
+          <p class="eyebrow">Pipeline</p>
+          <h2>One graph. Explicit routes.</h2>
+        </div>
+        <ol class="pipeline-steps">
+          <li><span class="step-idx">01</span><div><strong>Plan</strong><p>Structure the piece against the brief and goal.</p></div></li>
+          <li><span class="step-idx">02</span><div><strong>Research</strong><p>Gather facts and angles the writer must respect.</p></div></li>
+          <li><span class="step-idx">03</span><div><strong>Write</strong><p>Produce the draft in the selected theme voice.</p></div></li>
+          <li><span class="step-idx">04</span><div><strong>Manage</strong><p>Score criteria; route to revise or done.</p></div></li>
+        </ol>
+      </section>
+
+      <section class="section proof" id="proof" data-od-id="landing-proof">
+        <div class="section-head">
+          <p class="eyebrow">Signal</p>
+          <h2>Configured for publishable output</h2>
+        </div>
+        <div class="proof-grid">
+          <blockquote class="proof-card">
+            <p>“The loop forces clarity: if correctness or helpfulness dips below threshold, the manager sends it back — no soft exits.”</p>
+            <footer>Pipeline contract · <code>goal.criteria</code></footer>
+          </blockquote>
+          <blockquote class="proof-card">
+            <p>“Every agent instruction is a template. Swap models, edges, or thresholds without touching the orchestrator.”</p>
+            <footer>Config surface · <code>agents.yaml</code></footer>
+          </blockquote>
+          <blockquote class="proof-card">
+            <p>“Studio streams node events live — so you watch plan, research, write, and judge as they happen.”</p>
+            <footer>Runtime · SSE <code>/api/run</code></footer>
+          </blockquote>
+        </div>
+      </section>
+
+      <section class="footer-cta" data-od-id="landing-cta">
+        <h2>Start a piece. Let the agents carry the draft.</h2>
+        <p>Open the studio, set a brief, and fire the pipeline.</p>
+        <a class="btn btn-primary" href="/studio.html">Open writing studio</a>
+      </section>
+    </main>
+
+    <footer class="site-footer" data-od-id="landing-footer">
+      <div class="footer-brand">
+        <span class="brand-mark sm" aria-hidden="true"></span>
+        <span>Quill</span>
+      </div>
+      <div class="footer-links">
+        <a href="/studio.html">Studio</a>
+        <a href="/article.html">Sample article</a>
+        <a href="https://github.com/nexu-io/open-design">Open Design</a>
+      </div>
+      <p class="footer-meta">Bound design system: agentic · Templates: saas-landing + dashboard + blog-post</p>
+    </footer>
+  </body>
+</html>

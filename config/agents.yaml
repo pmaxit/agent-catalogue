@@ -1,0 +1,252 @@
+# Writing Agent Pipeline — all agent definitions, models, goals, and graph
+# flow are configured here. Secrets are referenced by env var name only.
+
+api:
+  base_url: ${CURSOR_API_BASE_URL:-https://api.cursor.com}
+  # Resolved from process env at runtime. Never put real keys in this file.
+  key_env: CURSOR_API_KEY
+  # basic = HTTP Basic with api_key as username (Cursor default)
+  # bearer = Authorization: Bearer <key>
+  auth: basic
+  # When true (or CURSOR_API_KEY missing), orchestrator uses a local mock runner
+  mock: ${CURSOR_MOCK:-false}
+  poll_interval_ms: 2000
+  request_timeout_ms: 120000
+  run_timeout_ms: 600000
+
+defaults:
+  model:
+    id: ${CURSOR_MODEL:-composer-2.5}
+  # no_repo cloud agents (omit repos/env) — ideal for pure writing work
+  runtime: no_repo
+  # shared = one Cursor agent reused across steps (follow-up runs)
+  # per_step = fresh Cursor agent per graph node
+  session: per_step
+  mode: agent
+
+app:
+  title: Quill
+  tagline: Plan · Research · Write · Judge
+  port: ${PORT:-8080}
+  public_dir: public
+
+# Quality goal the manager must satisfy before the graph exits.
+goal:
+  name: publishable_article
+  max_iterations: 5
+  # Manager must return route "done" AND every criterion score >= threshold
+  require_all_criteria: true
+  criteria:
+    - id: correctness
+      label: Correctness
+      description: >
+        Claims are accurate, sources are respected, no invented facts or
+        citations. Numbers and names match research notes when present.
+      weight: 1.0
+      threshold: 0.8
+    - id: helpfulness
+      label: Helpfulness
+      description: >
+        The piece answers the reader's intent, is actionable, well-structured,
+        and complete for the requested format/length.
+      weight: 1.0
+      threshold: 0.8
+    - id: clarity
+      label: Clarity
+      description: >
+        Prose is clear, scannable, and free of fluff. Headings and paragraphs
+        guide the reader.
+      weight: 0.8
+      threshold: 0.75
+    - id: images
+      label: Images
+      description: >
+        Includes at least one concrete image brief or markdown image placeholder
+        with alt text and placement notes that fit the article.
+      weight: 0.7
+      threshold: 0.7
+
+# Agent roster — instructions, models, and output keys are fully YAML-driven.
+agents:
+  planner:
+    name: Planner
+    description: Breaks the brief into an outline and research questions
+    model:
+      id: ${CURSOR_MODEL:-composer-2.5}
+    mode: plan
+    output_key: plan
+    instruction: |
+      You are the Planner in a multi-agent writing pipeline.
+
+      Brief:
+      {{brief}}
+
+      Audience: {{audience}}
+      Tone: {{tone}}
+      Format: {{format}}
+      Target length: {{length}}
+
+      Produce a concise writing plan with:
+      1. Working title options (2–3)
+      2. Audience insight (1 short paragraph)
+      3. Outline with H2/H3 sections
+      4. Research questions that must be answered
+      5. Success criteria for the final article
+      6. Suggested image opportunities (where visuals help)
+
+      Output markdown only. No preamble.
+
+  researcher:
+    name: Researcher
+    description: Gathers facts, angles, and citations for the plan
+    model:
+      id: ${CURSOR_MODEL:-composer-2.5}
+    mode: agent
+    output_key: research
+    instruction: |
+      You are the Researcher in a multi-agent writing pipeline.
+
+      Brief:
+      {{brief}}
+
+      Writing plan:
+      {{plan}}
+
+      Gather research notes that answer the plan's research questions.
+      Prefer durable knowledge and clearly mark uncertainty.
+      Structure your output as markdown with:
+      - Key findings (bullets)
+      - Evidence / rationale per finding
+      - Open questions / unknowns
+      - Suggested citations or source types (do not invent URLs)
+      - Image research notes (what to depict, style hints)
+
+      Output markdown only. No preamble.
+
+  writer:
+    name: Writer
+    description: Drafts or revises the article from plan + research + feedback
+    model:
+      id: ${CURSOR_MODEL:-composer-2.5}
+    mode: agent
+    output_key: draft
+    instruction: |
+      You are the Writer in a multi-agent writing pipeline.
+
+      Brief:
+      {{brief}}
+
+      Audience: {{audience}}
+      Tone: {{tone}}
+      Format: {{format}}
+      Target length: {{length}}
+
+      Plan:
+      {{plan}}
+
+      Research:
+      {{research}}
+
+      {% if feedback %}
+      Manager feedback to address (mandatory):
+      {{feedback}}
+      {% endif %}
+
+      {% if draft %}
+      Previous draft to revise:
+      {{draft}}
+      {% endif %}
+
+      Write a complete article in markdown.
+      Requirements:
+      - Follow the plan structure unless feedback says otherwise
+      - Ground claims in the research notes; do not invent facts
+      - Include at least one image using markdown image syntax with descriptive
+        alt text, e.g. ![alt](image-brief:short-slug "placement note")
+      - Use clear headings and scannable paragraphs
+      - End with a short takeaway or next step when appropriate
+
+      Output the article markdown only. No preamble.
+
+  manager:
+    name: Manager
+    description: Scores quality criteria and routes revise vs done
+    model:
+      id: ${CURSOR_MODEL:-composer-2.5}
+    mode: agent
+    output_key: evaluation
+    # Manager must emit structured JSON the orchestrator can parse
+    response_format: json
+    instruction: |
+      You are the Manager / quality gate for a writing pipeline.
+      Your job is to decide whether the draft meets the publish goal or must
+      be revised. Be strict but fair.
+
+      Brief:
+      {{brief}}
+
+      Plan:
+      {{plan}}
+
+      Research:
+      {{research}}
+
+      Draft:
+      {{draft}}
+
+      Quality criteria (score each from 0.0 to 1.0):
+      {% for c in criteria %}
+      - {{c.id}} ({{c.label}}): {{c.description}}
+        Threshold: {{c.threshold}}
+      {% endfor %}
+
+      Iteration: {{iteration}} of {{max_iterations}}
+
+      Respond with ONLY valid JSON matching this schema:
+      {
+        "scores": {
+          "correctness": 0.0,
+          "helpfulness": 0.0,
+          "clarity": 0.0,
+          "images": 0.0
+        },
+        "passed": false,
+        "route": "revise" | "done",
+        "feedback": "specific actionable revision notes; empty string if done",
+        "summary": "one-sentence verdict"
+      }
+
+      Rules:
+      - Set route to "done" ONLY if every criterion score >= its threshold
+        AND passed is true.
+      - Otherwise route must be "revise" with concrete feedback the Writer
+        can act on (call out missing images, weak sections, factual gaps).
+      - If this is the final allowed iteration and quality is still below bar,
+        still return route "revise" unless criteria are met; the orchestrator
+        will stop on max iterations.
+
+# Graph flow — deterministic edges + conditional manager routing.
+# Inspired by ADK-style workflow graphs: nodes + edges + route maps.
+workflow:
+  name: writing_pipeline
+  entry: plan
+  nodes:
+    plan:
+      agent: planner
+      next: research
+    research:
+      agent: researcher
+      next: write
+    write:
+      agent: writer
+      next: manage
+    manage:
+      agent: manager
+      # Conditional routes come from manager JSON "route" field
+      routes:
+        revise: write
+        done: end
+      # Count this hop toward goal.max_iterations when route is revise
+      counts_as_iteration: true
+  # Terminal node id
+  end: end

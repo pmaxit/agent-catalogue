@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "designSystem": {
+    "slug": "agentic",
+    "path": "design-systems/agentic"
+  },
+  "skill": {
+    "slug": "dashboard",
+    "path": "design-templates/dashboard",
+    "kind": "design-template",
+    "mode": "prototype"
+  },
+  "boundAt": "2026-08-02T17:10:00Z",
+  "extras": {
+    "siblingTemplates": ["saas-landing", "blog-post"],
+    "note": "Primary bind is dashboard (studio). saas-landing + blog-post applied as sibling surfaces under agentic."
+  }
+}
