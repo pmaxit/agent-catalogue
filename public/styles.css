@@ -632,6 +632,11 @@ code {
   background: #fff;
 }
 
+/* Author `display: grid` otherwise wins over the UA [hidden] rule. */
+.new-menu-pop[hidden] {
+  display: none;
+}
+
 .new-menu-pop button {
   padding: 8px 10px;
   border: 0;
