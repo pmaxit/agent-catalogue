@@ -33,11 +33,16 @@ Env interpolation: `${VAR}` and `${VAR:-default}`.
 
 ## API
 
-- `GET /api/health` — liveness + mode
+- `GET /api/health` — liveness + mode (+ sqlite stats)
 - `GET /api/config` — sanitized config for the UI
 - `POST /api/run` — SSE stream of pipeline events
+- `GET /api/articles` — published articles
+- `GET /api/articles/:id` — article with blocks (formatting preserved)
+- `POST /api/articles` / `PUT /api/articles/:id` — publish or save edit (creates a revision)
+- `GET /api/articles/:id/history` — revision list
+- `GET /api/articles/:id/revisions/:rev` — full snapshot of a revision
 
-Body:
+Body for `/api/run`:
 
 ```json
 {
@@ -48,6 +53,8 @@ Body:
   "length": "…"
 }
 ```
+
+SQLite path: `SQLITE_PATH` (default `./data/quill.db`; Railway uses `/data/quill.db` on a persistent volume).
 
 ## Railway
 
