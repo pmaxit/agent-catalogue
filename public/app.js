@@ -3,12 +3,14 @@
 
 document.addEventListener("DOMContentLoaded", () => {
   const menuNewPiece = document.getElementById("menu-new-piece");
+  const menuNewPieceCompose = document.getElementById("menu-new-piece-compose");
   const menuNewBook = document.getElementById("menu-new-book");
   const menuNewChapter = document.getElementById("menu-new-chapter");
   const menuPublishToggle = document.getElementById("menu-publish-toggle");
-  const menuAddBlock = document.getElementById("menu-add-block");
-  const menuExport = document.getElementById("menu-export");
   const menuToggleConsole = document.getElementById("menu-toggle-console");
+  const toggleConsoleDraft = document.getElementById("toggle-console-draft");
+  const newMenuBtn = document.getElementById("new-menu-btn");
+  const newMenuPop = document.getElementById("new-menu-pop");
   const booksList = document.getElementById("books-list");
   const bookRail = document.getElementById("book-rail");
   const bookRailTitle = document.getElementById("book-rail-title");
@@ -27,6 +29,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const applySelectAllBtn = document.getElementById("apply-select-all-btn");
   const applySelectedBtn = document.getElementById("apply-selected-btn");
   const dismissApplyBtn = document.getElementById("dismiss-apply-btn");
+  const activityRail = document.querySelector(".activity-rail");
+  const libraryTabs = document.querySelector(".library-tabs");
 
   const goalsSelector = document.getElementById("goals-selector");
   const themesSelector = document.getElementById("themes-selector");
@@ -170,7 +174,7 @@ document.addEventListener("DOMContentLoaded", () => {
     articleCanvas.innerHTML = `<div class="placeholder-notice empty-state"><h3>${escapeHtml(message)}</h3><p>Fire agents after setting the brief, theme, and length.</p></div>`;
   }
 
-  menuNewPiece.addEventListener("click", () => {
+  function startNewArticle() {
     currentArticleId = null;
     currentArticleSlug = null;
     currentChapterId = null;
@@ -178,13 +182,107 @@ document.addEventListener("DOMContentLoaded", () => {
     composingChapter = false;
     briefInput.value = "";
     resetEditorCanvas();
+    setActivity("compose");
     wizardSection.scrollIntoView({ behavior: "smooth" });
     briefInput.focus();
+  }
+
+  function closeNewMenu() {
+    if (!newMenuPop || !newMenuBtn) return;
+    newMenuPop.hidden = true;
+    newMenuBtn.setAttribute("aria-expanded", "false");
+  }
+
+  function setActivity(name) {
+    document.querySelectorAll(".rail-btn[data-activity]").forEach((btn) => {
+      const on = btn.dataset.activity === name;
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    document.querySelectorAll(".drawer-panel").forEach((panel) => {
+      panel.hidden = panel.dataset.panel !== name;
+    });
+    if (name === "compose") {
+      wizardSection?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    if (name === "run") {
+      workspaceSection.hidden = false;
+      workspaceSection.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+
+  function setLibraryTab(tab) {
+    libraryTabs?.querySelectorAll(".library-tab").forEach((btn) => {
+      const on = btn.dataset.libTab === tab;
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    document.querySelectorAll(".library-pane").forEach((pane) => {
+      pane.hidden = pane.dataset.libPane !== tab;
+    });
+  }
+
+  function toggleConsole() {
+    consolePanel.hidden = !consolePanel.hidden;
+    workspaceGrid.style.gridTemplateColumns = consolePanel.hidden
+      ? "1fr"
+      : "420px 1fr";
+  }
+
+  menuNewPiece?.addEventListener("click", () => {
+    closeNewMenu();
+    startNewArticle();
+  });
+  menuNewPieceCompose?.addEventListener("click", startNewArticle);
+  menuNewBook?.addEventListener("click", () => {
+    closeNewMenu();
+    createBookFlow();
+  });
+  menuNewChapter?.addEventListener("click", () => {
+    closeNewMenu();
+    startNewChapter();
+  });
+  bookAddChapterBtn?.addEventListener("click", () => startNewChapter());
+
+  newMenuBtn?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (!newMenuPop) return;
+    const open = newMenuPop.hidden;
+    newMenuPop.hidden = !open;
+    newMenuBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest?.("#new-menu")) closeNewMenu();
   });
 
-  menuNewBook?.addEventListener("click", () => createBookFlow());
-  menuNewChapter?.addEventListener("click", () => startNewChapter());
-  bookAddChapterBtn?.addEventListener("click", () => startNewChapter());
+  activityRail?.addEventListener("click", (e) => {
+    const btn = e.target.closest(".rail-btn[data-activity]");
+    if (!btn) return;
+    setActivity(btn.dataset.activity);
+  });
+
+  libraryTabs?.addEventListener("click", (e) => {
+    const tab = e.target.closest(".library-tab");
+    if (!tab) return;
+    setLibraryTab(tab.dataset.libTab);
+  });
+
+  document.getElementById("nav-compose-brief")?.addEventListener("click", () => {
+    setActivity("compose");
+    briefInput?.focus();
+    wizardSection?.scrollIntoView({ behavior: "smooth" });
+  });
+  document.getElementById("nav-compose-theme")?.addEventListener("click", () => {
+    setActivity("compose");
+    themesSelector?.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+  document.getElementById("nav-pipeline")?.addEventListener("click", () => {
+    setActivity("run");
+  });
+  document.getElementById("nav-draft")?.addEventListener("click", () => {
+    setActivity("run");
+    document.getElementById("draft-panel")?.scrollIntoView({ behavior: "smooth" });
+  });
 
   async function createBookFlow() {
     const title = window.prompt("Book title");
@@ -259,30 +357,50 @@ document.addEventListener("DOMContentLoaded", () => {
       const data = await res.json();
       const books = data.books || [];
       if (!books.length) {
-        booksList.innerHTML = `<p class="side-hint">No books yet</p>`;
+        booksList.innerHTML = `<p class="side-hint">No books yet — use + New</p>`;
         return;
       }
       booksList.innerHTML = "";
       for (const b of books) {
+        const wrap = document.createElement("div");
+        wrap.className = `book-tree-item${b.id === currentBookId ? " open" : ""}`;
         const row = document.createElement("div");
         row.className = `article-link-row${b.id === currentBookId ? " active" : ""}`;
-        const open = document.createElement("a");
+        const open = document.createElement("button");
+        open.type = "button";
         open.className = "article-link";
-        open.href = b.url || `/books/${b.slug}`;
-        open.target = "_blank";
-        open.rel = "noopener";
         open.innerHTML = `
           <span class="article-link-title">${escapeHtml(b.title)}</span>
           <span class="article-link-meta">/${escapeHtml(b.slug)} · ${b.chapterCount || 0} ch</span>
         `;
-        const edit = document.createElement("button");
-        edit.type = "button";
-        edit.className = "article-edit-btn";
-        edit.textContent = "Open";
-        edit.addEventListener("click", () => loadBook(b.id));
+        open.addEventListener("click", () => loadBook(b.id));
+        const ext = document.createElement("a");
+        ext.className = "article-edit-btn";
+        ext.href = b.url || `/books/${b.slug}`;
+        ext.target = "_blank";
+        ext.rel = "noopener";
+        ext.textContent = "↗";
+        ext.title = "Open public URL";
         row.appendChild(open);
-        row.appendChild(edit);
-        booksList.appendChild(row);
+        row.appendChild(ext);
+        wrap.appendChild(row);
+
+        if (b.id === currentBookId && bookChapters.length) {
+          const ul = document.createElement("ul");
+          ul.className = "book-tree-chapters";
+          bookChapters.forEach((c, i) => {
+            const li = document.createElement("li");
+            li.className = c.id === currentChapterId ? "active" : "";
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.textContent = `${i + 1}. ${c.title}`;
+            btn.addEventListener("click", () => loadChapter(c.id));
+            li.appendChild(btn);
+            ul.appendChild(li);
+          });
+          wrap.appendChild(ul);
+        }
+        booksList.appendChild(wrap);
       }
     } catch (err) {
       booksList.innerHTML = `<p class="side-hint">${escapeHtml(err.message)}</p>`;
@@ -302,8 +420,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (bookRail) bookRail.hidden = false;
     if (bookRailTitle) bookRailTitle.textContent = book.title;
     if (bookRailMeta) {
-      bookRailMeta.textContent = `${bookChapters.length} chapter${bookChapters.length === 1 ? "" : "s"} · /books/${book.slug}`;
+      bookRailMeta.textContent = `${bookChapters.length} chapter${bookChapters.length === 1 ? "" : "s"} · expand in Library rail`;
     }
+    setActivity("library");
+    setLibraryTab("books");
     if (bookPublicLink) {
       bookPublicLink.href = `/books/${book.slug}`;
       bookPublicLink.textContent = `/books/${book.slug}`;
@@ -375,11 +495,13 @@ document.addEventListener("DOMContentLoaded", () => {
     reviseModeActive = false;
     renderBlockEditor();
     renderBookChapterList();
+    await refreshBooksList();
+    setActivity("library");
     addLog("BOOK", `Loaded chapter “${chapter.title}”`, "system");
     workspaceSection.scrollIntoView({ behavior: "smooth" });
   }
 
-  menuPublishToggle.addEventListener("click", () => {
+  menuPublishToggle?.addEventListener("click", () => {
     if (currentDraftText) enablePublishMode(true);
     else
       window.alert(
@@ -387,19 +509,8 @@ document.addEventListener("DOMContentLoaded", () => {
       );
   });
 
-  menuAddBlock.addEventListener("click", () => {
-    if (!isPublished) enablePublishMode(true);
-    else addNewBlockBelow(blocks.length - 1);
-  });
-
-  menuExport.addEventListener("click", triggerDownload);
-
-  menuToggleConsole.addEventListener("click", () => {
-    consolePanel.hidden = !consolePanel.hidden;
-    workspaceGrid.style.gridTemplateColumns = consolePanel.hidden
-      ? "1fr"
-      : "420px 1fr";
-  });
+  menuToggleConsole?.addEventListener("click", toggleConsole);
+  toggleConsoleDraft?.addEventListener("click", toggleConsole);
 
   goalsSelector.addEventListener("click", (e) => {
     const card = e.target.closest(".option-card");
@@ -436,6 +547,14 @@ document.addEventListener("DOMContentLoaded", () => {
       themesSelector.querySelectorAll(".theme-card").forEach((card) => {
         const hay = `${card.dataset.theme} ${card.textContent}`.toLowerCase();
         card.hidden = Boolean(q) && !hay.includes(q);
+      });
+      booksList?.querySelectorAll(".book-tree-item").forEach((item) => {
+        const hay = item.textContent.toLowerCase();
+        item.hidden = Boolean(q) && !hay.includes(q);
+      });
+      articlesList?.querySelectorAll(".article-link-row").forEach((row) => {
+        const hay = row.textContent.toLowerCase();
+        row.hidden = Boolean(q) && !hay.includes(q);
       });
     });
   }

@@ -15,69 +15,90 @@
   </head>
   <body class="page-studio">
     <div class="studio-shell">
-      <aside class="sidebar" data-od-id="studio-sidebar" aria-label="Studio navigation">
-        <a class="brand sidebar-brand" href="/">
-          <span class="brand-mark" aria-hidden="true"></span>
-          <span class="brand-name">Quill</span>
-        </a>
-        <nav class="side-nav">
-          <a href="/studio.html" class="side-link active" data-nav="compose">
+      <aside class="sidebar sidebar-ab" data-od-id="studio-sidebar" aria-label="Studio navigation">
+        <nav class="activity-rail" aria-label="Studio activities">
+          <a class="rail-brand" href="/" title="Quill home">
+            <span class="brand-mark sm" aria-hidden="true"></span>
+            <span class="sr-only">Quill</span>
+          </a>
+          <button type="button" class="rail-btn active" data-activity="library" title="Library" aria-pressed="true">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 4h6v16H5zM13 4h6v10h-6z" stroke="currentColor" stroke-width="1.6"/></svg>
+            <span>Lib</span>
+          </button>
+          <button type="button" class="rail-btn" data-activity="compose" title="Compose" aria-pressed="false">
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 19h14M7 5h10v10H7z" stroke="currentColor" stroke-width="1.6"/></svg>
-            Compose
-          </a>
-          <a href="#workspace-section" class="side-link" data-nav="pipeline" id="nav-pipeline">
+            <span>Write</span>
+          </button>
+          <button type="button" class="rail-btn" data-activity="run" title="Pipeline and console" aria-pressed="false">
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 8h6v8H4zM14 4h6v8h-6zM14 14h6v6h-6z" stroke="currentColor" stroke-width="1.6"/></svg>
-            Pipeline
+            <span>Run</span>
+          </button>
+          <div class="rail-spacer" aria-hidden="true"></div>
+          <a class="rail-btn rail-link" href="/books" title="Public books" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 4h9l3 3v13H6z" stroke="currentColor" stroke-width="1.6"/></svg>
+            <span>Web</span>
           </a>
-          <a href="#draft-panel" class="side-link" data-nav="draft" id="nav-draft">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 4h9l3 3v13H6z" stroke="currentColor" stroke-width="1.6"/><path d="M9 12h6M9 16h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-            Draft
-          </a>
-          <span class="side-label">Books</span>
-          <div id="books-list" class="articles-list" aria-live="polite">
-            <p class="side-hint">Loading books…</p>
-          </div>
-          <span class="side-label">Articles</span>
-          <div id="articles-list" class="articles-list" aria-live="polite">
-            <p class="side-hint">Loading articles…</p>
-          </div>
-          <span class="side-label">Workspace</span>
-          <button type="button" class="side-link" id="menu-new-book">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 4h9l3 3v13H6zM9 8h6M9 12h6M9 16h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-            New book
-          </button>
-          <button type="button" class="side-link" id="menu-new-chapter" hidden>
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-            New chapter
-          </button>
-          <button type="button" class="side-link" id="menu-new-piece">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-            New article
-          </button>
-          <button type="button" class="side-link" id="menu-publish-toggle">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12l5 5L20 7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            Publish &amp; edit
-          </button>
-          <button type="button" class="side-link" id="menu-add-block">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M12 8v8M8 12h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-            Add block
-          </button>
-          <button type="button" class="side-link" id="menu-export">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 4v10M8 10l4 4 4-4M5 18h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            Export
-          </button>
-          <button type="button" class="side-link" id="menu-toggle-console">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 7h14v10H5zM8 17v2M16 17v2M9 11l2 2 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            Toggle console
-          </button>
-          <span class="side-label">Explore</span>
-          <a href="/books" class="side-link">Books library</a>
-          <a href="/articles" class="side-link">Articles library</a>
-          <a href="/" class="side-link">Landing</a>
         </nav>
-        <div class="sidebar-foot">
-          <span class="mono-stamp" id="mode-badge">STATUS: READY</span>
-          <span class="mono-stamp muted" id="model-badge">MODEL: —</span>
+
+        <div class="sidebar-drawer" id="sidebar-drawer">
+          <section class="drawer-panel" data-panel="library" id="drawer-library">
+            <div class="drawer-head">
+              <div>
+                <p class="drawer-kicker">Library</p>
+                <h2 class="drawer-title">Your work</h2>
+              </div>
+              <div class="new-menu" id="new-menu">
+                <button type="button" class="btn btn-primary sm" id="new-menu-btn" aria-haspopup="menu" aria-expanded="false">+ New</button>
+                <div class="new-menu-pop" id="new-menu-pop" role="menu" hidden>
+                  <button type="button" role="menuitem" id="menu-new-book">Book</button>
+                  <button type="button" role="menuitem" id="menu-new-chapter" hidden>Chapter</button>
+                  <button type="button" role="menuitem" id="menu-new-piece">Article</button>
+                </div>
+              </div>
+            </div>
+            <div class="library-tabs" role="tablist" aria-label="Library type">
+              <button type="button" class="library-tab active" role="tab" aria-selected="true" data-lib-tab="books">Books</button>
+              <button type="button" class="library-tab" role="tab" aria-selected="false" data-lib-tab="articles">Articles</button>
+            </div>
+            <div class="library-pane" data-lib-pane="books" id="books-list" aria-live="polite">
+              <p class="side-hint">Loading books…</p>
+            </div>
+            <div class="library-pane" data-lib-pane="articles" id="articles-list" aria-live="polite" hidden>
+              <p class="side-hint">Loading articles…</p>
+            </div>
+            <div class="sidebar-foot">
+              <span class="mono-stamp" id="mode-badge">STATUS: READY</span>
+              <span class="mono-stamp muted" id="model-badge">MODEL: —</span>
+              <a class="drawer-quiet-link" href="/articles" target="_blank" rel="noopener">Public articles →</a>
+            </div>
+          </section>
+
+          <section class="drawer-panel" data-panel="compose" id="drawer-compose" hidden>
+            <div class="drawer-head">
+              <div>
+                <p class="drawer-kicker">Compose</p>
+                <h2 class="drawer-title">Brief &amp; voice</h2>
+              </div>
+            </div>
+            <p class="side-hint drawer-copy">Set the goal, theme, and brief in the main canvas, then fire agents.</p>
+            <button type="button" class="side-link" id="nav-compose-brief">Jump to brief</button>
+            <button type="button" class="side-link" id="nav-compose-theme">Jump to theme</button>
+            <button type="button" class="side-link" id="menu-new-piece-compose">New article draft</button>
+          </section>
+
+          <section class="drawer-panel" data-panel="run" id="drawer-run" hidden>
+            <div class="drawer-head">
+              <div>
+                <p class="drawer-kicker">Run</p>
+                <h2 class="drawer-title">Pipeline</h2>
+              </div>
+            </div>
+            <p class="side-hint drawer-copy">Watch agents, toggle the console, and open the draft.</p>
+            <button type="button" class="side-link" id="nav-pipeline">Jump to pipeline</button>
+            <button type="button" class="side-link" id="nav-draft">Jump to draft</button>
+            <button type="button" class="side-link" id="menu-toggle-console">Toggle console</button>
+            <button type="button" class="side-link" id="menu-publish-toggle">Publish &amp; edit blocks</button>
+          </section>
         </div>
       </aside>
 
@@ -119,16 +140,16 @@
           </article>
         </section>
 
-        <section class="book-rail panel-card" id="book-rail" hidden data-od-id="studio-book-rail">
-          <div class="panel-head-inline">
-            <h2 id="book-rail-title">Book</h2>
-            <p id="book-rail-meta">Start a book, then iterate chapters.</p>
+        <section class="book-context-bar" id="book-rail" hidden data-od-id="studio-book-rail">
+          <div class="book-context-copy">
+            <p class="eyebrow" id="book-rail-title">Book</p>
+            <p class="book-context-meta" id="book-rail-meta">Chapters live in the Library rail.</p>
           </div>
           <div class="book-rail-actions">
             <a class="btn btn-ghost sm" id="book-public-link" href="/books" target="_blank" rel="noopener">Open book URL</a>
             <button type="button" class="btn btn-primary sm" id="book-add-chapter-btn">Add chapter</button>
           </div>
-          <ol class="book-chapter-list" id="book-chapter-list"></ol>
+          <ol class="book-chapter-list" id="book-chapter-list" hidden></ol>
         </section>
 
         <section class="wizard-panel" id="wizard-section" data-od-id="studio-wizard">
@@ -335,7 +356,8 @@
                   <button type="button" class="btn btn-ghost sm" id="save-btn" hidden>Save edit</button>
                   <button type="button" class="btn btn-ghost sm" id="history-btn" hidden>History</button>
                   <button type="button" class="btn btn-ghost sm" id="copy-btn">Copy</button>
-                  <button type="button" class="btn btn-ghost sm" id="download-btn">Download MD</button>
+                  <button type="button" class="btn btn-ghost sm" id="download-btn" title="Export markdown">Export</button>
+                  <button type="button" class="btn btn-ghost sm" id="toggle-console-draft" title="Show or hide live stream">Console</button>
                 </div>
               </div>
               <div class="criteria-card-grid" id="criteria-card-grid"></div>
