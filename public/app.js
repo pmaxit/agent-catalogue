@@ -1,197 +1,245 @@
-// Atelier Zero — Writing Agent Studio App Logic with Visual Block Editor & Hamburger Drawer
+// Quill Studio — webflow (WordPress-inspired white) dashboard app logic
+// Bound Open Design: design-systems/webflow + design-templates/dashboard
 
-document.addEventListener('DOMContentLoaded', () => {
-  // DOM Elements
-  const hamburgerBtn = document.getElementById('hamburger-btn');
-  const sideDrawer = document.getElementById('side-drawer');
-  const drawerOverlay = document.getElementById('drawer-overlay');
-  const closeDrawerBtn = document.getElementById('close-drawer-btn');
+document.addEventListener("DOMContentLoaded", () => {
+  const menuNewPiece = document.getElementById("menu-new-piece");
+  const menuPublishToggle = document.getElementById("menu-publish-toggle");
+  const menuAddBlock = document.getElementById("menu-add-block");
+  const menuExport = document.getElementById("menu-export");
+  const menuToggleConsole = document.getElementById("menu-toggle-console");
 
-  // Menu items
-  const menuNewPiece = document.getElementById('menu-new-piece');
-  const menuPublishToggle = document.getElementById('menu-publish-toggle');
-  const menuAddBlock = document.getElementById('menu-add-block');
-  const menuExport = document.getElementById('menu-export');
-  const menuToggleConsole = document.getElementById('menu-toggle-console');
-  const menuThemeQuick = document.getElementById('menu-theme-quick');
+  const goalsSelector = document.getElementById("goals-selector");
+  const themesSelector = document.getElementById("themes-selector");
+  const agentForm = document.getElementById("agent-form");
+  const briefInput = document.getElementById("brief-input");
+  const audienceInput = document.getElementById("audience-input");
+  const toneInput = document.getElementById("tone-input");
+  const formatInput = document.getElementById("format-input");
+  const lengthInput = document.getElementById("length-input");
+  const fireBtn = document.getElementById("fire-btn");
+  const resetBtn = document.getElementById("reset-btn");
 
-  const goalsSelector = document.getElementById('goals-selector');
-  const themesSelector = document.getElementById('themes-selector');
-  const agentForm = document.getElementById('agent-form');
-  const briefInput = document.getElementById('brief-input');
-  const audienceInput = document.getElementById('audience-input');
-  const toneInput = document.getElementById('tone-input');
-  const formatInput = document.getElementById('format-input');
-  const lengthInput = document.getElementById('length-input');
-  const fireBtn = document.getElementById('fire-btn');
-  const resetBtn = document.getElementById('reset-btn');
+  const wizardSection = document.getElementById("wizard-section");
+  const workspaceSection = document.getElementById("workspace-section");
+  const workspaceGrid = document.getElementById("workspace-grid");
+  const consolePanel = document.getElementById("console-panel");
+  const streamBox = document.getElementById("stream-box");
+  const streamStatus = document.getElementById("stream-status");
+  const liveDot = document.getElementById("live-dot");
+  const articleCanvas = document.getElementById("article-canvas");
+  const criteriaGrid = document.getElementById("criteria-card-grid");
+  const iterationBadge = document.getElementById("iteration-badge");
+  const publishedBadge = document.getElementById("published-badge");
+  const publishBtn = document.getElementById("publish-btn");
+  const copyBtn = document.getElementById("copy-btn");
+  const downloadBtn = document.getElementById("download-btn");
+  const editorBar = document.getElementById("editor-bar");
+  const blocksCount = document.getElementById("blocks-count");
+  const addBlockBtn = document.getElementById("add-block-btn");
+  const modeBadge = document.getElementById("mode-badge");
+  const modelBadge = document.getElementById("model-badge");
+  const healthPill = document.getElementById("health-pill");
+  const studioSearch = document.getElementById("studio-search");
 
-  const wizardSection = document.getElementById('wizard-section');
-  const workspaceSection = document.getElementById('workspace-section');
-  const workspaceGrid = document.getElementById('workspace-grid');
-  const consolePanel = document.getElementById('console-panel');
-  const streamBox = document.getElementById('stream-box');
-  const streamStatus = document.getElementById('stream-status');
-  const liveDot = document.getElementById('live-dot');
-  const articleCanvas = document.getElementById('article-canvas');
-  const criteriaGrid = document.getElementById('criteria-card-grid');
-  const iterationBadge = document.getElementById('iteration-badge');
-  const publishedBadge = document.getElementById('published-badge');
-  const publishBtn = document.getElementById('publish-btn');
-  const copyBtn = document.getElementById('copy-btn');
-  const downloadBtn = document.getElementById('download-btn');
-  const editorBar = document.getElementById('editor-bar');
-  const blocksCount = document.getElementById('blocks-count');
-  const addBlockBtn = document.getElementById('add-block-btn');
-
-  // App State
-  let currentGoal = 'Thought Leadership & Opinion Essay';
-  let currentTheme = 'Atelier Editorial';
-  let currentDraftText = '';
+  let currentGoal = "Thought Leadership & Opinion Essay";
+  let currentTheme = "Agentic Command";
+  let currentDraftText = "";
   let isPublished = false;
   let blocks = [];
-  let activeEventSource = null;
+  let criterionThreshold = 0.75;
 
-  // 1. Hamburger Drawer Toggle Logic
-  const openDrawer = () => {
-    sideDrawer.hidden = false;
-    drawerOverlay.hidden = false;
-  };
+  const escapeHtml = (str) =>
+    String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
 
-  const closeDrawer = () => {
-    sideDrawer.hidden = true;
-    drawerOverlay.hidden = true;
-  };
+  async function hydrateConfig() {
+    try {
+      const [healthRes, configRes] = await Promise.all([
+        fetch("/api/health"),
+        fetch("/api/config"),
+      ]);
+      if (!healthRes.ok || !configRes.ok) throw new Error("Config fetch failed");
+      const health = await healthRes.json();
+      const config = await configRes.json();
 
-  hamburgerBtn.addEventListener('click', openDrawer);
-  closeDrawerBtn.addEventListener('click', closeDrawer);
-  drawerOverlay.addEventListener('click', closeDrawer);
+      const mock = Boolean(health.mock ?? config.mock);
+      modeBadge.textContent = mock ? "STATUS: MOCK" : "STATUS: LIVE";
+      modelBadge.textContent = `MODEL: ${(config.defaults?.model || "—").toUpperCase()}`;
+      healthPill.textContent = mock ? "Mock mode" : "API connected";
+      healthPill.classList.toggle("mock", mock);
+      healthPill.classList.toggle("live", !mock);
 
-  // Drawer Menu Actions
-  menuNewPiece.addEventListener('click', () => {
-    closeDrawer();
-    briefInput.value = '';
-    wizardSection.scrollIntoView({ behavior: 'smooth' });
+      const agentCount = Array.isArray(config.agents) ? config.agents.length : 4;
+      document.getElementById("kpi-agents").textContent = String(agentCount);
+      document.getElementById("kpi-iters").textContent = String(
+        config.goal?.max_iterations ?? 5,
+      );
+      document.getElementById("max-iter-val").textContent = String(
+        config.goal?.max_iterations ?? 5,
+      );
+
+      const thresholds = (config.goal?.criteria || []).map((c) => c.threshold);
+      if (thresholds.length) {
+        criterionThreshold = Math.min(...thresholds);
+        document.getElementById("kpi-threshold").textContent =
+          criterionThreshold.toFixed(2);
+        document.getElementById("threshold-val").textContent =
+          `${criterionThreshold}+`;
+      }
+
+      document.getElementById("kpi-runtime").textContent = mock
+        ? "mock"
+        : config.defaults?.runtime || "api";
+      document.getElementById("kpi-runtime-delta").textContent = mock
+        ? "Local mock runner active"
+        : "Cursor Cloud Agents API";
+    } catch (err) {
+      healthPill.textContent = "Offline";
+      modeBadge.textContent = "STATUS: ERROR";
+      console.error(err);
+    }
+  }
+
+  hydrateConfig();
+
+  menuNewPiece.addEventListener("click", () => {
+    briefInput.value = "";
+    wizardSection.scrollIntoView({ behavior: "smooth" });
     briefInput.focus();
   });
 
-  menuPublishToggle.addEventListener('click', () => {
-    closeDrawer();
-    if (currentDraftText) {
-      enablePublishMode();
-    } else {
-      alert('Please run the agent pipeline to generate a draft before publishing!');
-    }
+  menuPublishToggle.addEventListener("click", () => {
+    if (currentDraftText) enablePublishMode();
+    else
+      window.alert(
+        "Run the agent pipeline to generate a draft before publishing.",
+      );
   });
 
-  menuAddBlock.addEventListener('click', () => {
-    closeDrawer();
+  menuAddBlock.addEventListener("click", () => {
     if (!isPublished) enablePublishMode();
-    addNewBlockBelow(blocks.length - 1);
+    if (isPublished) addNewBlockBelow(blocks.length - 1);
   });
 
-  menuExport.addEventListener('click', () => {
-    closeDrawer();
-    triggerDownload();
-  });
+  menuExport.addEventListener("click", triggerDownload);
 
-  menuToggleConsole.addEventListener('click', () => {
-    closeDrawer();
+  menuToggleConsole.addEventListener("click", () => {
     consolePanel.hidden = !consolePanel.hidden;
-    workspaceGrid.style.gridTemplateColumns = consolePanel.hidden ? '1fr' : '440px 1fr';
+    workspaceGrid.style.gridTemplateColumns = consolePanel.hidden
+      ? "1fr"
+      : "420px 1fr";
   });
 
-  menuThemeQuick.addEventListener('click', () => {
-    closeDrawer();
-    themesSelector.scrollIntoView({ behavior: 'smooth' });
-  });
-
-  // 2. Goal Selector Handler
-  goalsSelector.addEventListener('click', (e) => {
-    const card = e.target.closest('.option-card');
+  goalsSelector.addEventListener("click", (e) => {
+    const card = e.target.closest(".option-card");
     if (!card) return;
-    goalsSelector.querySelectorAll('.option-card').forEach((c) => c.classList.remove('active'));
-    card.classList.add('active');
+    goalsSelector.querySelectorAll(".option-card").forEach((c) => {
+      c.classList.remove("active");
+      c.setAttribute("aria-selected", "false");
+    });
+    card.classList.add("active");
+    card.setAttribute("aria-selected", "true");
     currentGoal = card.dataset.goal;
   });
 
-  // 3. Theme Selector Handler
-  themesSelector.addEventListener('click', (e) => {
-    const card = e.target.closest('.theme-card');
+  themesSelector.addEventListener("click", (e) => {
+    const card = e.target.closest(".theme-card");
     if (!card) return;
-    themesSelector.querySelectorAll('.theme-card').forEach((c) => c.classList.remove('active'));
-    card.classList.add('active');
-
+    themesSelector.querySelectorAll(".theme-card").forEach((c) =>
+      c.classList.remove("active"),
+    );
+    card.classList.add("active");
     currentTheme = card.dataset.theme;
     toneInput.value = card.dataset.tone;
     formatInput.value = card.dataset.format;
   });
 
-  resetBtn.addEventListener('click', () => {
-    briefInput.value = '';
+  if (studioSearch) {
+    studioSearch.addEventListener("input", () => {
+      const q = studioSearch.value.trim().toLowerCase();
+      goalsSelector.querySelectorAll(".option-card").forEach((card) => {
+        const hay = `${card.dataset.goal} ${card.textContent}`.toLowerCase();
+        card.hidden = Boolean(q) && !hay.includes(q);
+      });
+      themesSelector.querySelectorAll(".theme-card").forEach((card) => {
+        const hay = `${card.dataset.theme} ${card.textContent}`.toLowerCase();
+        card.hidden = Boolean(q) && !hay.includes(q);
+      });
+    });
+  }
+
+  resetBtn.addEventListener("click", () => {
+    briefInput.value = "";
     briefInput.focus();
   });
 
-  // 4. Helper Log Writer
-  const addLog = (tag, msg, tagClass = 'system') => {
-    const now = new Date();
-    const timeStr = now.toTimeString().split(' ')[0];
-    const row = document.createElement('div');
-    row.className = 'stream-log-entry';
+  const addLog = (tag, msg, tagClass = "system") => {
+    const timeStr = new Date().toTimeString().split(" ")[0];
+    const row = document.createElement("div");
+    row.className = "stream-log-entry";
     row.innerHTML = `<span class="log-time">[${timeStr}]</span> <span class="log-tag ${tagClass}">${tag}</span> <span class="log-msg">${escapeHtml(msg)}</span>`;
     streamBox.appendChild(row);
     streamBox.scrollTop = streamBox.scrollHeight;
   };
 
-  const escapeHtml = (str) =>
-    str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-
-  // 5. Stage Node Manager
   const setNodeState = (nodeId, state) => {
     const nodeElem = document.getElementById(`node-${nodeId}`);
     if (!nodeElem) return;
-    nodeElem.classList.remove('active', 'completed');
-    const statusText = nodeElem.querySelector('.node-status');
-
-    if (state === 'active') {
-      nodeElem.classList.add('active');
-      statusText.textContent = 'Running...';
-    } else if (state === 'completed') {
-      nodeElem.classList.add('completed');
-      statusText.textContent = 'Done ✓';
+    nodeElem.classList.remove("active", "completed");
+    const statusText = nodeElem.querySelector(".node-status");
+    if (state === "active") {
+      nodeElem.classList.add("active");
+      statusText.textContent = "Running…";
+    } else if (state === "completed") {
+      nodeElem.classList.add("completed");
+      statusText.textContent = "Done";
     } else {
-      statusText.textContent = 'Pending';
+      statusText.textContent = "Pending";
     }
   };
 
-  // 6. Form Submission (Fire Agents)
-  agentForm.addEventListener('submit', async (e) => {
+  agentForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const brief = briefInput.value.trim();
-    if (!brief) return;
+    if (!brief) {
+      briefInput.focus();
+      return;
+    }
 
     workspaceSection.hidden = false;
-    workspaceSection.scrollIntoView({ behavior: 'smooth' });
+    workspaceSection.scrollIntoView({ behavior: "smooth" });
 
     fireBtn.disabled = true;
-    fireBtn.querySelector('span:nth-child(2)').textContent = 'Agents Running...';
-    streamBox.innerHTML = '';
-    articleCanvas.innerHTML = `<div class="placeholder-notice"><p>Firing Planner agent to generate initial strategy...</p></div>`;
-    criteriaGrid.innerHTML = '';
-    iterationBadge.textContent = 'Loop: 1';
+    const label = fireBtn.querySelector("span");
+    if (label) label.textContent = "Agents running…";
+    streamBox.innerHTML = "";
+    articleCanvas.innerHTML = `<div class="placeholder-notice empty-state"><h3>Pipeline started</h3><p>Planner is shaping the strategy for this brief…</p></div>`;
+    criteriaGrid.innerHTML = "";
+    iterationBadge.textContent = "Loop: 1";
     publishedBadge.hidden = true;
     editorBar.hidden = true;
     isPublished = false;
-    articleCanvas.classList.remove('block-editor-active');
+    articleCanvas.classList.remove("block-editor-active");
+    streamStatus.textContent = "Pipeline active";
+    liveDot.classList.add("pulsating");
+    liveDot.style.backgroundColor = "";
 
-    ['plan', 'research', 'writer', 'manager'].forEach((id) => setNodeState(id, 'pending'));
-
-    addLog('INIT', `Firing pipeline with Goal: "${currentGoal}" & Theme: "${currentTheme}"`, 'system');
+    ["plan", "research", "write", "manage"].forEach((id) =>
+      setNodeState(id, "pending"),
+    );
+    addLog(
+      "INIT",
+      `Firing pipeline · Goal: "${currentGoal}" · Theme: "${currentTheme}"`,
+      "system",
+    );
 
     try {
-      const response = await fetch('/api/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           brief,
           audience: audienceInput.value,
@@ -203,217 +251,198 @@ document.addEventListener('DOMContentLoaded', () => {
         }),
       });
 
-      if (!response.ok) {
-        throw new Error(`Server returned ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`Server returned ${response.status}`);
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      let buffer = '';
+      let buffer = "";
 
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
-
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n\n');
-        buffer = lines.pop() || '';
-
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop() || "";
         for (const line of lines) {
           if (!line.trim()) continue;
           const match = line.match(/^event:\s*(.+)\ndata:\s*(.+)$/s);
-          if (match) {
-            const [, eventType, eventData] = match;
-            try {
-              const data = JSON.parse(eventData);
-              handlePipelineEvent(data);
-            } catch (err) {
-              console.error('SSE JSON parse error', err);
-            }
+          if (!match) continue;
+          const [, , eventData] = match;
+          try {
+            handlePipelineEvent(JSON.parse(eventData));
+          } catch (err) {
+            console.error("SSE JSON parse error", err);
           }
         }
       }
     } catch (err) {
-      addLog('ERROR', err.message, 'eval');
-      streamStatus.textContent = 'Pipeline Failed';
-      liveDot.classList.remove('pulsating');
-      liveDot.style.backgroundColor = '#ef4444';
+      addLog("ERROR", err.message, "eval");
+      streamStatus.textContent = "Pipeline failed";
+      liveDot.classList.remove("pulsating");
+      liveDot.style.backgroundColor = "var(--danger)";
+      articleCanvas.innerHTML = `<div class="placeholder-notice empty-state"><h3>Run failed</h3><p>${escapeHtml(err.message)}. Check the console stream and retry.</p></div>`;
     } finally {
       fireBtn.disabled = false;
-      fireBtn.querySelector('span:nth-child(2)').textContent = 'Fire Agents & Start Pipeline';
+      if (label) label.textContent = "Fire agents";
     }
   });
 
-  // 7. Event Handler
   function handlePipelineEvent(event) {
     switch (event.type) {
-      case 'pipeline_started':
-        addLog('PIPELINE', `Workflow "${event.workflow}" started`, 'system');
+      case "pipeline_started":
+        addLog("PIPELINE", `Workflow "${event.workflow}" started`, "system");
         break;
-
-      case 'node_started':
-        addLog('NODE', `Started ${event.agentId} (Node: ${event.nodeId})`, 'node');
-        setNodeState(event.nodeId, 'active');
+      case "node_started":
+        addLog("NODE", `Started ${event.agentId} (${event.nodeId})`, "node");
+        setNodeState(event.nodeId, "active");
         iterationBadge.textContent = `Loop: ${event.iteration + 1}`;
         break;
-
-      case 'agent_created':
-        addLog('AGENT', `Spawned Cursor Cloud Agent ID: ${event.cursorAgentId.slice(0, 8)}...`, 'node');
+      case "agent_created":
+        addLog(
+          "AGENT",
+          `Spawned Cursor agent ${String(event.cursorAgentId).slice(0, 8)}…`,
+          "node",
+        );
         break;
-
-      case 'assistant_delta':
-        if (event.nodeId === 'writer') {
-          addLog('WRITE', event.text.slice(0, 80) + '...', 'delta');
+      case "assistant_delta":
+        if (event.nodeId === "write") {
+          addLog("WRITE", `${String(event.text).slice(0, 80)}…`, "delta");
         }
         break;
-
-      case 'node_finished':
-        setNodeState(event.nodeId, 'completed');
-        addLog('DONE', `Completed ${event.agentId}`, 'finish');
-
-        if (event.outputKey === 'draft' && event.output) {
+      case "node_finished":
+        setNodeState(event.nodeId, "completed");
+        addLog("DONE", `Completed ${event.agentId}`, "finish");
+        if (event.outputKey === "draft" && event.output) {
           currentDraftText = event.output;
           renderRawDraft(event.output);
         }
-
-        if (event.evaluation) {
-          renderEvaluation(event.evaluation);
-        }
+        if (event.evaluation) renderEvaluation(event.evaluation);
         break;
-
-      case 'route':
-        addLog('ROUTE', `Routing from ${event.from} → ${event.to}. Reason: ${event.reason}`, 'node');
+      case "route":
+        addLog(
+          "ROUTE",
+          `${event.from} → ${event.to}. ${event.reason || ""}`,
+          "node",
+        );
         break;
-
-      case 'pipeline_finished':
-        if (event.status === 'completed') {
-          addLog('SUCCESS', 'Quality thresholds met cleanly! Pipeline completed.', 'finish');
-          streamStatus.textContent = 'Completed ✓';
-          liveDot.classList.remove('pulsating');
-          liveDot.style.backgroundColor = '#10b981';
-        } else if (event.status === 'max_iterations') {
-          addLog('WARN', 'Reached max iteration limit.', 'node');
-          streamStatus.textContent = 'Max Loops Reached';
-        } else if (event.status === 'error') {
-          addLog('ERROR', event.error || 'Pipeline error', 'eval');
-          streamStatus.textContent = 'Error';
+      case "pipeline_finished":
+        if (event.status === "completed") {
+          addLog("SUCCESS", "Quality thresholds met. Pipeline completed.", "finish");
+          streamStatus.textContent = "Completed";
+          liveDot.classList.remove("pulsating");
+          liveDot.style.backgroundColor = "var(--success)";
+        } else if (event.status === "max_iterations") {
+          addLog("WARN", "Reached max iteration limit.", "node");
+          streamStatus.textContent = "Max loops";
+        } else if (event.status === "error") {
+          addLog("ERROR", event.error || "Pipeline error", "eval");
+          streamStatus.textContent = "Error";
+          liveDot.classList.remove("pulsating");
+          liveDot.style.backgroundColor = "var(--danger)";
         }
         if (event.draft) {
           currentDraftText = event.draft;
           renderRawDraft(event.draft);
         }
         break;
+      default:
+        break;
     }
   }
 
-  // 8. Render Raw Draft (Pre-publish)
   function renderRawDraft(text) {
-    let html = escapeHtml(text)
-      .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-      .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-      .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-      .replace(/^\> (.*$)/gim, '<blockquote>$1</blockquote>')
-      .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
-      .replace(/\*(.*)\*/gim, '<em>$1</em>')
-      .replace(/\n\n/g, '</p><p>');
-
+    const html = escapeHtml(text)
+      .replace(/^### (.*$)/gim, "<h3>$1</h3>")
+      .replace(/^## (.*$)/gim, "<h2>$1</h2>")
+      .replace(/^# (.*$)/gim, "<h1>$1</h1>")
+      .replace(/^> (.*$)/gim, "<blockquote>$1</blockquote>")
+      .replace(/\*\*(.*?)\*\*/gim, "<strong>$1</strong>")
+      .replace(/\*(.*?)\*/gim, "<em>$1</em>")
+      .replace(/\n\n/g, "</p><p>");
     articleCanvas.innerHTML = `<p>${html}</p>`;
   }
 
-  // 9. Enable Publish & Interactive Visual Block Editor Mode
-  publishBtn.addEventListener('click', enablePublishMode);
-  addBlockBtn.addEventListener('click', () => addNewBlockBelow(blocks.length - 1));
+  publishBtn.addEventListener("click", enablePublishMode);
+  addBlockBtn.addEventListener("click", () => addNewBlockBelow(blocks.length - 1));
 
   function enablePublishMode() {
     if (!currentDraftText) {
-      alert('No draft content available to publish.');
+      window.alert("No draft content available to publish.");
       return;
     }
-
     isPublished = true;
     publishedBadge.hidden = false;
     editorBar.hidden = false;
-    articleCanvas.classList.add('block-editor-active');
-    addLog('PUBLISH', 'Article published! Interactive visual block editor activated.', 'finish');
+    articleCanvas.classList.add("block-editor-active");
+    addLog("PUBLISH", "Article published. Block editor active.", "finish");
 
-    // Parse raw text into structured block array
-    const rawParagraphs = currentDraftText.split(/\n\s*\n/).filter((p) => p.trim());
+    const rawParagraphs = currentDraftText
+      .split(/\n\s*\n/)
+      .filter((p) => p.trim());
     blocks = rawParagraphs.map((pText, idx) => {
-      let type = 'paragraph';
-      if (pText.startsWith('# ')) type = 'h1';
-      else if (pText.startsWith('## ')) type = 'h2';
-      else if (pText.startsWith('### ')) type = 'h3';
-      else if (pText.startsWith('> ')) type = 'blockquote';
-
-      const cleanText = pText.replace(/^#{1,3}\s+/, '').replace(/^>\s+/, '');
+      let type = "paragraph";
+      if (pText.startsWith("# ")) type = "h1";
+      else if (pText.startsWith("## ")) type = "h2";
+      else if (pText.startsWith("### ")) type = "h3";
+      else if (pText.startsWith("> ")) type = "blockquote";
+      const cleanText = pText.replace(/^#{1,3}\s+/, "").replace(/^>\s+/, "");
       return { id: idx + 1, type, text: cleanText };
     });
-
     renderBlockEditor();
   }
 
-  // 10. Render Interactive Blocks
   function renderBlockEditor() {
-    articleCanvas.innerHTML = '';
-    blocksCount.textContent = `${blocks.length} Blocks`;
+    articleCanvas.innerHTML = "";
+    blocksCount.textContent = `${blocks.length} blocks`;
 
     blocks.forEach((block, index) => {
-      const blockItem = document.createElement('div');
-      blockItem.className = 'block-item';
-      blockItem.dataset.blockIndex = index;
+      const blockItem = document.createElement("div");
+      blockItem.className = "block-item";
 
-      // Floating Block Control Toolbar
-      const controls = document.createElement('div');
-      controls.className = 'block-controls';
+      const controls = document.createElement("div");
+      controls.className = "block-controls";
       controls.innerHTML = `
-        <button type="button" class="block-btn edit-btn" title="Edit Inline">✏️ Edit</button>
-        <button type="button" class="block-btn up-btn" title="Move Up">⬆️</button>
-        <button type="button" class="block-btn down-btn" title="Move Down">⬇️</button>
-        <button type="button" class="block-btn add-btn" title="Add Block Below">➕</button>
-        <button type="button" class="block-btn del-btn" title="Delete Block">🗑️</button>
+        <button type="button" class="block-btn edit-btn">Edit</button>
+        <button type="button" class="block-btn up-btn">Up</button>
+        <button type="button" class="block-btn down-btn">Down</button>
+        <button type="button" class="block-btn add-btn">Add</button>
+        <button type="button" class="block-btn del-btn">Delete</button>
       `;
 
-      // Editable Content Element
       let contentElem;
-      if (block.type === 'h1') contentElem = document.createElement('h1');
-      else if (block.type === 'h2') contentElem = document.createElement('h2');
-      else if (block.type === 'h3') contentElem = document.createElement('h3');
-      else if (block.type === 'blockquote') contentElem = document.createElement('blockquote');
-      else contentElem = document.createElement('p');
+      if (block.type === "h1") contentElem = document.createElement("h1");
+      else if (block.type === "h2") contentElem = document.createElement("h2");
+      else if (block.type === "h3") contentElem = document.createElement("h3");
+      else if (block.type === "blockquote")
+        contentElem = document.createElement("blockquote");
+      else contentElem = document.createElement("p");
 
-      contentElem.className = 'block-content';
-      contentElem.contentEditable = true;
+      contentElem.className = "block-content";
+      contentElem.contentEditable = "true";
       contentElem.innerHTML = escapeHtml(block.text);
-
-      // Save edits on input
-      contentElem.addEventListener('input', () => {
+      contentElem.addEventListener("input", () => {
         blocks[index].text = contentElem.innerText;
       });
 
-      // Control Event Listeners
-      controls.querySelector('.edit-btn').addEventListener('click', () => contentElem.focus());
-
-      controls.querySelector('.up-btn').addEventListener('click', () => {
+      controls.querySelector(".edit-btn").addEventListener("click", () =>
+        contentElem.focus(),
+      );
+      controls.querySelector(".up-btn").addEventListener("click", () => {
         if (index > 0) {
-          const temp = blocks[index];
-          blocks[index] = blocks[index - 1];
-          blocks[index - 1] = temp;
+          [blocks[index - 1], blocks[index]] = [blocks[index], blocks[index - 1]];
           renderBlockEditor();
         }
       });
-
-      controls.querySelector('.down-btn').addEventListener('click', () => {
+      controls.querySelector(".down-btn").addEventListener("click", () => {
         if (index < blocks.length - 1) {
-          const temp = blocks[index];
-          blocks[index] = blocks[index + 1];
-          blocks[index + 1] = temp;
+          [blocks[index + 1], blocks[index]] = [blocks[index], blocks[index + 1]];
           renderBlockEditor();
         }
       });
-
-      controls.querySelector('.add-btn').addEventListener('click', () => addNewBlockBelow(index));
-
-      controls.querySelector('.del-btn').addEventListener('click', () => {
+      controls
+        .querySelector(".add-btn")
+        .addEventListener("click", () => addNewBlockBelow(index));
+      controls.querySelector(".del-btn").addEventListener("click", () => {
         blocks.splice(index, 1);
         renderBlockEditor();
       });
@@ -425,55 +454,60 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function addNewBlockBelow(index) {
-    const newBlock = { id: Date.now(), type: 'paragraph', text: 'Write your new paragraph content here...' };
-    blocks.splice(index + 1, 0, newBlock);
+    blocks.splice(index + 1, 0, {
+      id: Date.now(),
+      type: "paragraph",
+      text: "Write your new paragraph content here…",
+    });
     renderBlockEditor();
   }
 
-  // 11. Render Evaluation
   function renderEvaluation(evaluation) {
-    if (!evaluation || !evaluation.scores) return;
-    criteriaGrid.innerHTML = '';
-
+    if (!evaluation?.scores) return;
+    criteriaGrid.innerHTML = "";
     for (const [key, score] of Object.entries(evaluation.scores)) {
-      const pass = score >= 0.75;
-      const card = document.createElement('div');
-      card.className = 'criterion-card';
+      const pass = score >= criterionThreshold;
+      const card = document.createElement("div");
+      card.className = "criterion-card";
       card.innerHTML = `
-        <span class="crit-label">${escapeHtml(key).toUpperCase()}</span>
-        <span class="crit-score ${pass ? 'pass' : 'fail'}">${(score * 100).toFixed(0)}% ${pass ? '✓' : '✗'}</span>
+        <span class="crit-label">${escapeHtml(key)}</span>
+        <span class="crit-score ${pass ? "pass" : "fail"}">${(score * 100).toFixed(0)}%</span>
       `;
       criteriaGrid.appendChild(card);
     }
   }
 
-  // 12. Copy and Download Handlers
   function getLatestArticleText() {
     if (isPublished && blocks.length > 0) {
-      return blocks.map((b) => b.text).join('\n\n');
+      return blocks.map((b) => b.text).join("\n\n");
     }
     return currentDraftText;
   }
 
-  copyBtn.addEventListener('click', () => {
+  copyBtn.addEventListener("click", async () => {
     const text = getLatestArticleText();
     if (!text) return;
-    navigator.clipboard.writeText(text);
-    copyBtn.textContent = 'Copied! ✓';
-    setTimeout(() => (copyBtn.textContent = 'Copy Text'), 2000);
+    await navigator.clipboard.writeText(text);
+    copyBtn.textContent = "Copied";
+    setTimeout(() => {
+      copyBtn.textContent = "Copy";
+    }, 2000);
   });
 
   function triggerDownload() {
     const text = getLatestArticleText();
-    if (!text) return;
-    const blob = new Blob([text], { type: 'text/markdown' });
+    if (!text) {
+      window.alert("Nothing to export yet.");
+      return;
+    }
+    const blob = new Blob([text], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
-    a.download = `atelier-published-article-${Date.now()}.md`;
+    a.download = `quill-article-${Date.now()}.md`;
     a.click();
     URL.revokeObjectURL(url);
   }
 
-  downloadBtn.addEventListener('click', triggerDownload);
+  downloadBtn.addEventListener("click", triggerDownload);
 });

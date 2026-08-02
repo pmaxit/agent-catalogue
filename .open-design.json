@@ -1,8 +1,8 @@
 {
   "version": 1,
   "designSystem": {
-    "slug": "agentic",
-    "path": "design-systems/agentic"
+    "slug": "webflow",
+    "path": "design-systems/webflow"
   },
   "skill": {
     "slug": "dashboard",
@@ -10,9 +10,9 @@
     "kind": "design-template",
     "mode": "prototype"
   },
-  "boundAt": "2026-08-02T17:10:00Z",
+  "boundAt": "2026-08-02T17:15:00Z",
   "extras": {
     "siblingTemplates": ["saas-landing", "blog-post"],
-    "note": "Primary bind is dashboard (studio). saas-landing + blog-post applied as sibling surfaces under agentic."
+    "note": "Switched from agentic (dark) to webflow (white, blue) per user request for WordPress-inspired light theme. No wordpress slug in OD catalogue; webflow is closest white + blue CMS/builder match."
   }
 }
