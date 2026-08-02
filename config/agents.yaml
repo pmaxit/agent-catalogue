@@ -63,8 +63,17 @@ goal:
       description: >
         Includes at least one concrete image brief or markdown image placeholder
         with alt text and placement notes that fit the article.
-      weight: 0.7
+      weight: 0.6
       threshold: 0.7
+    - id: diagrams
+      label: Diagrams (draw.io)
+      description: >
+        Includes at least one draw.io (diagrams.net) workflow, architecture, or
+        explanation graph as a fenced ```drawio mxfile block. The diagram must
+        clarify a process or structure in the article — not decorative filler.
+        Prefer labeled boxes and arrows (flowchart / pipeline / decision tree).
+      weight: 1.0
+      threshold: 0.8
 
 # Agent roster — instructions, models, and output keys are fully YAML-driven.
 agents:
@@ -93,6 +102,8 @@ agents:
       4. Research questions that must be answered
       5. Success criteria for the final article
       6. Suggested image opportunities (where visuals help)
+      7. Required draw.io diagrams — list each workflow / architecture /
+         explanation graph the Writer must include (name, purpose, placement)
 
       Output markdown only. No preamble.
 
@@ -120,6 +131,8 @@ agents:
       - Open questions / unknowns
       - Suggested citations or source types (do not invent URLs)
       - Image research notes (what to depict, style hints)
+      - Diagram specs for draw.io: node labels, edge labels, and the story
+        each workflow/architecture graph should tell
 
       Output markdown only. No preamble.
 
@@ -163,8 +176,18 @@ agents:
       - Ground claims in the research notes; do not invent facts
       - Include at least one image using markdown image syntax with descriptive
         alt text, e.g. ![alt](image-brief:short-slug "placement note")
+      - Include at least one draw.io diagram as a fenced ```drawio block with
+        valid <mxfile>…</mxfile> XML. Use it to explain a workflow, architecture,
+        or decision graph (boxes + arrows). Place it next to the section it
+        clarifies. Prefer draw.io over mermaid for this requirement.
       - Use clear headings and scannable paragraphs
       - End with a short takeaway or next step when appropriate
+
+      Draw.io tips:
+      - Root cells id="0" and parent id="1" are required
+      - Vertices: style="rounded=1;whiteSpace=wrap;html=1;..." with mxGeometry
+      - Edges: edge="1" with source/target pointing at vertex ids
+      - Keep 3–8 nodes so the diagram stays readable
 
       Output the article markdown only. No preamble.
 
@@ -208,7 +231,8 @@ agents:
           "correctness": 0.0,
           "helpfulness": 0.0,
           "clarity": 0.0,
-          "images": 0.0
+          "images": 0.0,
+          "diagrams": 0.0
         },
         "passed": false,
         "route": "revise" | "done",
@@ -220,7 +244,12 @@ agents:
       - Set route to "done" ONLY if every criterion score >= its threshold
         AND passed is true.
       - Otherwise route must be "revise" with concrete feedback the Writer
-        can act on (call out missing images, weak sections, factual gaps).
+        can act on (call out missing draw.io diagrams, missing images, weak
+        sections, factual gaps).
+      - For the "diagrams" criterion: score high only if the draft contains a
+        fenced ```drawio (or ```diagrams.net / ```mxfile) block with mxfile XML
+        that explains a process or structure. Mermaid alone is not enough for
+        a passing diagrams score.
       - If this is the final allowed iteration and quality is still below bar,
         still return route "revise" unless criteria are met; the orchestrator
         will stop on max iterations.

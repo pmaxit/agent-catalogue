@@ -2,10 +2,11 @@ import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import Database from "better-sqlite3";
+import { buildFlowMxfile, hasDrawioDiagram } from "./diagrams.js";
 
 export type Block = {
   id: string | number;
-  type: "h1" | "h2" | "h3" | "blockquote" | "paragraph" | "list" | string;
+  type: "h1" | "h2" | "h3" | "blockquote" | "paragraph" | "list" | "drawio" | string;
   text: string;
   html?: string;
 };
@@ -91,6 +92,8 @@ export function blocksToMarkdown(blocks: Block[]): string {
             .filter(Boolean)
             .map((line) => (line.startsWith("- ") || line.startsWith("* ") ? line : `- ${line}`))
             .join("\n");
+        case "drawio":
+          return `\`\`\`drawio\n${text}\n\`\`\``;
         default:
           return text;
       }
@@ -99,38 +102,71 @@ export function blocksToMarkdown(blocks: Block[]): string {
 }
 
 export function markdownToBlocks(markdown: string): Block[] {
-  const chunks = markdown.split(/\n\s*\n/).filter((p) => p.trim());
-  return chunks.map((pText, idx) => {
-    let type: Block["type"] = "paragraph";
-    let clean = pText.trim();
-    if (clean.startsWith("# ")) {
-      type = "h1";
-      clean = clean.replace(/^#\s+/, "");
-    } else if (clean.startsWith("## ")) {
-      type = "h2";
-      clean = clean.replace(/^##\s+/, "");
-    } else if (clean.startsWith("### ")) {
-      type = "h3";
-      clean = clean.replace(/^###\s+/, "");
-    } else if (clean.split("\n").every((l) => l.startsWith("> ") || l === ">")) {
-      type = "blockquote";
-      clean = clean
-        .split("\n")
-        .map((l) => l.replace(/^>\s?/, ""))
-        .join("\n");
-    } else if (
-      clean.split("\n").length > 1 &&
-      clean.split("\n").every((l) => /^[-*]\s+/.test(l) || l.trim() === "")
-    ) {
-      type = "list";
-      clean = clean
-        .split("\n")
-        .filter((l) => l.trim())
-        .map((l) => l.replace(/^[-*]\s+/, ""))
-        .join("\n");
+  const blocks: Block[] = [];
+  const fenceRe =
+    /```(drawio|diagrams\.net|mxfile)\s*\n([\s\S]*?)```/gi;
+  let last = 0;
+  let match: RegExpExecArray | null;
+  const fenceMatches: Array<{ start: number; end: number; xml: string }> = [];
+  while ((match = fenceRe.exec(markdown)) !== null) {
+    fenceMatches.push({
+      start: match.index,
+      end: match.index + match[0].length,
+      xml: match[2].trim(),
+    });
+  }
+
+  const pushProse = (chunk: string) => {
+    const parts = chunk.split(/\n\s*\n/).filter((p) => p.trim());
+    for (const pText of parts) {
+      let type: Block["type"] = "paragraph";
+      let clean = pText.trim();
+      if (clean.startsWith("# ")) {
+        type = "h1";
+        clean = clean.replace(/^#\s+/, "");
+      } else if (clean.startsWith("## ")) {
+        type = "h2";
+        clean = clean.replace(/^##\s+/, "");
+      } else if (clean.startsWith("### ")) {
+        type = "h3";
+        clean = clean.replace(/^###\s+/, "");
+      } else if (clean.split("\n").every((l) => l.startsWith("> ") || l === ">")) {
+        type = "blockquote";
+        clean = clean
+          .split("\n")
+          .map((l) => l.replace(/^>\s?/, ""))
+          .join("\n");
+      } else if (
+        clean.split("\n").length > 1 &&
+        clean.split("\n").every((l) => /^[-*]\s+/.test(l) || l.trim() === "")
+      ) {
+        type = "list";
+        clean = clean
+          .split("\n")
+          .filter((l) => l.trim())
+          .map((l) => l.replace(/^[-*]\s+/, ""))
+          .join("\n");
+      }
+      blocks.push({ id: blocks.length + 1, type, text: clean });
     }
-    return { id: idx + 1, type, text: clean };
-  });
+  };
+
+  if (!fenceMatches.length) {
+    pushProse(markdown);
+    return blocks;
+  }
+
+  for (const f of fenceMatches) {
+    pushProse(markdown.slice(last, f.start));
+    blocks.push({
+      id: blocks.length + 1,
+      type: "drawio",
+      text: f.xml,
+    });
+    last = f.end;
+  }
+  pushProse(markdown.slice(last));
+  return blocks;
 }
 
 function slugify(input: string): string {
@@ -392,10 +428,51 @@ export class ArticleStore {
     return n;
   }
 
+  /** Ensure seeded/sample articles include a draw.io diagram revision when missing. */
+  ensureDiagramsOnPublished(): number {
+    const rows = this.list(200).filter((a) => a.status === "published");
+    let updated = 0;
+    for (const row of rows) {
+      if (hasDrawioDiagram(row.body_markdown)) continue;
+      const mx = buildFlowMxfile("Writing pipeline", [
+        "Plan",
+        "Research",
+        "Write",
+        "Judge",
+      ], [
+        { from: 0, to: 1 },
+        { from: 1, to: 2 },
+        { from: 2, to: 3 },
+        { from: 3, to: 2, label: "revise" },
+      ]);
+      const bodyMarkdown = `${row.body_markdown.trim()}\n\n## Pipeline diagram\n\n\`\`\`drawio\n${mx}\n\`\`\`\n`;
+      this.publish({
+        id: row.id,
+        title: row.title,
+        bodyMarkdown,
+        changeSummary: "Added draw.io workflow diagram",
+        status: "published",
+      });
+      updated += 1;
+    }
+    return updated;
+  }
+
   close(): void {
     this.db.close();
   }
 }
+
+const SAMPLE_PIPELINE_MX = buildFlowMxfile(
+  "Writing pipeline",
+  ["Plan", "Research", "Write", "Judge"],
+  [
+    { from: 0, to: 1 },
+    { from: 1, to: 2 },
+    { from: 2, to: 3 },
+    { from: 3, to: 2, label: "revise" },
+  ],
+);
 
 export const SAMPLE_ARTICLES: PublishInput[] = [
   {
@@ -415,9 +492,13 @@ Multi-agent writing systems fail quietly when the judge can shrug. Quill treats 
 
 Most “AI writing” products optimize for first-token latency. That is the wrong north star if the artifact has to survive an editor’s desk. Quill is built around a different contract: a YAML-defined graph of agents that must return scores, and a manager that cannot exit while any criterion sits below its threshold.
 
-The pipeline is deliberately boring. A planner shapes the angle. A researcher gathers constraints the writer is not allowed to invent. The writer produces a draft in a selected theme voice. The manager scores correctness, helpfulness, clarity, and image usage — then chooses revise or done.
+The pipeline is deliberately boring. A planner shapes the angle. A researcher gathers constraints the writer is not allowed to invent. The writer produces a draft in a selected theme voice. The manager scores correctness, helpfulness, clarity, images, and draw.io diagrams — then chooses revise or done.
 
 > Soft exits are how drafts become “good enough.” Hard gates are how drafts become publishable.
+
+\`\`\`drawio
+${SAMPLE_PIPELINE_MX}
+\`\`\`
 
 ## Why the graph is configuration, not ceremony
 
@@ -433,6 +514,7 @@ The manager response is structured. It must include scores, a passed flag, a rou
 - Helpfulness — the piece answers the brief for the stated audience
 - Clarity — structure, scannability, and prose that holds attention
 - Images — figures proposed where they earn their place
+- Diagrams — draw.io workflow / architecture graphs that explain the system
 
 ## Theme as a first-class input
 
@@ -442,7 +524,7 @@ Voice is not a late prompt sprinkle. The studio binds a writing goal and a narra
 
 ## What ship looks like
 
-In the studio, publish mode turns the draft into editable blocks — reorder, insert, delete — then export Markdown. Every publish and edit is stored in SQLite with a full revision snapshot so formatting, text, and structure survive across sessions.
+In the studio, publish mode turns the draft into editable blocks — reorder, insert, delete — then export Markdown. Every publish and edit is stored in SQLite with a full revision snapshot so formatting, text, diagrams, and structure survive across sessions.
 `,
   },
 ];

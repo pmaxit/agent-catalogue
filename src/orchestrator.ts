@@ -1,4 +1,5 @@
 import type { CursorClient } from "./cursor-client.js";
+import { buildFlowMxfile, hasDrawioDiagram } from "./diagrams.js";
 import { renderTemplate } from "./template.js";
 import type {
   BriefInput,
@@ -160,7 +161,7 @@ export class WritingOrchestrator {
             passed: false,
             route: "revise",
             feedback:
-              "Manager returned unparseable JSON. Revise for clarity and add image briefs.",
+              "Manager returned unparseable JSON. Revise for clarity and add draw.io diagram blocks.",
             summary: "Parse failure — forcing revise",
           };
           if (
@@ -399,6 +400,10 @@ Readers want clarity, credible framing, and something they can use today.
 ## Image opportunities
 - Hero diagram of the main framework
 - Before/after comparison visual
+
+## Required draw.io diagrams
+- Pipeline workflow: Plan → Research → Write → Judge (place after intro)
+- Quality gate decision: revise vs done (place near judge section)
 `;
   }
 
@@ -413,6 +418,7 @@ Readers want clarity, credible framing, and something they can use today.
 ## Evidence / rationale
 - Structured outlines reduce cognitive load for long-form reading.
 - Image briefs help designers and writers align early.
+- Workflow diagrams (draw.io) make multi-step systems scannable.
 
 ## Open questions
 - Exact metrics depend on the reader's vertical — keep ranges cautious.
@@ -423,6 +429,10 @@ Readers want clarity, credible framing, and something they can use today.
 ## Image research notes
 - Style: editorial line illustration, muted ink on warm paper
 - Depict the 3-step loop: plan → research → write
+
+## Diagram specs (draw.io)
+- Nodes: Plan, Research, Write, Judge
+- Edges: sequential arrows; Judge → Write labeled "revise"; Judge → Done labeled "publish"
 `;
   }
 
@@ -430,11 +440,26 @@ Readers want clarity, credible framing, and something they can use today.
     const feedback = /Manager feedback[\s\S]*?:\n([\s\S]*?)(?:\n\n|$)/i.exec(
       prompt,
     )?.[1];
+    const mx = buildFlowMxfile("Writing pipeline", [
+      "Plan",
+      "Research",
+      "Write",
+      "Judge",
+    ], [
+      { from: 0, to: 1 },
+      { from: 1, to: 2 },
+      { from: 2, to: 3 },
+      { from: 3, to: 2, label: "revise" },
+    ]);
     return `# ${brief}
 
 ![Framework overview](image-brief:plan-research-write-loop "Place after intro")
 
 ${brief} rewards a disciplined loop: plan what matters, research what is true, and write what helps.
+
+\`\`\`drawio
+${mx}
+\`\`\`
 
 ## Why this matters
 Readers do not need more noise. They need a path from confusion to a usable next step.
@@ -443,11 +468,11 @@ Readers do not need more noise. They need a path from confusion to a usable next
 1. **Plan** — name the audience, outline the sections, list research questions.
 2. **Research** — gather durable facts; mark uncertainty honestly.
 3. **Write** — turn the plan into scannable prose with one clear idea per section.
-4. **Judge** — score correctness, helpfulness, clarity, and images; revise until the bar is met.
+4. **Judge** — score correctness, helpfulness, clarity, images, and diagrams; revise until the bar is met.
 
 ## Pitfalls
 - Inventing citations
-- Skipping visuals
+- Skipping visuals and draw.io workflow graphs
 - Writing before the questions are clear
 
 ## Takeaway
@@ -458,14 +483,25 @@ ${feedback ? `\n<!-- addressed feedback: ${feedback.slice(0, 200)} -->` : ""}
 
   if (agentKey === "manager") {
     const hasImage = /!\[/.test(prompt) || /image-brief:/.test(prompt);
+    const hasDiagram = hasDrawioDiagram(prompt);
     const draftSection = prompt.includes("Draft:");
     const scores = {
       correctness: draftSection ? 0.88 : 0.4,
       helpfulness: draftSection ? 0.86 : 0.4,
       clarity: draftSection ? 0.84 : 0.4,
       images: hasImage ? 0.9 : 0.3,
+      diagrams: hasDiagram ? 0.92 : 0.2,
     };
-    const passed = Object.values(scores).every((s) => s >= 0.75);
+    const thresholds: Record<string, number> = {
+      correctness: 0.8,
+      helpfulness: 0.8,
+      clarity: 0.75,
+      images: 0.7,
+      diagrams: 0.8,
+    };
+    const passed = Object.entries(scores).every(
+      ([k, s]) => s >= (thresholds[k] ?? 0.75),
+    );
     return JSON.stringify(
       {
         scores,
@@ -473,10 +509,10 @@ ${feedback ? `\n<!-- addressed feedback: ${feedback.slice(0, 200)} -->` : ""}
         route: passed ? "done" : "revise",
         feedback: passed
           ? ""
-          : "Add at least one markdown image brief with alt text, tighten the intro, and ensure each section answers a research question.",
+          : "Add a fenced ```drawio mxfile workflow diagram, keep at least one image brief, tighten the intro, and ensure each section answers a research question.",
         summary: passed
-          ? "Draft meets publish criteria."
-          : "Draft needs another revision pass.",
+          ? "Draft meets publish criteria including draw.io diagrams."
+          : "Draft needs another revision pass (check diagrams criterion).",
       },
       null,
       2,

@@ -369,11 +369,35 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function renderRawDraft(text) {
-    const html = escapeHtml(text)
+    const withDiagrams = text.replace(
+      /```(?:drawio|diagrams\.net|mxfile)\s*\n([\s\S]*?)```/gi,
+      (_m, xml) => {
+        const encoded = "R" + encodeURIComponent(String(xml).trim());
+        const viewer = `https://viewer.diagrams.net/?highlight=0000ff&edit=_blank&layers=1&nav=1&title=Diagram#${encoded}`;
+        const editor = `https://app.diagrams.net/?splash=0&libs=general;flowchart#${encoded}`;
+        return `<figure class="diagram-figure" data-diagram="drawio">
+          <div class="diagram-toolbar">
+            <span class="mono-stamp">draw.io</span>
+            <a class="diagram-link" href="${editor}" target="_blank" rel="noopener">Open in draw.io</a>
+          </div>
+          <iframe class="diagram-frame" title="draw.io diagram" src="${viewer}" loading="lazy" referrerpolicy="no-referrer"></iframe>
+        </figure>`;
+      },
+    );
+    const html = escapeHtml(withDiagrams)
+      .replace(
+        /&lt;figure class="diagram-figure"[\s\S]*?&lt;\/figure&gt;/g,
+        (escaped) =>
+          escaped
+            .replace(/&lt;/g, "<")
+            .replace(/&gt;/g, ">")
+            .replace(/&quot;/g, '"')
+            .replace(/&amp;/g, "&"),
+      )
       .replace(/^### (.*$)/gim, "<h3>$1</h3>")
       .replace(/^## (.*$)/gim, "<h2>$1</h2>")
       .replace(/^# (.*$)/gim, "<h1>$1</h1>")
-      .replace(/^> (.*$)/gim, "<blockquote>$1</blockquote>")
+      .replace(/^&gt; (.*$)/gim, "<blockquote>$1</blockquote>")
       .replace(/\*\*(.*?)\*\*/gim, "<strong>$1</strong>")
       .replace(/\*(.*?)\*/gim, "<em>$1</em>")
       .replace(/\n\n/g, "</p><p>");
@@ -406,6 +430,7 @@ document.addEventListener("DOMContentLoaded", () => {
             .filter(Boolean)
             .map((line) => (line.startsWith("- ") ? line : `- ${line}`))
             .join("\n");
+        if (b.type === "drawio") return "```drawio\n" + text + "\n```";
         return text;
       })
       .join("\n\n");
@@ -622,18 +647,39 @@ document.addEventListener("DOMContentLoaded", () => {
     articleCanvas.classList.add("block-editor-active");
 
     if (!blocks.length) {
-      const rawParagraphs = currentDraftText
-        .split(/\n\s*\n/)
-        .filter((p) => p.trim());
-      blocks = rawParagraphs.map((pText, idx) => {
-        let type = "paragraph";
-        if (pText.startsWith("# ")) type = "h1";
-        else if (pText.startsWith("## ")) type = "h2";
-        else if (pText.startsWith("### ")) type = "h3";
-        else if (pText.startsWith("> ")) type = "blockquote";
-        const cleanText = pText.replace(/^#{1,3}\s+/, "").replace(/^>\s+/gm, "");
-        return { id: idx + 1, type, text: cleanText };
-      });
+      const fenceRe = /```(?:drawio|diagrams\.net|mxfile)\s*\n([\s\S]*?)```/gi;
+      const fences = [];
+      let m;
+      while ((m = fenceRe.exec(currentDraftText)) !== null) {
+        fences.push({ start: m.index, end: m.index + m[0].length, xml: m[1].trim() });
+      }
+      const pushProse = (chunk) => {
+        chunk
+          .split(/\n\s*\n/)
+          .filter((p) => p.trim())
+          .forEach((pText) => {
+            let type = "paragraph";
+            if (pText.startsWith("# ")) type = "h1";
+            else if (pText.startsWith("## ")) type = "h2";
+            else if (pText.startsWith("### ")) type = "h3";
+            else if (pText.startsWith("> ")) type = "blockquote";
+            const cleanText = pText
+              .replace(/^#{1,3}\s+/, "")
+              .replace(/^>\s+/gm, "");
+            blocks.push({ id: blocks.length + 1, type, text: cleanText });
+          });
+      };
+      if (!fences.length) {
+        pushProse(currentDraftText);
+      } else {
+        let last = 0;
+        for (const f of fences) {
+          pushProse(currentDraftText.slice(last, f.start));
+          blocks.push({ id: blocks.length + 1, type: "drawio", text: f.xml });
+          last = f.end;
+        }
+        pushProse(currentDraftText.slice(last));
+      }
     }
     renderBlockEditor();
     if (persist) {
@@ -667,20 +713,41 @@ document.addEventListener("DOMContentLoaded", () => {
       `;
 
       let contentElem;
-      if (block.type === "h1") contentElem = document.createElement("h1");
+      if (block.type === "drawio") {
+        contentElem = document.createElement("div");
+        contentElem.className = "block-content diagram-block";
+        const encoded = "R" + encodeURIComponent(block.text || "");
+        const viewer = `https://viewer.diagrams.net/?highlight=0000ff&edit=_blank&layers=1&nav=1&title=Diagram#${encoded}`;
+        const editor = `https://app.diagrams.net/?splash=0&libs=general;flowchart#${encoded}`;
+        contentElem.innerHTML = `
+          <div class="diagram-toolbar">
+            <span class="mono-stamp">draw.io block</span>
+            <a class="diagram-link" href="${editor}" target="_blank" rel="noopener">Edit in draw.io</a>
+          </div>
+          <iframe class="diagram-frame" title="draw.io diagram" src="${viewer}" loading="lazy" referrerpolicy="no-referrer"></iframe>
+          <textarea class="diagram-xml" rows="4" aria-label="draw.io XML">${escapeHtml(block.text)}</textarea>
+        `;
+        const ta = contentElem.querySelector(".diagram-xml");
+        ta.addEventListener("input", () => {
+          blocks[index].text = ta.value;
+          scheduleSave();
+        });
+      } else if (block.type === "h1") contentElem = document.createElement("h1");
       else if (block.type === "h2") contentElem = document.createElement("h2");
       else if (block.type === "h3") contentElem = document.createElement("h3");
       else if (block.type === "blockquote")
         contentElem = document.createElement("blockquote");
       else contentElem = document.createElement("p");
 
-      contentElem.className = "block-content";
-      contentElem.contentEditable = "true";
-      contentElem.innerHTML = escapeHtml(block.text);
-      contentElem.addEventListener("input", () => {
-        blocks[index].text = contentElem.innerText;
-        scheduleSave();
-      });
+      if (block.type !== "drawio") {
+        contentElem.className = "block-content";
+        contentElem.contentEditable = "true";
+        contentElem.innerHTML = escapeHtml(block.text);
+        contentElem.addEventListener("input", () => {
+          blocks[index].text = contentElem.innerText;
+          scheduleSave();
+        });
+      }
 
       controls.querySelector(".edit-btn").addEventListener("click", () =>
         contentElem.focus(),

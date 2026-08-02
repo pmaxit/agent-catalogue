@@ -1,6 +1,6 @@
 # Quill — YAML-driven writing agent (Cursor API)
 
-Multi-agent writing pipeline: **plan → research → write → manager**, looping until quality criteria (correctness, helpfulness, clarity, images) pass. Every agent definition, model, goal threshold, and graph edge lives in [`config/agents.yaml`](config/agents.yaml). Runtime calls the [Cursor Cloud Agents API](https://cursor.com/docs/cloud-agent/api/endpoints) (`POST /v1/agents`, no-repo agents).
+Multi-agent writing pipeline: **plan → research → write → manager**, looping until quality criteria (correctness, helpfulness, clarity, images, **diagrams**) pass. Diagrams must be fenced \`\`\`drawio mxfile blocks (diagrams.net / draw.io). Every agent definition, model, goal threshold, and graph edge lives in [`config/agents.yaml`](config/agents.yaml). Runtime calls the [Cursor Cloud Agents API](https://cursor.com/docs/cloud-agent/api/endpoints) (`POST /v1/agents`, no-repo agents).
 
 ## Quick start
 

@@ -36,6 +36,7 @@ const client =
 const orchestrator = new WritingOrchestrator(config, client, mock);
 const store = new ArticleStore();
 const seeded = store.seedIfEmpty(SAMPLE_ARTICLES);
+const diagramsBackfilled = store.ensureDiagramsOnPublished();
 
 const port = Number(config.app.port) || 8080;
 const publicDir = resolve(process.cwd(), config.app.public_dir);
@@ -350,6 +351,7 @@ app.log.info(
     title: config.app.title,
     sqlite: store.path,
     seeded,
+    diagramsBackfilled,
   },
   "writing-agent listening",
 );

@@ -1,4 +1,5 @@
 import type { ArticleRecord, Block } from "./db.js";
+import { renderDrawioEmbed } from "./diagrams.js";
 
 function escapeHtml(str: string): string {
   return String(str)
@@ -17,7 +18,7 @@ function inlineFormat(text: string): string {
 
 export function blocksToHtml(blocks: Block[]): string {
   return blocks
-    .map((b) => {
+    .map((b, index) => {
       const text = b.text ?? "";
       switch (b.type) {
         case "h1":
@@ -37,6 +38,11 @@ export function blocksToHtml(blocks: Block[]): string {
             .filter(Boolean)
             .map((line) => `<li>${inlineFormat(line.replace(/^[-*]\s+/, ""))}</li>`)
             .join("")}</ul>`;
+        case "drawio":
+          return renderDrawioEmbed(text, {
+            title: `Workflow diagram ${index + 1}`,
+            index,
+          });
         default:
           return `<p>${inlineFormat(text).replace(/\n/g, "<br />")}</p>`;
       }
