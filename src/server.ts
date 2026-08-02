@@ -7,12 +7,22 @@ import {
   renderArticlesIndex,
   renderNotFound,
 } from "./article-pages.js";
+import {
+  renderBookNotFound,
+  renderBookPage,
+  renderBooksIndex,
+  renderChapterPage,
+} from "./book-pages.js";
 import { isMockMode, loadConfig, resolveApiKey } from "./config.js";
 import { CursorClient } from "./cursor-client.js";
 import {
   ArticleStore,
   SAMPLE_ARTICLES,
   blocksToMarkdown,
+  ensureBlockIds,
+  markdownToBlocks,
+  mergeBlocksById,
+  parseMarkedBlocks,
   type Block,
   type PublishInput,
 } from "./db.js";
@@ -66,6 +76,7 @@ app.get("/api/health", async () => ({
   sqlite: {
     path: store.path,
     articles: store.list(1000).length,
+    books: store.listBooks(1000).length,
     seeded,
   },
 }));
@@ -245,6 +256,392 @@ app.put<{ Params: { id: string }; Body: ArticleBody }>(
   },
 );
 
+app.get("/api/books", async () => {
+  const books = store.listBooks().map((b) => {
+    const chapters = store.listChapters(b.id);
+    return {
+      id: b.id,
+      slug: b.slug,
+      title: b.title,
+      synopsis: b.synopsis,
+      status: b.status,
+      revision: b.revision,
+      theme: b.theme,
+      goal: b.goal,
+      chapterCount: chapters.length,
+      updated_at: b.updated_at,
+      published_at: b.published_at,
+      url: `/books/${b.slug}`,
+    };
+  });
+  return { books };
+});
+
+app.get<{ Params: { id: string } }>("/api/books/:id", async (req, reply) => {
+  const book = store.getBook(req.params.id);
+  if (!book) return reply.code(404).send({ error: "Book not found" });
+  const chapters = store.listChapters(book.id).map((c) => ({
+    id: c.id,
+    slug: c.slug,
+    title: c.title,
+    sort_order: c.sort_order,
+    status: c.status,
+    revision: c.revision,
+    theme: c.theme,
+    updated_at: c.updated_at,
+    url: `/books/${book.slug}/${c.slug}`,
+  }));
+  let overviewBlocks: Block[] = [];
+  try {
+    overviewBlocks = parseBlocks(book.overview_blocks_json);
+  } catch {
+    overviewBlocks = [];
+  }
+  return {
+    book: {
+      ...book,
+      overviewBlocks,
+      chapters,
+      url: `/books/${book.slug}`,
+    },
+  };
+});
+
+app.post<{
+  Body: {
+    title?: string;
+    slug?: string;
+    synopsis?: string;
+    overviewMarkdown?: string;
+    audience?: string;
+    tone?: string;
+    format?: string;
+    length?: string;
+    theme?: string;
+    goal?: string;
+    status?: "draft" | "published";
+  };
+}>("/api/books", async (req, reply) => {
+  try {
+    const body = req.body ?? {};
+    if (!body.title?.trim()) {
+      return reply.code(400).send({ error: "title is required" });
+    }
+    const book = store.upsertBook({
+      title: body.title.trim(),
+      slug: body.slug,
+      synopsis: body.synopsis,
+      overviewMarkdown: body.overviewMarkdown,
+      status: body.status ?? "published",
+      meta: {
+        audience: body.audience,
+        tone: body.tone,
+        format: body.format,
+        length: body.length,
+        theme: body.theme,
+        goal: body.goal,
+      },
+    });
+    return reply.code(201).send({
+      book: { ...book, chapters: [], url: `/books/${book.slug}` },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return reply.code(400).send({ error: message });
+  }
+});
+
+app.put<{
+  Params: { id: string };
+  Body: {
+    title?: string;
+    slug?: string;
+    synopsis?: string;
+    overviewMarkdown?: string;
+    overviewBlocks?: Block[];
+    audience?: string;
+    tone?: string;
+    format?: string;
+    length?: string;
+    theme?: string;
+    goal?: string;
+    status?: "draft" | "published";
+  };
+}>("/api/books/:id", async (req, reply) => {
+  const existing = store.getBook(req.params.id);
+  if (!existing) return reply.code(404).send({ error: "Book not found" });
+  try {
+    const body = req.body ?? {};
+    const book = store.upsertBook({
+      id: existing.id,
+      title: body.title?.trim() || existing.title,
+      slug: body.slug,
+      synopsis: body.synopsis,
+      overviewMarkdown: body.overviewMarkdown,
+      overviewBlocks: body.overviewBlocks,
+      status: body.status ?? (existing.status as "draft" | "published"),
+      meta: {
+        audience: body.audience,
+        tone: body.tone,
+        format: body.format,
+        length: body.length,
+        theme: body.theme,
+        goal: body.goal,
+      },
+    });
+    const chapters = store.listChapters(book.id);
+    return { book: { ...book, chapters, url: `/books/${book.slug}` } };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return reply.code(400).send({ error: message });
+  }
+});
+
+app.get<{ Params: { id: string } }>(
+  "/api/chapters/:id",
+  async (req, reply) => {
+    const chapter = store.getChapter(req.params.id);
+    if (!chapter) return reply.code(404).send({ error: "Chapter not found" });
+    const book = store.getBook(chapter.book_id);
+    if (!book) return reply.code(404).send({ error: "Book not found" });
+    const blocks = parseBlocks(chapter.blocks_json);
+    return {
+      chapter: {
+        ...chapter,
+        blocks,
+        url: `/books/${book.slug}/${chapter.slug}`,
+        book: { id: book.id, slug: book.slug, title: book.title },
+      },
+    };
+  },
+);
+
+app.get<{ Params: { id: string } }>(
+  "/api/chapters/:id/history",
+  async (req, reply) => {
+    const chapter = store.getChapter(req.params.id);
+    if (!chapter) return reply.code(404).send({ error: "Chapter not found" });
+    const revisions = store.chapterHistory(chapter.id).map((r) => ({
+      id: r.id,
+      revision: r.revision,
+      title: r.title,
+      change_summary: r.change_summary,
+      created_at: r.created_at,
+    }));
+    return { chapterId: chapter.id, revisions };
+  },
+);
+
+app.get<{ Params: { id: string; rev: string } }>(
+  "/api/chapters/:id/revisions/:rev",
+  async (req, reply) => {
+    const chapter = store.getChapter(req.params.id);
+    if (!chapter) return reply.code(404).send({ error: "Chapter not found" });
+    const rev = Number(req.params.rev);
+    if (!Number.isFinite(rev)) {
+      return reply.code(400).send({ error: "Invalid revision" });
+    }
+    const revision = store.getChapterRevision(chapter.id, rev);
+    if (!revision) return reply.code(404).send({ error: "Revision not found" });
+    return { revision: { ...revision, blocks: parseBlocks(revision.blocks_json) } };
+  },
+);
+
+app.post<{
+  Body: ArticleBody & {
+    bookId?: string;
+    sortOrder?: number;
+  };
+}>("/api/chapters", async (req, reply) => {
+  try {
+    const body = req.body ?? {};
+    if (!body.bookId) {
+      return reply.code(400).send({ error: "bookId is required" });
+    }
+    const blocks = body.blocks?.length
+      ? ensureBlockIds(body.blocks)
+      : undefined;
+    const chapter = store.publishChapter({
+      bookId: body.bookId,
+      slug: body.slug,
+      title: body.title,
+      sortOrder: body.sortOrder,
+      bodyMarkdown: body.bodyMarkdown,
+      bodyHtml: body.bodyHtml,
+      blocks,
+      changeSummary: body.changeSummary,
+      status: body.status ?? "published",
+      meta: {
+        brief: body.brief,
+        audience: body.audience,
+        tone: body.tone,
+        format: body.format,
+        length: body.length,
+        theme: body.theme,
+        goal: body.goal,
+      },
+    });
+    const book = store.getBook(chapter.book_id)!;
+    return reply.code(201).send({
+      chapter: {
+        ...chapter,
+        blocks: parseBlocks(chapter.blocks_json),
+        url: `/books/${book.slug}/${chapter.slug}`,
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return reply.code(400).send({ error: message });
+  }
+});
+
+app.put<{
+  Params: { id: string };
+  Body: ArticleBody & { bookId?: string; sortOrder?: number };
+}>("/api/chapters/:id", async (req, reply) => {
+  const existing = store.getChapter(req.params.id);
+  if (!existing) return reply.code(404).send({ error: "Chapter not found" });
+  try {
+    const body = req.body ?? {};
+    const blocks = body.blocks?.length
+      ? ensureBlockIds(body.blocks)
+      : undefined;
+    const chapter = store.publishChapter({
+      id: existing.id,
+      bookId: body.bookId || existing.book_id,
+      slug: body.slug,
+      title: body.title,
+      sortOrder: body.sortOrder,
+      bodyMarkdown: body.bodyMarkdown,
+      bodyHtml: body.bodyHtml,
+      blocks,
+      changeSummary: body.changeSummary,
+      status: body.status ?? "published",
+      meta: {
+        brief: body.brief,
+        audience: body.audience,
+        tone: body.tone,
+        format: body.format,
+        length: body.length,
+        theme: body.theme,
+        goal: body.goal,
+      },
+    });
+    const book = store.getBook(chapter.book_id)!;
+    return {
+      chapter: {
+        ...chapter,
+        blocks: parseBlocks(chapter.blocks_json),
+        url: `/books/${book.slug}/${chapter.slug}`,
+      },
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return reply.code(400).send({ error: message });
+  }
+});
+
+app.post<{
+  Params: { id: string };
+  Body: {
+    updates?: Block[];
+    selectedIds?: Array<string | number>;
+    proposedMarkdown?: string;
+    changeSummary?: string;
+  };
+}>("/api/chapters/:id/apply-blocks", async (req, reply) => {
+  const existing = store.getChapter(req.params.id);
+  if (!existing) return reply.code(404).send({ error: "Chapter not found" });
+  try {
+    const body = req.body ?? {};
+    let updates = body.updates?.length ? ensureBlockIds(body.updates) : [];
+    if (!updates.length && body.proposedMarkdown) {
+      const marked = parseMarkedBlocks(body.proposedMarkdown);
+      updates = marked.length
+        ? marked
+        : markdownToBlocks(body.proposedMarkdown);
+    }
+    if (!updates.length) {
+      return reply.code(400).send({ error: "No block updates provided" });
+    }
+    const chapter = store.applyChapterBlockUpdates(
+      existing.id,
+      updates,
+      body.selectedIds,
+      body.changeSummary ?? "Selective block update",
+    );
+    const book = store.getBook(chapter.book_id)!;
+    return {
+      chapter: {
+        ...chapter,
+        blocks: parseBlocks(chapter.blocks_json),
+        url: `/books/${book.slug}/${chapter.slug}`,
+      },
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return reply.code(400).send({ error: message });
+  }
+});
+
+app.post<{
+  Params: { id: string };
+  Body: {
+    updates?: Block[];
+    selectedIds?: Array<string | number>;
+    proposedMarkdown?: string;
+    changeSummary?: string;
+  };
+}>("/api/articles/:id/apply-blocks", async (req, reply) => {
+  const existing = store.get(req.params.id);
+  if (!existing) return reply.code(404).send({ error: "Article not found" });
+  try {
+    const body = req.body ?? {};
+    let updates = body.updates?.length ? ensureBlockIds(body.updates) : [];
+    if (!updates.length && body.proposedMarkdown) {
+      const marked = parseMarkedBlocks(body.proposedMarkdown);
+      updates = marked.length
+        ? marked
+        : markdownToBlocks(body.proposedMarkdown);
+    }
+    if (!updates.length) {
+      return reply.code(400).send({ error: "No block updates provided" });
+    }
+    let current = parseBlocks(existing.blocks_json);
+    if (!current.length) current = markdownToBlocks(existing.body_markdown);
+    current = ensureBlockIds(current);
+    const merged = mergeBlocksById(current, updates, body.selectedIds);
+    const article = store.publish({
+      id: existing.id,
+      title: existing.title,
+      slug: existing.slug,
+      blocks: merged,
+      bodyMarkdown: blocksToMarkdown(merged),
+      changeSummary: body.changeSummary ?? "Selective block update",
+      status: "published",
+      meta: {
+        brief: existing.brief ?? undefined,
+        audience: existing.audience ?? undefined,
+        tone: existing.tone ?? undefined,
+        format: existing.format ?? undefined,
+        length: existing.length ?? undefined,
+        theme: existing.theme ?? undefined,
+        goal: existing.goal ?? undefined,
+      },
+    });
+    return {
+      article: {
+        ...article,
+        blocks: parseBlocks(article.blocks_json),
+        url: `/articles/${article.slug}`,
+      },
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return reply.code(400).send({ error: message });
+  }
+});
+
 app.get("/articles", async (_req, reply) => {
   const html = renderArticlesIndex(publishedOnly());
   return reply.type("text/html; charset=utf-8").send(html);
@@ -262,6 +659,70 @@ app.get<{ Params: { slug: string } }>("/articles/:slug", async (req, reply) => {
   const html = renderArticlePage(article, blocks);
   return reply.type("text/html; charset=utf-8").send(html);
 });
+
+app.get("/books", async (_req, reply) => {
+  const books = store.listBooks(200).filter((b) => b.status === "published");
+  return reply
+    .type("text/html; charset=utf-8")
+    .send(renderBooksIndex(books));
+});
+
+app.get<{ Params: { bookSlug: string } }>(
+  "/books/:bookSlug",
+  async (req, reply) => {
+    const book = store.getBook(req.params.bookSlug);
+    if (!book || book.status !== "published") {
+      return reply
+        .code(404)
+        .type("text/html; charset=utf-8")
+        .send(renderBookNotFound(`/books/${req.params.bookSlug}`));
+    }
+    const chapters = store
+      .listChapters(book.id)
+      .filter((c) => c.status === "published");
+    return reply
+      .type("text/html; charset=utf-8")
+      .send(renderBookPage(book, chapters));
+  },
+);
+
+app.get<{ Params: { bookSlug: string; chapterSlug: string } }>(
+  "/books/:bookSlug/:chapterSlug",
+  async (req, reply) => {
+    const book = store.getBook(req.params.bookSlug);
+    if (!book || book.status !== "published") {
+      return reply
+        .code(404)
+        .type("text/html; charset=utf-8")
+        .send(
+          renderBookNotFound(
+            `/books/${req.params.bookSlug}/${req.params.chapterSlug}`,
+          ),
+        );
+    }
+    const chapter = store.getChapter(req.params.chapterSlug, book.id);
+    if (!chapter || chapter.status !== "published") {
+      return reply
+        .code(404)
+        .type("text/html; charset=utf-8")
+        .send(
+          renderBookNotFound(
+            `/books/${req.params.bookSlug}/${req.params.chapterSlug}`,
+          ),
+        );
+    }
+    const siblings = store
+      .listChapters(book.id)
+      .filter((c) => c.status === "published");
+    const html = renderChapterPage(
+      book,
+      chapter,
+      parseBlocks(chapter.blocks_json),
+      siblings,
+    );
+    return reply.type("text/html; charset=utf-8").send(html);
+  },
+);
 
 app.post<{ Body: BriefInput }>("/api/run", async (req, reply) => {
   const body = req.body ?? ({} as BriefInput);
@@ -298,6 +759,13 @@ app.post<{ Body: BriefInput }>("/api/run", async (req, reply) => {
         length: body.length,
         theme: body.theme,
         goal: body.goal,
+        mode: body.mode,
+        existingDraft: body.existingDraft,
+        selectedBlocks: body.selectedBlocks,
+        reviseInstruction: body.reviseInstruction,
+        bookTitle: body.bookTitle,
+        chapterTitle: body.chapterTitle,
+        chapterNumber: body.chapterNumber,
       },
       signal: ac.signal,
       onEvent: async (event) => {

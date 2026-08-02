@@ -3,10 +3,30 @@
 
 document.addEventListener("DOMContentLoaded", () => {
   const menuNewPiece = document.getElementById("menu-new-piece");
+  const menuNewBook = document.getElementById("menu-new-book");
+  const menuNewChapter = document.getElementById("menu-new-chapter");
   const menuPublishToggle = document.getElementById("menu-publish-toggle");
   const menuAddBlock = document.getElementById("menu-add-block");
   const menuExport = document.getElementById("menu-export");
   const menuToggleConsole = document.getElementById("menu-toggle-console");
+  const booksList = document.getElementById("books-list");
+  const bookRail = document.getElementById("book-rail");
+  const bookRailTitle = document.getElementById("book-rail-title");
+  const bookRailMeta = document.getElementById("book-rail-meta");
+  const bookChapterList = document.getElementById("book-chapter-list");
+  const bookPublicLink = document.getElementById("book-public-link");
+  const bookAddChapterBtn = document.getElementById("book-add-chapter-btn");
+  const blockReviseBar = document.getElementById("block-revise-bar");
+  const selectAllBlocks = document.getElementById("select-all-blocks");
+  const selectedBlocksCount = document.getElementById("selected-blocks-count");
+  const reviseInstruction = document.getElementById("revise-instruction");
+  const reviseBlocksBtn = document.getElementById("revise-blocks-btn");
+  const toggleReviseBtn = document.getElementById("toggle-revise-btn");
+  const applyPanel = document.getElementById("apply-panel");
+  const applyList = document.getElementById("apply-list");
+  const applySelectAllBtn = document.getElementById("apply-select-all-btn");
+  const applySelectedBtn = document.getElementById("apply-selected-btn");
+  const dismissApplyBtn = document.getElementById("dismiss-apply-btn");
 
   const goalsSelector = document.getElementById("goals-selector");
   const themesSelector = document.getElementById("themes-selector");
@@ -53,11 +73,26 @@ document.addEventListener("DOMContentLoaded", () => {
   let currentDraftText = "";
   let currentArticleId = null;
   let currentArticleSlug = null;
+  let currentBookId = null;
+  let currentBookSlug = null;
+  let currentBookTitle = "";
+  let currentChapterId = null;
+  let currentChapterSlug = null;
+  let bookChapters = [];
+  let composingChapter = false;
   let isPublished = false;
   let blocks = [];
+  let selectedBlockIds = new Set();
+  let pendingProposals = [];
+  let pendingProposalMarkdown = "";
+  let reviseModeActive = false;
+  let awaitingBlockApply = false;
   let criterionThreshold = 0.75;
   let saveTimer = null;
   let saving = false;
+
+  const newId = () =>
+    crypto.randomUUID ? crypto.randomUUID() : `b-${Date.now()}-${Math.random()}`;
 
   const escapeHtml = (str) =>
     String(str)
@@ -116,11 +151,233 @@ document.addEventListener("DOMContentLoaded", () => {
 
   hydrateConfig();
 
+  function resetEditorCanvas(message = "Waiting for draft") {
+    currentDraftText = "";
+    blocks = [];
+    selectedBlockIds = new Set();
+    pendingProposals = [];
+    pendingProposalMarkdown = "";
+    awaitingBlockApply = false;
+    isPublished = false;
+    publishedBadge.hidden = true;
+    editorBar.hidden = true;
+    if (blockReviseBar) blockReviseBar.hidden = true;
+    if (applyPanel) applyPanel.hidden = true;
+    if (saveBtn) saveBtn.hidden = true;
+    if (historyBtn) historyBtn.hidden = true;
+    if (articleMeta) articleMeta.textContent = "";
+    articleCanvas.classList.remove("block-editor-active");
+    articleCanvas.innerHTML = `<div class="placeholder-notice empty-state"><h3>${escapeHtml(message)}</h3><p>Fire agents after setting the brief, theme, and length.</p></div>`;
+  }
+
   menuNewPiece.addEventListener("click", () => {
+    currentArticleId = null;
+    currentArticleSlug = null;
+    currentChapterId = null;
+    currentChapterSlug = null;
+    composingChapter = false;
     briefInput.value = "";
+    resetEditorCanvas();
     wizardSection.scrollIntoView({ behavior: "smooth" });
     briefInput.focus();
   });
+
+  menuNewBook?.addEventListener("click", () => createBookFlow());
+  menuNewChapter?.addEventListener("click", () => startNewChapter());
+  bookAddChapterBtn?.addEventListener("click", () => startNewChapter());
+
+  async function createBookFlow() {
+    const title = window.prompt("Book title");
+    if (!title?.trim()) return;
+    const synopsis =
+      window.prompt("Short synopsis (optional)", "")?.trim() || "";
+    try {
+      const oreillyCard = themesSelector?.querySelector(
+        '[data-theme="O\'Reilly Book Chapter"]',
+      );
+      if (oreillyCard) oreillyCard.click();
+      const bookGoal = goalsSelector?.querySelector(
+        '[data-goal="O\'Reilly-Style Technical Book Chapter"]',
+      );
+      if (bookGoal) bookGoal.click();
+
+      const res = await fetch("/api/books", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: title.trim(),
+          synopsis,
+          overviewMarkdown: synopsis
+            ? `# ${title.trim()}\n\n${synopsis}`
+            : `# ${title.trim()}\n\nA practical technical book drafted in Quill.`,
+          theme: currentTheme,
+          goal: currentGoal,
+          audience: audienceInput.value,
+          tone: toneInput.value,
+          format: formatInput.value,
+          length: lengthInput.value,
+          status: "published",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not create book");
+      await loadBook(data.book.id);
+      addLog("BOOK", `Started “${data.book.title}”`, "finish");
+      startNewChapter();
+    } catch (err) {
+      window.alert(err.message);
+    }
+  }
+
+  function startNewChapter() {
+    if (!currentBookId) {
+      window.alert("Start or open a book first.");
+      return;
+    }
+    currentArticleId = null;
+    currentArticleSlug = null;
+    currentChapterId = null;
+    currentChapterSlug = null;
+    composingChapter = true;
+    const n = bookChapters.length + 1;
+    briefInput.value = `Write chapter ${n} of “${currentBookTitle}”. Cover the next practical topic a reader needs after the previous chapters.`;
+    lengthInput.value = "4000–5500 words (full book chapter)";
+    resetEditorCanvas(`Chapter ${n} draft`);
+    if (articleMeta) {
+      articleMeta.textContent = `New chapter · ${currentBookTitle}`;
+    }
+    wizardSection.scrollIntoView({ behavior: "smooth" });
+    briefInput.focus();
+    addLog("BOOK", `Composing chapter ${n} for “${currentBookTitle}”`, "system");
+  }
+
+  async function refreshBooksList() {
+    if (!booksList) return;
+    try {
+      const res = await fetch("/api/books");
+      if (!res.ok) throw new Error("Failed to list books");
+      const data = await res.json();
+      const books = data.books || [];
+      if (!books.length) {
+        booksList.innerHTML = `<p class="side-hint">No books yet</p>`;
+        return;
+      }
+      booksList.innerHTML = "";
+      for (const b of books) {
+        const row = document.createElement("div");
+        row.className = `article-link-row${b.id === currentBookId ? " active" : ""}`;
+        const open = document.createElement("a");
+        open.className = "article-link";
+        open.href = b.url || `/books/${b.slug}`;
+        open.target = "_blank";
+        open.rel = "noopener";
+        open.innerHTML = `
+          <span class="article-link-title">${escapeHtml(b.title)}</span>
+          <span class="article-link-meta">/${escapeHtml(b.slug)} · ${b.chapterCount || 0} ch</span>
+        `;
+        const edit = document.createElement("button");
+        edit.type = "button";
+        edit.className = "article-edit-btn";
+        edit.textContent = "Open";
+        edit.addEventListener("click", () => loadBook(b.id));
+        row.appendChild(open);
+        row.appendChild(edit);
+        booksList.appendChild(row);
+      }
+    } catch (err) {
+      booksList.innerHTML = `<p class="side-hint">${escapeHtml(err.message)}</p>`;
+    }
+  }
+
+  async function loadBook(id) {
+    const res = await fetch(`/api/books/${id}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Load book failed");
+    const book = data.book;
+    currentBookId = book.id;
+    currentBookSlug = book.slug;
+    currentBookTitle = book.title;
+    bookChapters = book.chapters || [];
+    if (menuNewChapter) menuNewChapter.hidden = false;
+    if (bookRail) bookRail.hidden = false;
+    if (bookRailTitle) bookRailTitle.textContent = book.title;
+    if (bookRailMeta) {
+      bookRailMeta.textContent = `${bookChapters.length} chapter${bookChapters.length === 1 ? "" : "s"} · /books/${book.slug}`;
+    }
+    if (bookPublicLink) {
+      bookPublicLink.href = `/books/${book.slug}`;
+      bookPublicLink.textContent = `/books/${book.slug}`;
+    }
+    renderBookChapterList();
+    if (book.theme) currentTheme = book.theme;
+    if (book.goal) currentGoal = book.goal;
+    await refreshBooksList();
+    addLog("BOOK", `Opened “${book.title}”`, "system");
+  }
+
+  function renderBookChapterList() {
+    if (!bookChapterList) return;
+    bookChapterList.innerHTML = "";
+    if (!bookChapters.length) {
+      bookChapterList.innerHTML = `<li class="side-hint">No chapters yet — add one and fire agents.</li>`;
+      return;
+    }
+    bookChapters.forEach((c, i) => {
+      const li = document.createElement("li");
+      li.className = c.id === currentChapterId ? "active" : "";
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "chapter-pick";
+      btn.innerHTML = `<span>Ch. ${i + 1}</span><strong>${escapeHtml(c.title)}</strong>`;
+      btn.addEventListener("click", () => loadChapter(c.id));
+      li.appendChild(btn);
+      bookChapterList.appendChild(li);
+    });
+  }
+
+  async function loadChapter(id) {
+    const res = await fetch(`/api/chapters/${id}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Load chapter failed");
+    const chapter = data.chapter;
+    if (chapter.book?.id && chapter.book.id !== currentBookId) {
+      await loadBook(chapter.book.id);
+    }
+    currentArticleId = null;
+    currentArticleSlug = null;
+    currentChapterId = chapter.id;
+    currentChapterSlug = chapter.slug;
+    composingChapter = false;
+    workspaceSection.hidden = false;
+    currentDraftText = chapter.body_markdown;
+    blocks = Array.isArray(chapter.blocks)
+      ? chapter.blocks.map((b) => ({ ...b, id: b.id ?? newId() }))
+      : [];
+    isPublished = true;
+    publishedBadge.hidden = false;
+    publishedBadge.textContent = "Chapter · block editor";
+    editorBar.hidden = false;
+    articleCanvas.classList.add("block-editor-active");
+    if (saveBtn) saveBtn.hidden = false;
+    if (historyBtn) historyBtn.hidden = false;
+    if (articleMeta) {
+      articleMeta.innerHTML = `<a href="${escapeHtml(chapter.url)}" target="_blank" rel="noopener">${escapeHtml(chapter.url)}</a> · r${chapter.revision}`;
+    }
+    if (chapter.theme) currentTheme = chapter.theme;
+    if (chapter.goal) currentGoal = chapter.goal;
+    if (chapter.brief) briefInput.value = chapter.brief;
+    if (chapter.audience) audienceInput.value = chapter.audience;
+    if (chapter.tone) toneInput.value = chapter.tone;
+    if (chapter.format) formatInput.value = chapter.format;
+    if (chapter.length) lengthInput.value = chapter.length;
+    if (applyPanel) applyPanel.hidden = true;
+    if (blockReviseBar) blockReviseBar.hidden = true;
+    reviseModeActive = false;
+    renderBlockEditor();
+    renderBookChapterList();
+    addLog("BOOK", `Loaded chapter “${chapter.title}”`, "system");
+    workspaceSection.scrollIntoView({ behavior: "smooth" });
+  }
 
   menuPublishToggle.addEventListener("click", () => {
     if (currentDraftText) enablePublishMode(true);
@@ -166,6 +423,7 @@ document.addEventListener("DOMContentLoaded", () => {
     currentTheme = card.dataset.theme;
     toneInput.value = card.dataset.tone;
     formatInput.value = card.dataset.format;
+    if (card.dataset.length) lengthInput.value = card.dataset.length;
   });
 
   if (studioSearch) {
@@ -266,6 +524,14 @@ document.addEventListener("DOMContentLoaded", () => {
           length: lengthInput.value,
           theme: currentTheme,
           goal: currentGoal,
+          bookTitle: currentBookTitle || undefined,
+          chapterTitle: currentChapterSlug
+            ? bookChapters.find((c) => c.id === currentChapterId)?.title
+            : undefined,
+          chapterNumber: currentBookId
+            ? (bookChapters.findIndex((c) => c.id === currentChapterId) + 1) ||
+              bookChapters.length + 1
+            : undefined,
         }),
       });
 
@@ -331,8 +597,13 @@ document.addEventListener("DOMContentLoaded", () => {
         setNodeState(event.nodeId, "completed");
         addLog("DONE", `Completed ${event.agentId}`, "finish");
         if (event.outputKey === "draft" && event.output) {
-          currentDraftText = event.output;
-          renderRawDraft(event.output);
+          if (awaitingBlockApply) {
+            // Keep living draft intact until user applies selected proposals
+            addLog("WRITE", "Revision draft ready for selective apply", "delta");
+          } else {
+            currentDraftText = event.output;
+            renderRawDraft(event.output);
+          }
         }
         if (event.evaluation) renderEvaluation(event.evaluation);
         break;
@@ -360,7 +631,11 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         if (event.draft) {
           currentDraftText = event.draft;
-          renderRawDraft(event.draft);
+          if (awaitingBlockApply) {
+            showApplyProposals(event.draft);
+          } else {
+            renderRawDraft(event.draft);
+          }
         }
         break;
       default:
@@ -437,7 +712,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function scheduleSave() {
-    if (!currentArticleId) return;
+    if (!currentArticleId && !currentChapterId) return;
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => persistArticle("Autosave edit"), 900);
   }
@@ -445,12 +720,30 @@ document.addEventListener("DOMContentLoaded", () => {
   function setLibraryUi(article) {
     currentArticleId = article.id;
     currentArticleSlug = article.slug;
+    currentChapterId = null;
+    currentChapterSlug = null;
+    composingChapter = false;
     if (saveBtn) saveBtn.hidden = false;
     if (historyBtn) historyBtn.hidden = false;
     if (articleMeta) {
       const url = `/articles/${article.slug}`;
       articleMeta.innerHTML = `<a href="${url}" target="_blank" rel="noopener">/${escapeHtml(article.slug)}</a> · r${article.revision}`;
     }
+  }
+
+  function setChapterUi(chapter) {
+    currentChapterId = chapter.id;
+    currentChapterSlug = chapter.slug;
+    currentArticleId = null;
+    currentArticleSlug = null;
+    composingChapter = false;
+    if (saveBtn) saveBtn.hidden = false;
+    if (historyBtn) historyBtn.hidden = false;
+    if (articleMeta) {
+      articleMeta.innerHTML = `<a href="${escapeHtml(chapter.url)}" target="_blank" rel="noopener">${escapeHtml(chapter.url)}</a> · r${chapter.revision}`;
+    }
+    publishedBadge.hidden = false;
+    publishedBadge.textContent = "Chapter · block editor";
   }
 
   async function refreshArticlesList() {
@@ -505,15 +798,18 @@ document.addEventListener("DOMContentLoaded", () => {
       window.alert("Nothing to publish yet.");
       return null;
     }
+
+    if (currentBookId && (currentChapterId || composingChapter)) {
+      return persistChapter(changeSummary, bodyMarkdown);
+    }
+
     saving = true;
     try {
       const payload = {
         id: currentArticleId || undefined,
         title: bodyMarkdown.match(/^#\s+(.+)$/m)?.[1] || undefined,
         bodyMarkdown,
-        blocks: blocks.length
-          ? blocks
-          : undefined,
+        blocks: blocks.length ? blocks.map((b) => ({ ...b, id: b.id ?? newId() })) : undefined,
         brief: briefInput.value,
         audience: audienceInput.value,
         tone: toneInput.value,
@@ -558,6 +854,64 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  async function persistChapter(changeSummary, bodyMarkdown) {
+    saving = true;
+    try {
+      const payload = {
+        id: currentChapterId || undefined,
+        bookId: currentBookId,
+        title: bodyMarkdown.match(/^#\s+(.+)$/m)?.[1] || `Chapter ${bookChapters.length + 1}`,
+        bodyMarkdown,
+        blocks: blocks.length
+          ? blocks.map((b) => ({ ...b, id: b.id ?? newId() }))
+          : undefined,
+        brief: briefInput.value,
+        audience: audienceInput.value,
+        tone: toneInput.value,
+        format: formatInput.value,
+        length: lengthInput.value,
+        theme: currentTheme,
+        goal: currentGoal,
+        changeSummary,
+        status: "published",
+      };
+      const res = await fetch(
+        currentChapterId
+          ? `/api/chapters/${currentChapterId}`
+          : "/api/chapters",
+        {
+          method: currentChapterId ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Chapter save failed");
+      const chapter = data.chapter;
+      setChapterUi(chapter);
+      currentDraftText = chapter.body_markdown;
+      if (Array.isArray(chapter.blocks) && chapter.blocks.length) {
+        blocks = chapter.blocks;
+      }
+      addLog(
+        "BOOK",
+        `Saved chapter “${chapter.title}” r${chapter.revision}`,
+        "finish",
+      );
+      await loadBook(currentBookId);
+      currentChapterId = chapter.id;
+      currentChapterSlug = chapter.slug;
+      renderBookChapterList();
+      return chapter;
+    } catch (err) {
+      addLog("ERROR", err.message, "eval");
+      window.alert(err.message);
+      return null;
+    } finally {
+      saving = false;
+    }
+  }
+
   async function loadArticle(id) {
     try {
       const res = await fetch(`/api/articles/${id}`);
@@ -590,9 +944,14 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function loadHistory() {
-    if (!currentArticleId) return;
+    const base = currentChapterId
+      ? `/api/chapters/${currentChapterId}`
+      : currentArticleId
+        ? `/api/articles/${currentArticleId}`
+        : null;
+    if (!base) return;
     try {
-      const res = await fetch(`/api/articles/${currentArticleId}/history`);
+      const res = await fetch(`${base}/history`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "History failed");
       historyList.innerHTML = "";
@@ -618,11 +977,14 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function restoreRevision(revision) {
-    if (!currentArticleId) return;
+    const base = currentChapterId
+      ? `/api/chapters/${currentChapterId}`
+      : currentArticleId
+        ? `/api/articles/${currentArticleId}`
+        : null;
+    if (!base) return;
     try {
-      const res = await fetch(
-        `/api/articles/${currentArticleId}/revisions/${revision}`,
-      );
+      const res = await fetch(`${base}/revisions/${revision}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Revision load failed");
       const rev = data.revision;
@@ -666,7 +1028,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const cleanText = pText
               .replace(/^#{1,3}\s+/, "")
               .replace(/^>\s+/gm, "");
-            blocks.push({ id: blocks.length + 1, type, text: cleanText });
+            blocks.push({ id: newId(), type, text: cleanText });
           });
       };
       if (!fences.length) {
@@ -675,7 +1037,7 @@ document.addEventListener("DOMContentLoaded", () => {
         let last = 0;
         for (const f of fences) {
           pushProse(currentDraftText.slice(last, f.start));
-          blocks.push({ id: blocks.length + 1, type: "drawio", text: f.xml });
+          blocks.push({ id: newId(), type: "drawio", text: f.xml });
           last = f.end;
         }
         pushProse(currentDraftText.slice(last));
@@ -694,17 +1056,34 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  function updateSelectedCount() {
+    if (selectedBlocksCount) {
+      selectedBlocksCount.textContent = `${selectedBlockIds.size} selected`;
+    }
+    if (selectAllBlocks) {
+      selectAllBlocks.checked =
+        blocks.length > 0 && selectedBlockIds.size === blocks.length;
+    }
+  }
+
   function renderBlockEditor() {
     articleCanvas.innerHTML = "";
     blocksCount.textContent = `${blocks.length} blocks`;
+    blocks = blocks.map((b) => ({ ...b, id: b.id ?? newId() }));
 
     blocks.forEach((block, index) => {
       const blockItem = document.createElement("div");
       blockItem.className = "block-item";
+      if (selectedBlockIds.has(String(block.id))) {
+        blockItem.classList.add("selected-for-revise");
+      }
 
       const controls = document.createElement("div");
       controls.className = "block-controls";
       controls.innerHTML = `
+        <label class="block-pick" title="Select for agent update">
+          <input type="checkbox" class="block-select" ${selectedBlockIds.has(String(block.id)) ? "checked" : ""} />
+        </label>
         <button type="button" class="block-btn edit-btn">Edit</button>
         <button type="button" class="block-btn up-btn">Up</button>
         <button type="button" class="block-btn down-btn">Down</button>
@@ -749,6 +1128,13 @@ document.addEventListener("DOMContentLoaded", () => {
         });
       }
 
+      controls.querySelector(".block-select").addEventListener("change", (e) => {
+        const on = e.target.checked;
+        if (on) selectedBlockIds.add(String(block.id));
+        else selectedBlockIds.delete(String(block.id));
+        blockItem.classList.toggle("selected-for-revise", on);
+        updateSelectedCount();
+      });
       controls.querySelector(".edit-btn").addEventListener("click", () =>
         contentElem.focus(),
       );
@@ -770,6 +1156,7 @@ document.addEventListener("DOMContentLoaded", () => {
         .querySelector(".add-btn")
         .addEventListener("click", () => addNewBlockBelow(index));
       controls.querySelector(".del-btn").addEventListener("click", () => {
+        selectedBlockIds.delete(String(blocks[index].id));
         blocks.splice(index, 1);
         renderBlockEditor();
         scheduleSave();
@@ -779,17 +1166,266 @@ document.addEventListener("DOMContentLoaded", () => {
       blockItem.appendChild(contentElem);
       articleCanvas.appendChild(blockItem);
     });
+    updateSelectedCount();
   }
 
   function addNewBlockBelow(index) {
     blocks.splice(index + 1, 0, {
-      id: Date.now(),
+      id: newId(),
       type: "paragraph",
       text: "Write your new paragraph content here…",
     });
     renderBlockEditor();
     scheduleSave();
   }
+
+  function parseMarkedBlocksClient(markdown) {
+    const re =
+      /<!--\s*quill-block\s+id=["']([^"']+)["']\s*(?:type=["']([^"']*)["'])?\s*-->([\s\S]*?)<!--\s*\/quill-block\s*-->/gi;
+    const found = [];
+    let m;
+    while ((m = re.exec(markdown)) !== null) {
+      found.push({
+        id: m[1],
+        type: (m[2] || "paragraph").trim() || "paragraph",
+        text: m[3].trim(),
+        apply: true,
+      });
+    }
+    return found;
+  }
+
+  function showApplyProposals(draftMarkdown) {
+    pendingProposalMarkdown = draftMarkdown;
+    let proposals = parseMarkedBlocksClient(draftMarkdown);
+    if (!proposals.length) {
+      // Fallback: map by selected order / index
+      const selected = blocks.filter((b) =>
+        selectedBlockIds.has(String(b.id)),
+      );
+      proposals = selected.map((b) => ({
+        id: b.id,
+        type: b.type,
+        text: draftMarkdown.trim(),
+        apply: true,
+        wholeDraftFallback: selected.length === 1,
+      }));
+      if (selected.length !== 1) {
+        // If many selected and no markers, offer full draft as one unit per selected
+        proposals = selected.map((b) => ({
+          id: b.id,
+          type: b.type,
+          text: `*(Agent returned an unmarked draft — review before apply)*\n\n${draftMarkdown.trim()}`,
+          apply: false,
+        }));
+      }
+    }
+    pendingProposals = proposals;
+    awaitingBlockApply = false;
+    if (!applyPanel || !applyList) {
+      renderRawDraft(draftMarkdown);
+      return;
+    }
+    applyList.innerHTML = "";
+    for (const p of pendingProposals) {
+      const row = document.createElement("label");
+      row.className = "apply-row";
+      row.innerHTML = `
+        <input type="checkbox" class="apply-check" data-id="${escapeHtml(String(p.id))}" ${p.apply ? "checked" : ""} />
+        <div>
+          <strong>${escapeHtml(p.type)} · ${escapeHtml(String(p.id).slice(0, 8))}</strong>
+          <pre>${escapeHtml(String(p.text).slice(0, 480))}${String(p.text).length > 480 ? "…" : ""}</pre>
+        </div>
+      `;
+      applyList.appendChild(row);
+    }
+    applyPanel.hidden = false;
+    renderRawDraft(draftMarkdown);
+    addLog(
+      "APPLY",
+      `${pendingProposals.length} proposed block update(s) ready — choose which to merge`,
+      "finish",
+    );
+  }
+
+  async function runBlockRevision() {
+    const selected = blocks.filter((b) => selectedBlockIds.has(String(b.id)));
+    if (!selected.length) {
+      window.alert("Select one or more blocks (or use All blocks).");
+      return;
+    }
+    const instruction =
+      reviseInstruction?.value?.trim() ||
+      "Improve clarity, tighten examples, and keep the same intent.";
+    const label = fireBtn.querySelector("span");
+    fireBtn.disabled = true;
+    if (label) label.textContent = "Updating…";
+    workspaceSection.hidden = false;
+    streamStatus.textContent = "Block update pipeline";
+    liveDot.classList.add("pulsating");
+    awaitingBlockApply = true;
+    addLog(
+      "REVISE",
+      `Updating ${selected.length} block(s): ${instruction}`,
+      "system",
+    );
+    try {
+      const response = await fetch("/api/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          brief: instruction,
+          reviseInstruction: instruction,
+          mode: "revise_blocks",
+          existingDraft: blocksToMarkdown(blocks),
+          selectedBlocks: selected.map((b) => ({
+            id: b.id,
+            type: b.type,
+            text: b.text,
+          })),
+          audience: audienceInput.value,
+          tone: toneInput.value,
+          format: formatInput.value,
+          length: "match selected blocks",
+          theme: currentTheme,
+          goal: currentGoal,
+          bookTitle: currentBookTitle || undefined,
+          chapterTitle: bookChapters.find((c) => c.id === currentChapterId)
+            ?.title,
+        }),
+      });
+      if (!response.ok) throw new Error(`Server returned ${response.status}`);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const match = line.match(/^event:\s*(.+)\ndata:\s*(.+)$/s);
+          if (!match) continue;
+          try {
+            handlePipelineEvent(JSON.parse(match[2]));
+          } catch (err) {
+            console.error(err);
+          }
+        }
+      }
+    } catch (err) {
+      awaitingBlockApply = false;
+      addLog("ERROR", err.message, "eval");
+      window.alert(err.message);
+    } finally {
+      fireBtn.disabled = false;
+      if (label) label.textContent = "Fire agents";
+    }
+  }
+
+  async function applySelectedProposals() {
+    if (!pendingProposals.length) return;
+    const checks = applyList?.querySelectorAll(".apply-check") || [];
+    const selectedIds = [];
+    const updates = [];
+    checks.forEach((el) => {
+      if (!el.checked) return;
+      const id = el.dataset.id;
+      selectedIds.push(id);
+      const prop = pendingProposals.find((p) => String(p.id) === String(id));
+      if (prop) updates.push({ id: prop.id, type: prop.type, text: prop.text });
+    });
+    if (!updates.length) {
+      window.alert("Select at least one proposed update to apply.");
+      return;
+    }
+
+    if (currentChapterId) {
+      const res = await fetch(`/api/chapters/${currentChapterId}/apply-blocks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          updates,
+          selectedIds,
+          changeSummary: "Selective block update from agents",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Apply failed");
+      blocks = data.chapter.blocks;
+      currentDraftText = data.chapter.body_markdown;
+      setChapterUi(data.chapter);
+    } else if (currentArticleId) {
+      const res = await fetch(`/api/articles/${currentArticleId}/apply-blocks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          updates,
+          selectedIds,
+          changeSummary: "Selective block update from agents",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Apply failed");
+      blocks = data.article.blocks;
+      currentDraftText = data.article.body_markdown;
+      setLibraryUi(data.article);
+    } else {
+      // Local merge before first publish
+      const byId = new Map(updates.map((u) => [String(u.id), u]));
+      blocks = blocks.map((b) => {
+        const u = byId.get(String(b.id));
+        return u ? { ...b, type: u.type || b.type, text: u.text } : b;
+      });
+      currentDraftText = blocksToMarkdown(blocks);
+    }
+
+    pendingProposals = [];
+    pendingProposalMarkdown = "";
+    if (applyPanel) applyPanel.hidden = true;
+    selectedBlockIds = new Set();
+    renderBlockEditor();
+    if (currentChapterId || currentArticleId) {
+      await refreshArticlesList();
+      if (currentBookId) await loadBook(currentBookId);
+    }
+    addLog("APPLY", `Merged ${updates.length} block update(s)`, "finish");
+  }
+
+  toggleReviseBtn?.addEventListener("click", () => {
+    reviseModeActive = !reviseModeActive;
+    if (blockReviseBar) blockReviseBar.hidden = !reviseModeActive;
+    if (reviseModeActive && !selectedBlockIds.size) {
+      // default: none selected — user chooses all or some
+    }
+  });
+  selectAllBlocks?.addEventListener("change", () => {
+    selectedBlockIds = new Set();
+    if (selectAllBlocks.checked) {
+      blocks.forEach((b) => selectedBlockIds.add(String(b.id)));
+    }
+    renderBlockEditor();
+  });
+  reviseBlocksBtn?.addEventListener("click", () => {
+    runBlockRevision().catch((err) => window.alert(err.message));
+  });
+  applySelectAllBtn?.addEventListener("click", () => {
+    applyList
+      ?.querySelectorAll(".apply-check")
+      .forEach((el) => {
+        el.checked = true;
+      });
+  });
+  applySelectedBtn?.addEventListener("click", () => {
+    applySelectedProposals().catch((err) => window.alert(err.message));
+  });
+  dismissApplyBtn?.addEventListener("click", () => {
+    if (applyPanel) applyPanel.hidden = true;
+    pendingProposals = [];
+    awaitingBlockApply = false;
+  });
 
   function renderEvaluation(evaluation) {
     if (!evaluation?.scores) return;
@@ -838,4 +1474,5 @@ document.addEventListener("DOMContentLoaded", () => {
 
   downloadBtn.addEventListener("click", triggerDownload);
   refreshArticlesList();
+  refreshBooksList();
 });

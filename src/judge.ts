@@ -124,7 +124,33 @@ export function enforceStrictJudgment(
   config: PipelineConfig,
   evaluation: ManagerEvaluation,
   draft: string,
+  options?: { skipArtifactCaps?: boolean },
 ): ManagerEvaluation {
+  // Selective block revisions are not full articles — skip diagram/code caps.
+  if (
+    options?.skipArtifactCaps ||
+    /<!--\s*quill-block\s+id=/i.test(draft)
+  ) {
+    const scores = { ...evaluation.scores };
+    for (const c of config.goal.criteria) {
+      if (typeof scores[c.id] !== "number") scores[c.id] = 0;
+    }
+    const passed = config.goal.criteria.every(
+      (c) => scores[c.id] >= c.threshold,
+    );
+    return {
+      scores,
+      passed,
+      route: passed ? "done" : "revise",
+      feedback: passed ? "" : evaluation.feedback || "Block revision incomplete.",
+      summary:
+        evaluation.summary ||
+        (passed
+          ? "Selective block updates clear the bar."
+          : "Selective block updates need another pass."),
+    };
+  }
+
   const report = analyzeDraftHeuristics(draft);
   const scores = { ...evaluation.scores };
 

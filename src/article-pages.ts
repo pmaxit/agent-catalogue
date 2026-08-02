@@ -80,7 +80,8 @@ function layout(opts: {
       <nav aria-label="Article">
         <a href="/">Product</a>
         <a href="/studio.html">Studio</a>
-        <a href="/articles">Library</a>
+        <a href="/books">Books</a>
+        <a href="/articles">Articles</a>
         <a href="/studio.html" class="nav-cta">Write yours</a>
       </nav>
     </header>

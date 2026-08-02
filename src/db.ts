@@ -66,6 +66,86 @@ export type PublishInput = {
   status?: "draft" | "published";
 };
 
+export type BookRecord = {
+  id: string;
+  slug: string;
+  title: string;
+  synopsis: string | null;
+  overview_markdown: string;
+  overview_blocks_json: string;
+  audience: string | null;
+  tone: string | null;
+  format: string | null;
+  length: string | null;
+  theme: string | null;
+  goal: string | null;
+  status: string;
+  revision: number;
+  created_at: string;
+  updated_at: string;
+  published_at: string | null;
+};
+
+export type ChapterRecord = {
+  id: string;
+  book_id: string;
+  slug: string;
+  title: string;
+  sort_order: number;
+  body_markdown: string;
+  body_html: string | null;
+  blocks_json: string;
+  brief: string | null;
+  audience: string | null;
+  tone: string | null;
+  format: string | null;
+  length: string | null;
+  theme: string | null;
+  goal: string | null;
+  status: string;
+  revision: number;
+  created_at: string;
+  updated_at: string;
+  published_at: string | null;
+};
+
+export type ChapterRevisionRecord = {
+  id: number;
+  chapter_id: string;
+  revision: number;
+  title: string;
+  body_markdown: string;
+  body_html: string | null;
+  blocks_json: string;
+  change_summary: string | null;
+  created_at: string;
+};
+
+export type BookInput = {
+  id?: string;
+  slug?: string;
+  title: string;
+  synopsis?: string;
+  overviewMarkdown?: string;
+  overviewBlocks?: Block[];
+  meta?: ArticleMeta;
+  status?: "draft" | "published";
+};
+
+export type ChapterInput = {
+  id?: string;
+  bookId: string;
+  slug?: string;
+  title?: string;
+  sortOrder?: number;
+  bodyMarkdown?: string;
+  bodyHtml?: string;
+  blocks?: Block[];
+  meta?: ArticleMeta;
+  changeSummary?: string;
+  status?: "draft" | "published";
+};
+
 function nowIso(): string {
   return new Date().toISOString();
 }
@@ -147,7 +227,7 @@ export function markdownToBlocks(markdown: string): Block[] {
           .map((l) => l.replace(/^[-*]\s+/, ""))
           .join("\n");
       }
-      blocks.push({ id: blocks.length + 1, type, text: clean });
+      blocks.push({ id: randomUUID(), type, text: clean });
     }
   };
 
@@ -159,7 +239,7 @@ export function markdownToBlocks(markdown: string): Block[] {
   for (const f of fenceMatches) {
     pushProse(markdown.slice(last, f.start));
     blocks.push({
-      id: blocks.length + 1,
+      id: randomUUID(),
       type: "drawio",
       text: f.xml,
     });
@@ -169,13 +249,66 @@ export function markdownToBlocks(markdown: string): Block[] {
   return blocks;
 }
 
-function slugify(input: string): string {
+/** Parse writer output that wraps revised sections in quill-block markers. */
+export function parseMarkedBlocks(markdown: string): Block[] {
+  const re =
+    /<!--\s*quill-block\s+id=["']([^"']+)["']\s*(?:type=["']([^"']*)["'])?\s*-->([\s\S]*?)<!--\s*\/quill-block\s*-->/gi;
+  const found: Block[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(markdown)) !== null) {
+    const id = m[1];
+    const typeHint = (m[2] || "").trim();
+    const inner = m[3].trim();
+    const parsed = markdownToBlocks(inner);
+    if (parsed.length === 1) {
+      found.push({ ...parsed[0], id, type: typeHint || parsed[0].type });
+    } else if (parsed.length > 1) {
+      found.push({
+        id,
+        type: typeHint || "paragraph",
+        text: blocksToMarkdown(parsed),
+      });
+    } else {
+      found.push({ id, type: typeHint || "paragraph", text: inner });
+    }
+  }
+  return found;
+}
+
+export function ensureBlockIds(blocks: Block[]): Block[] {
+  return blocks.map((b) => ({
+    ...b,
+    id: b.id != null && String(b.id).length ? b.id : randomUUID(),
+  }));
+}
+
+export function slugify(input: string): string {
   const base = input
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 80);
   return base || `article-${Date.now()}`;
+}
+
+export function mergeBlocksById(
+  current: Block[],
+  updates: Block[],
+  selectedIds?: Array<string | number>,
+): Block[] {
+  const allow = selectedIds?.length
+    ? new Set(selectedIds.map(String))
+    : null;
+  const byId = new Map(
+    updates
+      .filter((u) => !allow || allow.has(String(u.id)))
+      .map((u) => [String(u.id), u]),
+  );
+  if (!byId.size) return current;
+  return current.map((b) => {
+    const next = byId.get(String(b.id));
+    return next ? { ...b, type: next.type || b.type, text: next.text } : b;
+  });
 }
 
 function titleFromMarkdown(md: string): string {
@@ -244,6 +377,67 @@ export class ArticleStore {
 
       CREATE INDEX IF NOT EXISTS idx_articles_updated ON articles(updated_at DESC);
       CREATE INDEX IF NOT EXISTS idx_revisions_article ON article_revisions(article_id, revision DESC);
+
+      CREATE TABLE IF NOT EXISTS books (
+        id TEXT PRIMARY KEY,
+        slug TEXT NOT NULL UNIQUE,
+        title TEXT NOT NULL,
+        synopsis TEXT,
+        overview_markdown TEXT NOT NULL DEFAULT '',
+        overview_blocks_json TEXT NOT NULL DEFAULT '[]',
+        audience TEXT,
+        tone TEXT,
+        format TEXT,
+        length TEXT,
+        theme TEXT,
+        goal TEXT,
+        status TEXT NOT NULL DEFAULT 'published',
+        revision INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        published_at TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS chapters (
+        id TEXT PRIMARY KEY,
+        book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+        slug TEXT NOT NULL,
+        title TEXT NOT NULL,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        body_markdown TEXT NOT NULL,
+        body_html TEXT,
+        blocks_json TEXT NOT NULL,
+        brief TEXT,
+        audience TEXT,
+        tone TEXT,
+        format TEXT,
+        length TEXT,
+        theme TEXT,
+        goal TEXT,
+        status TEXT NOT NULL DEFAULT 'published',
+        revision INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        published_at TEXT,
+        UNIQUE(book_id, slug)
+      );
+
+      CREATE TABLE IF NOT EXISTS chapter_revisions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        chapter_id TEXT NOT NULL REFERENCES chapters(id) ON DELETE CASCADE,
+        revision INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        body_markdown TEXT NOT NULL,
+        body_html TEXT,
+        blocks_json TEXT NOT NULL,
+        change_summary TEXT,
+        created_at TEXT NOT NULL,
+        UNIQUE(chapter_id, revision)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_books_updated ON books(updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_chapters_book ON chapters(book_id, sort_order ASC);
+      CREATE INDEX IF NOT EXISTS idx_chapter_revisions ON chapter_revisions(chapter_id, revision DESC);
     `);
   }
 
@@ -254,6 +448,34 @@ export class ArticleStore {
       const row = this.db
         .prepare(`SELECT id FROM articles WHERE slug = ?`)
         .get(slug) as { id: string } | undefined;
+      if (!row || row.id === excludeId) return slug;
+      slug = `${slugify(desired)}-${n++}`;
+    }
+  }
+
+  private uniqueBookSlug(desired: string, excludeId?: string): string {
+    let slug = slugify(desired);
+    let n = 2;
+    for (;;) {
+      const row = this.db
+        .prepare(`SELECT id FROM books WHERE slug = ?`)
+        .get(slug) as { id: string } | undefined;
+      if (!row || row.id === excludeId) return slug;
+      slug = `${slugify(desired)}-${n++}`;
+    }
+  }
+
+  private uniqueChapterSlug(
+    bookId: string,
+    desired: string,
+    excludeId?: string,
+  ): string {
+    let slug = slugify(desired);
+    let n = 2;
+    for (;;) {
+      const row = this.db
+        .prepare(`SELECT id FROM chapters WHERE book_id = ? AND slug = ?`)
+        .get(bookId, slug) as { id: string } | undefined;
       if (!row || row.id === excludeId) return slug;
       slug = `${slugify(desired)}-${n++}`;
     }
@@ -291,10 +513,11 @@ export class ArticleStore {
 
   publish(input: PublishInput): ArticleRecord {
     const ts = nowIso();
-    const blocks =
+    const blocks = ensureBlockIds(
       input.blocks && input.blocks.length > 0
         ? input.blocks
-        : markdownToBlocks(input.bodyMarkdown || "");
+        : markdownToBlocks(input.bodyMarkdown || ""),
+    );
     const bodyMarkdown =
       input.bodyMarkdown?.trim() || blocksToMarkdown(blocks);
     if (!bodyMarkdown.trim()) {
@@ -456,6 +679,328 @@ export class ArticleStore {
       updated += 1;
     }
     return updated;
+  }
+
+  listBooks(limit = 50): BookRecord[] {
+    return this.db
+      .prepare(`SELECT * FROM books ORDER BY updated_at DESC LIMIT ?`)
+      .all(limit) as BookRecord[];
+  }
+
+  getBook(idOrSlug: string): BookRecord | undefined {
+    return this.db
+      .prepare(`SELECT * FROM books WHERE id = ? OR slug = ?`)
+      .get(idOrSlug, idOrSlug) as BookRecord | undefined;
+  }
+
+  listChapters(bookId: string): ChapterRecord[] {
+    return this.db
+      .prepare(
+        `SELECT * FROM chapters WHERE book_id = ? ORDER BY sort_order ASC, created_at ASC`,
+      )
+      .all(bookId) as ChapterRecord[];
+  }
+
+  getChapter(idOrSlug: string, bookId?: string): ChapterRecord | undefined {
+    if (bookId) {
+      return this.db
+        .prepare(
+          `SELECT * FROM chapters WHERE book_id = ? AND (id = ? OR slug = ?)`,
+        )
+        .get(bookId, idOrSlug, idOrSlug) as ChapterRecord | undefined;
+    }
+    return this.db
+      .prepare(`SELECT * FROM chapters WHERE id = ? OR slug = ?`)
+      .get(idOrSlug, idOrSlug) as ChapterRecord | undefined;
+  }
+
+  upsertBook(input: BookInput): BookRecord {
+    const ts = nowIso();
+    const title = input.title?.trim();
+    if (!title) throw new Error("Book title is required");
+    const overviewBlocks = ensureBlockIds(
+      input.overviewBlocks?.length
+        ? input.overviewBlocks
+        : markdownToBlocks(input.overviewMarkdown || ""),
+    );
+    const overviewMarkdown =
+      input.overviewMarkdown?.trim() ||
+      (overviewBlocks.length ? blocksToMarkdown(overviewBlocks) : "");
+    const meta = input.meta ?? {};
+    const status = input.status ?? "published";
+    const existing = input.id ? this.getBook(input.id) : undefined;
+
+    const run = this.db.transaction(() => {
+      if (existing) {
+        const slug = this.uniqueBookSlug(input.slug || existing.slug, existing.id);
+        this.db
+          .prepare(
+            `UPDATE books SET
+              slug = ?, title = ?, synopsis = ?, overview_markdown = ?, overview_blocks_json = ?,
+              audience = ?, tone = ?, format = ?, length = ?, theme = ?, goal = ?,
+              status = ?, revision = revision + 1, updated_at = ?,
+              published_at = CASE WHEN ? = 'published' THEN COALESCE(published_at, ?) ELSE published_at END
+             WHERE id = ?`,
+          )
+          .run(
+            slug,
+            title,
+            input.synopsis ?? existing.synopsis,
+            overviewMarkdown,
+            JSON.stringify(overviewBlocks),
+            meta.audience ?? existing.audience,
+            meta.tone ?? existing.tone,
+            meta.format ?? existing.format,
+            meta.length ?? existing.length,
+            meta.theme ?? existing.theme,
+            meta.goal ?? existing.goal,
+            status,
+            ts,
+            status,
+            ts,
+            existing.id,
+          );
+        return this.getBook(existing.id)!;
+      }
+
+      const id = randomUUID();
+      const slug = this.uniqueBookSlug(input.slug || title);
+      this.db
+        .prepare(
+          `INSERT INTO books (
+            id, slug, title, synopsis, overview_markdown, overview_blocks_json,
+            audience, tone, format, length, theme, goal,
+            status, revision, created_at, updated_at, published_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+        )
+        .run(
+          id,
+          slug,
+          title,
+          input.synopsis ?? null,
+          overviewMarkdown,
+          JSON.stringify(overviewBlocks),
+          meta.audience ?? null,
+          meta.tone ?? null,
+          meta.format ?? null,
+          meta.length ?? null,
+          meta.theme ?? null,
+          meta.goal ?? null,
+          status,
+          ts,
+          ts,
+          status === "published" ? ts : null,
+        );
+      return this.getBook(id)!;
+    });
+
+    return run();
+  }
+
+  publishChapter(input: ChapterInput): ChapterRecord {
+    const ts = nowIso();
+    const book = this.getBook(input.bookId);
+    if (!book) throw new Error("Book not found");
+
+    const blocks = ensureBlockIds(
+      input.blocks && input.blocks.length > 0
+        ? input.blocks
+        : markdownToBlocks(input.bodyMarkdown || ""),
+    );
+    const bodyMarkdown =
+      input.bodyMarkdown?.trim() || blocksToMarkdown(blocks);
+    if (!bodyMarkdown.trim()) throw new Error("Chapter body is required");
+
+    const title =
+      input.title?.trim() || titleFromMarkdown(bodyMarkdown) || "Untitled chapter";
+    const blocksJson = JSON.stringify(blocks);
+    const bodyHtml = input.bodyHtml ?? null;
+    const status = input.status ?? "published";
+    const meta = input.meta ?? {};
+    const existing = input.id ? this.getChapter(input.id) : undefined;
+
+    const run = this.db.transaction(() => {
+      if (existing) {
+        if (existing.book_id !== book.id) {
+          throw new Error("Chapter does not belong to this book");
+        }
+        const nextRev = existing.revision + 1;
+        const slug = this.uniqueChapterSlug(
+          book.id,
+          input.slug || existing.slug,
+          existing.id,
+        );
+        const sortOrder = input.sortOrder ?? existing.sort_order;
+        this.db
+          .prepare(
+            `UPDATE chapters SET
+              slug = ?, title = ?, sort_order = ?, body_markdown = ?, body_html = ?, blocks_json = ?,
+              brief = ?, audience = ?, tone = ?, format = ?, length = ?, theme = ?, goal = ?,
+              status = ?, revision = ?, updated_at = ?,
+              published_at = CASE WHEN ? = 'published' THEN COALESCE(published_at, ?) ELSE published_at END
+             WHERE id = ?`,
+          )
+          .run(
+            slug,
+            title,
+            sortOrder,
+            bodyMarkdown,
+            bodyHtml,
+            blocksJson,
+            meta.brief ?? existing.brief,
+            meta.audience ?? existing.audience,
+            meta.tone ?? existing.tone,
+            meta.format ?? existing.format,
+            meta.length ?? existing.length,
+            meta.theme ?? existing.theme,
+            meta.goal ?? existing.goal,
+            status,
+            nextRev,
+            ts,
+            status,
+            ts,
+            existing.id,
+          );
+        this.db
+          .prepare(
+            `INSERT INTO chapter_revisions
+              (chapter_id, revision, title, body_markdown, body_html, blocks_json, change_summary, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .run(
+            existing.id,
+            nextRev,
+            title,
+            bodyMarkdown,
+            bodyHtml,
+            blocksJson,
+            input.changeSummary ?? "Chapter edit saved",
+            ts,
+          );
+        this.db
+          .prepare(`UPDATE books SET updated_at = ?, revision = revision + 1 WHERE id = ?`)
+          .run(ts, book.id);
+        return this.getChapter(existing.id)!;
+      }
+
+      const maxOrder = (
+        this.db
+          .prepare(
+            `SELECT COALESCE(MAX(sort_order), -1) AS m FROM chapters WHERE book_id = ?`,
+          )
+          .get(book.id) as { m: number }
+      ).m;
+      const sortOrder = input.sortOrder ?? maxOrder + 1;
+      const id = randomUUID();
+      const slug = this.uniqueChapterSlug(book.id, input.slug || title);
+      this.db
+        .prepare(
+          `INSERT INTO chapters (
+            id, book_id, slug, title, sort_order, body_markdown, body_html, blocks_json,
+            brief, audience, tone, format, length, theme, goal,
+            status, revision, created_at, updated_at, published_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+        )
+        .run(
+          id,
+          book.id,
+          slug,
+          title,
+          sortOrder,
+          bodyMarkdown,
+          bodyHtml,
+          blocksJson,
+          meta.brief ?? null,
+          meta.audience ?? null,
+          meta.tone ?? null,
+          meta.format ?? null,
+          meta.length ?? null,
+          meta.theme ?? null,
+          meta.goal ?? null,
+          status,
+          ts,
+          ts,
+          status === "published" ? ts : null,
+        );
+      this.db
+        .prepare(
+          `INSERT INTO chapter_revisions
+            (chapter_id, revision, title, body_markdown, body_html, blocks_json, change_summary, created_at)
+           VALUES (?, 1, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          id,
+          title,
+          bodyMarkdown,
+          bodyHtml,
+          blocksJson,
+          input.changeSummary ?? "Initial chapter publish",
+          ts,
+        );
+      this.db
+        .prepare(`UPDATE books SET updated_at = ?, revision = revision + 1 WHERE id = ?`)
+        .run(ts, book.id);
+      return this.getChapter(id)!;
+    });
+
+    return run();
+  }
+
+  chapterHistory(chapterId: string): ChapterRevisionRecord[] {
+    return this.db
+      .prepare(
+        `SELECT * FROM chapter_revisions WHERE chapter_id = ? ORDER BY revision DESC`,
+      )
+      .all(chapterId) as ChapterRevisionRecord[];
+  }
+
+  getChapterRevision(
+    chapterId: string,
+    revision: number,
+  ): ChapterRevisionRecord | undefined {
+    return this.db
+      .prepare(
+        `SELECT * FROM chapter_revisions WHERE chapter_id = ? AND revision = ?`,
+      )
+      .get(chapterId, revision) as ChapterRevisionRecord | undefined;
+  }
+
+  applyChapterBlockUpdates(
+    chapterId: string,
+    updates: Block[],
+    selectedIds?: Array<string | number>,
+    changeSummary = "Selective block update",
+  ): ChapterRecord {
+    const chapter = this.getChapter(chapterId);
+    if (!chapter) throw new Error("Chapter not found");
+    let current: Block[] = [];
+    try {
+      current = JSON.parse(chapter.blocks_json) as Block[];
+    } catch {
+      current = markdownToBlocks(chapter.body_markdown);
+    }
+    current = ensureBlockIds(current);
+    const merged = mergeBlocksById(current, ensureBlockIds(updates), selectedIds);
+    return this.publishChapter({
+      id: chapter.id,
+      bookId: chapter.book_id,
+      title: chapter.title,
+      slug: chapter.slug,
+      sortOrder: chapter.sort_order,
+      blocks: merged,
+      bodyMarkdown: blocksToMarkdown(merged),
+      changeSummary,
+      status: (chapter.status as "draft" | "published") || "published",
+      meta: {
+        brief: chapter.brief ?? undefined,
+        audience: chapter.audience ?? undefined,
+        tone: chapter.tone ?? undefined,
+        format: chapter.format ?? undefined,
+        length: chapter.length ?? undefined,
+        theme: chapter.theme ?? undefined,
+        goal: chapter.goal ?? undefined,
+      },
+    });
   }
 
   close(): void {

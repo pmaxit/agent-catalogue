@@ -33,14 +33,26 @@
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 4h9l3 3v13H6z" stroke="currentColor" stroke-width="1.6"/><path d="M9 12h6M9 16h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
             Draft
           </a>
-          <span class="side-label">Library</span>
+          <span class="side-label">Books</span>
+          <div id="books-list" class="articles-list" aria-live="polite">
+            <p class="side-hint">Loading books…</p>
+          </div>
+          <span class="side-label">Articles</span>
           <div id="articles-list" class="articles-list" aria-live="polite">
             <p class="side-hint">Loading articles…</p>
           </div>
           <span class="side-label">Workspace</span>
+          <button type="button" class="side-link" id="menu-new-book">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 4h9l3 3v13H6zM9 8h6M9 12h6M9 16h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            New book
+          </button>
+          <button type="button" class="side-link" id="menu-new-chapter" hidden>
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            New chapter
+          </button>
           <button type="button" class="side-link" id="menu-new-piece">
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-            New piece
+            New article
           </button>
           <button type="button" class="side-link" id="menu-publish-toggle">
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12l5 5L20 7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -59,7 +71,8 @@
             Toggle console
           </button>
           <span class="side-label">Explore</span>
-          <a href="/articles" class="side-link">Published library</a>
+          <a href="/books" class="side-link">Books library</a>
+          <a href="/articles" class="side-link">Articles library</a>
           <a href="/" class="side-link">Landing</a>
         </nav>
         <div class="sidebar-foot">
@@ -106,6 +119,18 @@
           </article>
         </section>
 
+        <section class="book-rail panel-card" id="book-rail" hidden data-od-id="studio-book-rail">
+          <div class="panel-head-inline">
+            <h2 id="book-rail-title">Book</h2>
+            <p id="book-rail-meta">Start a book, then iterate chapters.</p>
+          </div>
+          <div class="book-rail-actions">
+            <a class="btn btn-ghost sm" id="book-public-link" href="/books" target="_blank" rel="noopener">Open book URL</a>
+            <button type="button" class="btn btn-primary sm" id="book-add-chapter-btn">Add chapter</button>
+          </div>
+          <ol class="book-chapter-list" id="book-chapter-list"></ol>
+        </section>
+
         <section class="wizard-panel" id="wizard-section" data-od-id="studio-wizard">
           <div class="panel-card">
             <div class="panel-head-inline">
@@ -129,6 +154,10 @@
                 <span class="card-title">Executive Brief</span>
                 <span class="card-sub">Decision-oriented takeaways</span>
               </button>
+              <button type="button" class="option-card" data-goal="O'Reilly-Style Technical Book Chapter" role="option" aria-selected="false">
+                <span class="card-title">Book Chapter</span>
+                <span class="card-sub">Full chapter: concepts, labs, exercises</span>
+              </button>
             </div>
           </div>
 
@@ -138,39 +167,46 @@
               <p>Narrative aesthetic for writer and evaluator agents.</p>
             </div>
             <div class="options-grid themes-grid" id="themes-selector" role="listbox" aria-label="Themes">
-              <button type="button" class="theme-card active" data-theme="Agentic Command" data-tone="precise, delegated, outcome-first, traceable" data-format="Long-form Agentic Essay">
+              <button type="button" class="theme-card active" data-theme="Agentic Command" data-tone="precise, delegated, outcome-first, traceable" data-format="Long-form Agentic Essay" data-length="1000–1500 words">
                 <div class="theme-swatch agentic"></div>
                 <div class="theme-info">
                   <span class="theme-title">Agentic Command</span>
                   <span class="theme-sub">Dark command surfaces, clear outcomes, delegated task flows.</span>
                 </div>
               </button>
-              <button type="button" class="theme-card" data-theme="Technical Trace" data-tone="sharp, analytical, code-dense, high-clarity" data-format="Technical Deep-Dive & Guide">
+              <button type="button" class="theme-card" data-theme="Technical Trace" data-tone="sharp, analytical, code-dense, high-clarity" data-format="Technical Deep-Dive & Guide" data-length="1500–2200 words">
                 <div class="theme-swatch cyber"></div>
                 <div class="theme-info">
                   <span class="theme-title">Technical Trace</span>
                   <span class="theme-sub">Monospace density, evidence-first engineering voice.</span>
                 </div>
               </button>
-              <button type="button" class="theme-card" data-theme="Editorial Signal" data-tone="authoritative, structured, reflective, formal" data-format="Research Report">
+              <button type="button" class="theme-card" data-theme="Editorial Signal" data-tone="authoritative, structured, reflective, formal" data-format="Research Report" data-length="1200–1800 words">
                 <div class="theme-swatch editorial"></div>
                 <div class="theme-info">
                   <span class="theme-title">Editorial Signal</span>
                   <span class="theme-sub">Structured arguments, formal scholarly cadence.</span>
                 </div>
               </button>
-              <button type="button" class="theme-card" data-theme="Narrative Pulse" data-tone="vivid, narrative-driven, punchy, evocative" data-format="Narrative Feature">
+              <button type="button" class="theme-card" data-theme="Narrative Pulse" data-tone="vivid, narrative-driven, punchy, evocative" data-format="Narrative Feature" data-length="900–1400 words">
                 <div class="theme-swatch narrative"></div>
                 <div class="theme-info">
                   <span class="theme-title">Narrative Pulse</span>
                   <span class="theme-sub">Story hooks, imagery, memorable rhythm.</span>
                 </div>
               </button>
-              <button type="button" class="theme-card" data-theme="Executive Crisp" data-tone="concise, action-oriented, high impact, strategic" data-format="Executive Briefing">
+              <button type="button" class="theme-card" data-theme="Executive Crisp" data-tone="concise, action-oriented, high impact, strategic" data-format="Executive Briefing" data-length="600–900 words">
                 <div class="theme-swatch executive"></div>
                 <div class="theme-info">
                   <span class="theme-title">Executive Crisp</span>
                   <span class="theme-sub">Scannable summaries, bold takeaways, zero fluff.</span>
+                </div>
+              </button>
+              <button type="button" class="theme-card" data-theme="O'Reilly Book Chapter" data-tone="practical, example-first, authoritative yet approachable, you-addressed" data-format="O'Reilly-Style Book Chapter" data-length="4000–5500 words (full book chapter)">
+                <div class="theme-swatch oreilly"></div>
+                <div class="theme-info">
+                  <span class="theme-title">O'Reilly Book Chapter</span>
+                  <span class="theme-sub">Full chapter voice: labs, Tip/Note callouts, exercises.</span>
                 </div>
               </button>
             </div>
@@ -303,6 +339,29 @@
                 </div>
               </div>
               <div class="criteria-card-grid" id="criteria-card-grid"></div>
+              <div class="block-revise-bar" id="block-revise-bar" hidden>
+                <div class="block-revise-left">
+                  <span class="mono-stamp">Block updates</span>
+                  <label class="block-select-all"><input type="checkbox" id="select-all-blocks" /> All blocks</label>
+                  <span class="mono-stamp" id="selected-blocks-count">0 selected</span>
+                </div>
+                <div class="block-revise-right">
+                  <input id="revise-instruction" type="text" placeholder="How should selected blocks change?" />
+                  <button type="button" class="btn btn-primary sm" id="revise-blocks-btn">Update selected</button>
+                </div>
+              </div>
+              <aside class="apply-panel" id="apply-panel" hidden>
+                <div class="panel-head">
+                  <div class="head-title"><span>Apply agent updates</span></div>
+                  <div class="draft-actions">
+                    <button type="button" class="btn btn-ghost sm" id="apply-select-all-btn">Select all</button>
+                    <button type="button" class="btn btn-primary sm" id="apply-selected-btn">Apply selected</button>
+                    <button type="button" class="btn btn-ghost sm" id="dismiss-apply-btn">Dismiss</button>
+                  </div>
+                </div>
+                <p class="side-hint">Choose which proposed blocks to merge into the chapter (or article). Unchecked blocks stay as-is.</p>
+                <div id="apply-list" class="apply-list"></div>
+              </aside>
               <div class="article-canvas" id="article-canvas">
                 <div class="placeholder-notice empty-state">
                   <h3>Waiting for draft</h3>
@@ -315,7 +374,10 @@
                   <span class="blocks-count" id="blocks-count">0 blocks</span>
                   <span class="mono-stamp" id="article-meta"></span>
                 </div>
-                <button type="button" class="btn btn-ghost sm" id="add-block-btn">Add paragraph</button>
+                <div class="editor-bar-right">
+                  <button type="button" class="btn btn-ghost sm" id="toggle-revise-btn">Update blocks…</button>
+                  <button type="button" class="btn btn-ghost sm" id="add-block-btn">Add paragraph</button>
+                </div>
               </div>
               <aside class="history-panel" id="history-panel" hidden>
                 <div class="panel-head">

@@ -113,18 +113,47 @@ agents:
       Tone: {{tone}}
       Format: {{format}}
       Target length: {{length}}
+      Theme: {{theme}}
+      Goal: {{goal}}
 
-      Produce a concise writing plan with:
-      1. Working title options (2–3) — lead with a hook title
+      {{theme_guidance}}
+
+      {% if book_title %}
+      Book: {{book_title}}
+      {% endif %}
+      {% if chapter_title %}
+      Chapter: {% if chapter_number %}{{chapter_number}}. {% endif %}{{chapter_title}}
+      {% endif %}
+
+      {% if revise_mode %}
+      REVISION MODE — selective block update:
+      Instruction: {{revise_instruction}}
+      Existing draft (context only):
+      {{existing_draft}}
+
+      Selected blocks to revise (keep the same <!--quill-block id=...--> wrappers):
+      {{selected_blocks}}
+
+      Plan surgical edits to ONLY those blocks. Do not outline a new piece.
+      {% endif %}
+
+      Produce a writing plan that matches the theme personality above.
+      For O'Reilly / Book Chapter themes, plan a FULL chapter (not a blog
+      outline) with the required chapter H2s, Tip/Note/Warning callouts,
+      multiple code+output beats, exercises, and summary.
+
+      Include:
+      1. Working title options (2–3) — chapter-style when theme requires it
       2. Audience insight (1 short paragraph) — what they fear / want
       3. Outline with H2/H3 sections and where curiosity pays off
       4. Research questions that must be answered
-      5. Success criteria for the final article (user-perspective)
+      5. Success criteria for the final piece (user-perspective)
       6. Code · output · explanation beats — which snippets and sample
-         results the Writer must show
+         results the Writer must show (multiple for full chapters)
       7. Visual feedback — required draw.io diagrams + image briefs
          (name, purpose, placement)
       8. Addictive devices — hook, open loops, challenge/close
+      9. For book chapters: warm-up problem, pitfalls, exercises, summary
 
       Output markdown only. No preamble.
 
@@ -141,10 +170,18 @@ agents:
       Brief:
       {{brief}}
 
+      Theme: {{theme}}
+      Format: {{format}}
+      Goal: {{goal}}
+
+      {{theme_guidance}}
+
       Writing plan:
       {{plan}}
 
       Gather research notes that answer the plan's research questions.
+      When the theme is an O'Reilly book chapter, favor worked examples,
+      pitfall patterns, exercise ideas, and diagram specs a chapter needs.
       Prefer durable knowledge and clearly mark uncertainty.
       Structure your output as markdown with:
       - Key findings (bullets)
@@ -176,6 +213,10 @@ agents:
       Tone: {{tone}}
       Format: {{format}}
       Target length: {{length}}
+      Theme: {{theme}}
+      Goal: {{goal}}
+
+      {{theme_guidance}}
 
       Plan:
       {{plan}}
@@ -193,10 +234,36 @@ agents:
       {{draft}}
       {% endif %}
 
-      Write a complete article in markdown optimized for a busy reader who
-      should feel pulled to keep reading and then try something.
+      {% if revise_mode %}
+      REVISION MODE — update ONLY the selected blocks.
+      Instruction: {{revise_instruction}}
 
-      Requirements:
+      Full draft for context (do not rewrite unmarked sections):
+      {{existing_draft}}
+
+      Selected blocks (preserve each id exactly):
+      {{selected_blocks}}
+
+      Output ONLY the revised selected blocks, each wrapped as:
+      <!--quill-block id="THE_SAME_ID" type="same-type"-->
+      ...revised markdown for that block...
+      <!--/quill-block-->
+
+      Do not invent new block ids. Do not omit wrappers. No preamble.
+      {% else %}
+      Write the COMPLETE piece in markdown — match Format and Theme length.
+      For O'Reilly Book Chapter: write the full chapter body (thousands of
+      words), not an outline, summary, or blog-length essay. Obey the theme
+      personality structure (warm-up, concepts, hands-on, pitfalls, exercises,
+      summary) with Tip/Note/Warning callouts.
+      {% if book_title %}
+      This is a chapter in the book “{{book_title}}”{% if chapter_title %} —
+      chapter “{{chapter_title}}”{% endif %}. Write it to stand alone but fit
+      the series.
+      {% endif %}
+      {% endif %}
+
+      Requirements (compose mode; in revision mode apply to selected blocks):
       - Follow the plan structure unless feedback says otherwise
       - Ground claims in the research notes; do not invent facts
       - Open with a hook (tension, question, or surprising claim)
@@ -207,9 +274,9 @@ agents:
       - Include at least one fenced code block (real language, not drawio) PLUS
         a nearby sample/expected output (fenced text/output or labeled Output:)
         PLUS a short explanation of what the code does and why the output
-        looks that way
+        looks that way — prefer multiple listings for full chapters
       - Use clear headings and scannable paragraphs
-      - Close with a memorable takeaway or challenge that creates urge to act
+      - Close with a memorable takeaway, exercises, or challenge
 
       Draw.io tips:
       - Root cells id="0" and parent id="1" are required
@@ -217,7 +284,7 @@ agents:
       - Edges: edge="1" with source/target pointing at vertex ids
       - Keep 3–8 nodes so the diagram stays readable
 
-      Output the article markdown only. No preamble.
+      Output the full markdown only. No preamble.
 
   manager:
     name: Manager
@@ -236,6 +303,12 @@ agents:
       Brief:
       {{brief}}
 
+      Theme: {{theme}}
+      Format: {{format}}
+      Target length: {{length}}
+
+      {{theme_guidance}}
+
       Plan:
       {{plan}}
 
@@ -244,6 +317,18 @@ agents:
 
       Draft:
       {{draft}}
+
+      When Theme/Format is an O'Reilly book chapter, fail (revise) if the draft
+      is blog-length, outline-only, missing exercises/summary, or lacks the
+      chapter scaffolding described in the theme personality.
+
+      {% if revise_mode %}
+      REVISION MODE: the draft should contain ONLY revised <!--quill-block-->
+      sections for the selected ids. Do NOT require a full chapter, draw.io,
+      image brief, or long-form addictive structure. Score based on whether
+      the selected blocks improved per the instruction and preserved ids.
+      Pass when wrappers + ids are correct and the prose is clearer.
+      {% endif %}
 
       Quality criteria (score each from 0.0 to 1.0 — be harsh):
       {% for c in criteria %}

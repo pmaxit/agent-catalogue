@@ -2,6 +2,7 @@ import type { CursorClient } from "./cursor-client.js";
 import { buildFlowMxfile } from "./diagrams.js";
 import { analyzeDraftHeuristics, enforceStrictJudgment } from "./judge.js";
 import { renderTemplate } from "./template.js";
+import { isOreillyChapterTheme, resolveThemePlaybook } from "./themes.js";
 import type {
   BriefInput,
   ManagerEvaluation,
@@ -70,18 +71,49 @@ export class WritingOrchestrator {
       await options.onEvent?.(event);
     };
 
+    const theme = options.brief.theme ?? "Agentic Command";
+    const format = options.brief.format ?? "long-form article";
+    const themePlaybook = resolveThemePlaybook(theme, format);
+    const defaultLength = isOreillyChapterTheme(theme, format)
+      ? "4000–5500 words (full book chapter)"
+      : "800–1200 words";
+
+    const reviseMode = options.brief.mode === "revise_blocks";
+    const selectedBlocks = options.brief.selectedBlocks ?? [];
+    const selectedBlocksMarkdown = selectedBlocks.length
+      ? selectedBlocks
+          .map(
+            (b) =>
+              `<!--quill-block id="${b.id}" type="${b.type}"-->\n${b.text}\n<!--/quill-block-->`,
+          )
+          .join("\n\n")
+      : "";
+
     const state: Record<string, string> = {
       brief: options.brief.brief,
       audience: options.brief.audience ?? "general readers",
       tone: options.brief.tone ?? "clear and confident",
-      format: options.brief.format ?? "long-form article",
-      length: options.brief.length ?? "800–1200 words",
-      theme: options.brief.theme ?? "Atelier Editorial",
+      format,
+      length: options.brief.length ?? defaultLength,
+      theme,
+      theme_guidance: themePlaybook.guidance,
       goal: options.brief.goal ?? "Thought Leadership",
       feedback: "",
       draft: "",
       plan: "",
       research: "",
+      revise_mode: reviseMode ? "true" : "",
+      existing_draft: options.brief.existingDraft ?? "",
+      selected_blocks: selectedBlocksMarkdown,
+      revise_instruction:
+        options.brief.reviseInstruction ??
+        (reviseMode ? options.brief.brief : ""),
+      book_title: options.brief.bookTitle ?? "",
+      chapter_title: options.brief.chapterTitle ?? "",
+      chapter_number:
+        options.brief.chapterNumber != null
+          ? String(options.brief.chapterNumber)
+          : "",
     };
 
     let iteration = 0;
@@ -170,6 +202,7 @@ export class WritingOrchestrator {
             this.config,
             evaluation,
             state.draft || "",
+            { skipArtifactCaps: Boolean(state.revise_mode) },
           );
           if (
             evaluation.route === "done" &&
@@ -377,11 +410,224 @@ export class WritingOrchestrator {
   }
 }
 
+function mockOreillyChapter(brief: string, feedback?: string): string {
+  const mx = buildFlowMxfile("Chapter learning loop", [
+    "Warm-up problem",
+    "Core concept",
+    "Hands-on lab",
+    "Read the output",
+    "Pitfall check",
+    "Exercise",
+  ], [
+    { from: 0, to: 1 },
+    { from: 1, to: 2 },
+    { from: 2, to: 3 },
+    { from: 3, to: 4 },
+    { from: 3, to: 5 },
+  ]);
+
+  return `# Chapter 4: ${brief}
+
+![Annotated lab session](image-brief:oreilly-lab-session "Place after What You Will Learn")
+
+You ship a change that "looks right," then spend an hour wondering why production disagrees.
+This chapter treats ${brief} the O'Reilly way: a warm-up failure, crisp concepts, typed labs with real output, and exercises you can finish tonight.
+
+## A Warm-Up Problem
+
+Imagine you paste a "working" snippet from a blog, run it, and get silence — or worse, the wrong kind of success.
+The itch is not missing syntax; it is a missing mental model of how the pieces talk to each other.
+
+> **Note:** If you already have a failing case from your own stack, keep it open beside this chapter. We will map each section onto that failure.
+
+## What You Will Build / Learn
+
+By the end of this chapter you will be able to:
+
+- State the core idea behind ${brief} in one plain sentence
+- Run a minimal lab and predict the output before it prints
+- Spot the three pitfalls that burn first-week practitioners
+- Complete a longer practice path that ties the labs together
+
+## Core Concepts
+
+Before we type, name the parts. ${brief} is easiest when you separate:
+
+1. **Intent** — what outcome you want the system to produce
+2. **Contract** — inputs, outputs, and failure modes you can observe
+3. **Feedback** — how you know the contract held (logs, return values, diagrams)
+
+> **Tip:** Write the contract in a comment before the first function. If you cannot write it, you are not ready to code yet.
+
+## Hands-On: Walkthrough
+
+### Listing 1 — the failing gate
+
+\`\`\`javascript
+function clearsBar(scores, thresholds) {
+  return Object.keys(thresholds).every(
+    (id) => Number(scores[id] ?? 0) >= thresholds[id]
+  );
+}
+
+console.log(
+  clearsBar(
+    { correctness: 0.9, clarity: 0.7 },
+    { correctness: 0.85, clarity: 0.85, helpfulness: 0.85 }
+  )
+);
+\`\`\`
+
+Output:
+
+\`\`\`text
+false
+\`\`\`
+
+Explanation: \`helpfulness\` is missing from scores, so it becomes \`0\` and fails the floor. Soft drafts fail for the same reason — absent evidence counts as zero.
+
+### Listing 2 — the repaired path
+
+\`\`\`javascript
+function clearsBar(scores, thresholds) {
+  return Object.entries(thresholds).every(
+    ([id, min]) => Number(scores[id] ?? 0) >= min
+  );
+}
+
+const thresholds = {
+  correctness: 0.85,
+  clarity: 0.85,
+  helpfulness: 0.85,
+  code_output: 0.85,
+  visual_feedback: 0.85,
+  addictive: 0.8,
+};
+
+const scores = {
+  correctness: 0.9,
+  clarity: 0.88,
+  helpfulness: 0.9,
+  code_output: 0.9,
+  visual_feedback: 0.9,
+  addictive: 0.85,
+};
+
+console.log(clearsBar(scores, thresholds));
+\`\`\`
+
+Output:
+
+\`\`\`text
+true
+\`\`\`
+
+Explanation: every criterion is present and above its floor. That is the chapter's posture for ${brief}: prove each leg, then move on.
+
+## How It Fits Together
+
+The chapter loop is not "read then vibe." It is problem → concept → lab → output literacy → pitfall → exercise:
+
+\`\`\`drawio
+${mx}
+\`\`\`
+
+Keep this diagram next to your terminal. If a step cannot point to a node, you skipped a beat.
+
+## Common Pitfalls
+
+> **Warning:** Do not celebrate green output you cannot explain. Unexplained success is tomorrow's outage.
+
+- **Tutorial theater** — copying listings without predicting output first
+- **One-listing chapters** — a single happy path hides the failure modes
+- **Diagram decoration** — a pretty graph that does not match the code path
+- **Skipping exercises** — reading without reps does not build judgment
+
+## Putting It Into Practice
+
+Take ${brief} through a longer path:
+
+1. Restate the warm-up failure in one paragraph
+2. Write the contract (inputs / outputs / failure modes)
+3. Run Listing 1 style until you can force \`false\` on purpose
+4. Repair toward Listing 2 until \`true\` is boringly repeatable
+5. Sketch the draw.io loop for *your* system, not the sample's
+
+When the practice path feels slow, that is the point — chapters earn trust by making you do the work.
+
+## Exercises
+
+1. **Reproduce:** Create a minimal case where ${brief} fails for an obvious, documented reason. Paste the output.
+2. **Extend:** Add one new threshold or check to Listing 2. Predict the output, then run it.
+3. **Teach-back:** Explain the diagram to a colleague without showing the code. If they cannot redraw the edges, simplify the nodes.
+4. **Stretch:** Write a Tip and a Warning callout for your team's real stack based on this chapter.
+
+## Summary
+
+- Start from a warm-up failure, not a definition dump
+- Teach ${brief} with contracts, labs, and output literacy
+- Require code + shown output + explanation as a single unit
+- Use diagrams to show the system, Tip/Note/Warning to steer judgment
+- Close with exercises so the chapter becomes skill, not souvenir
+
+Next: take the repaired path into an integration chapter — wire ${brief} into a multi-step workflow and keep the same hard gate.
+
+${feedback ? `<!-- addressed feedback: ${feedback.slice(0, 200)} -->` : ""}
+`;
+}
+
 function mockResponse(agentKey: string, prompt: string): string {
   const briefMatch = prompt.match(/Brief:\n([\s\S]*?)(?:\n\n[A-Z]|\nAudience:)/);
   const brief = (briefMatch?.[1] ?? "the requested topic").trim().slice(0, 120);
+  const oreilly =
+    /o'?reilly|book chapter|THEME PERSONALITY — O'Reilly|full book chapter/i.test(
+      prompt,
+    );
 
   if (agentKey === "planner") {
+    if (oreilly) {
+      return `# Chapter plan for: ${brief}
+
+## Title options
+1. Chapter 4: ${brief} — Learning by Doing
+2. ${brief}: From First Principles to Working Code
+3. Making ${brief} Stick
+
+## Audience insight
+Practitioners who have skimmed blog posts and still cannot ship a working mental model.
+They fear wasted weekends; they want labs they can type along with.
+
+## Outline (full O'Reilly chapter)
+1. Warm-Up Problem — a concrete failure that motivates the chapter
+2. What You Will Build / Learn — outcomes checklist
+3. Core Concepts — precise definitions
+4. Hands-On Walkthrough — multiple code + output + explanation beats
+5. How It Fits Together — architecture/workflow diagram
+6. Common Pitfalls — Warning callouts
+7. Putting It Into Practice — longer worked example
+8. Exercises — 3 practice prompts
+9. Summary — recap + next chapter hook
+
+## Research questions
+- What durable facts vs opinions belong in this chapter?
+- Which two labs prove the concept beyond a toy snippet?
+- What pitfalls do practitioners hit in the first week?
+
+## Code · output · explanation beats
+- Listing 1: minimal failing example + output + why it fails
+- Listing 2: corrected path + output + explanation
+- Listing 3: integration check in the longer worked example
+
+## Visual feedback
+- draw.io: concept → practice → judgment loop (after Core Concepts)
+- Image brief: annotated terminal/session still (near Hands-On)
+
+## Addictive devices
+- Open with a broken system the reader recognizes
+- Pay off each open loop in Hands-On
+- Close with exercises that create urge to try tonight
+`;
+    }
     return `# Plan for: ${brief}
 
 ## Title options
@@ -415,6 +661,44 @@ Readers want clarity, credible framing, and something they can use today.
   }
 
   if (agentKey === "researcher") {
+    if (oreilly) {
+      return `# Research notes (book chapter)
+
+## Key findings
+- ${brief} is best taught as concept → tiny lab → output literacy → pitfall.
+- Readers retain more when each listing shows Output and a plain-language Explanation.
+- Tip/Note/Warning callouts reduce support load without bloating prose.
+
+## Evidence / rationale
+- Example-first chapters outperform theory-first chapters for practitioners.
+- Exercises with a 20–40 minute scope convert reading into skill.
+- Architecture diagrams prevent "I followed steps but don't see the system."
+
+## Open questions
+- Exact product versions drift — keep examples version-tolerant and mark assumptions.
+
+## Suggested source types
+- Primary docs, RFCs, reputable engineering blogs, first-party experiments
+
+## Image research notes
+- Style: animal-book adjacent — clean line art, parchment-adjacent neutrals
+- Depict the warm-up failure and the repaired flow side by side
+
+## Diagram specs (draw.io)
+- Nodes: Problem, Concept, Lab, Output, Pitfall, Exercise
+- Edges: Problem→Concept→Lab→Output; Output→Pitfall; Output→Exercise
+
+## Code · output pairs
+- Minimal repro that fails for an obvious reason
+- Corrected lab with success output
+- Integration snippet for the longer practice section
+
+## Exercise ideas
+1. Reproduce the warm-up failure locally
+2. Extend Listing 2 with one constraint from the brief
+3. Draw the system before coding the integration path
+`;
+    }
     return `# Research notes
 
 ## Key findings
@@ -447,6 +731,32 @@ Readers want clarity, credible framing, and something they can use today.
     const feedback = /Manager feedback[\s\S]*?:\n([\s\S]*?)(?:\n\n|$)/i.exec(
       prompt,
     )?.[1];
+    if (/REVISION MODE|Selected blocks \(preserve|Selected blocks to revise/i.test(prompt)) {
+      const section =
+        /Selected blocks[^\n]*:\n([\s\S]*?)(?:\n\n[A-Z][^\n]*:|\n\nRequirements|\n\nOutput ONLY|$)/i.exec(
+          prompt,
+        )?.[1] ?? "";
+      const blockRe =
+        /<!--\s*quill-block\s+id=["']([^"']+)["']\s*(?:type=["']([^"']*)["'])?\s*-->([\s\S]*?)<!--\s*\/quill-block\s*-->/gi;
+      const parts: string[] = [];
+      let bm: RegExpExecArray | null;
+      const source = section || prompt;
+      while ((bm = blockRe.exec(source)) !== null) {
+        const id = bm[1];
+        if (id === "THE_SAME_ID") continue;
+        const type = bm[2] || "paragraph";
+        const text = bm[3].trim();
+        parts.push(
+          `<!--quill-block id="${id}" type="${type}"-->\n${text}\n\n*(Revised for clarity and stronger practical guidance.)*\n<!--/quill-block-->`,
+        );
+      }
+      if (parts.length) {
+        return `${parts.join("\n\n")}${feedback ? `\n<!-- addressed feedback: ${feedback.slice(0, 120)} -->` : ""}`;
+      }
+    }
+    if (oreilly) {
+      return mockOreillyChapter(brief, feedback);
+    }
     const mx = buildFlowMxfile("Writing pipeline", [
       "Plan",
       "Research",
@@ -532,10 +842,37 @@ ${feedback ? `\n<!-- addressed feedback: ${feedback.slice(0, 200)} -->` : ""}
     const draft = draftMatch?.[1] ?? prompt;
     const report = analyzeDraftHeuristics(draft);
     const draftSection = prompt.includes("Draft:");
+    const revisePass =
+      /REVISION MODE|selective block/i.test(prompt) &&
+      /<!--\s*quill-block\s+id=/i.test(draft);
+    if (revisePass) {
+      return JSON.stringify(
+        {
+          scores: {
+            correctness: 0.9,
+            clarity: 0.9,
+            helpfulness: 0.9,
+            code_output: 0.9,
+            visual_feedback: 0.9,
+            addictive: 0.85,
+          },
+          passed: true,
+          route: "done",
+          feedback: "",
+          summary: "Selective block revisions look solid.",
+        },
+        null,
+        2,
+      );
+    }
+    const chapterOk =
+      !oreilly ||
+      (/##\s+(A Warm-Up|What You Will|Exercises|Summary)/i.test(draft) &&
+        draft.split(/\s+/).length >= 800);
     const scores = {
-      correctness: draftSection ? 0.9 : 0.4,
+      correctness: draftSection && chapterOk ? 0.9 : oreilly && !chapterOk ? 0.55 : draftSection ? 0.9 : 0.4,
       clarity: draftSection ? 0.88 : 0.4,
-      helpfulness: draftSection ? 0.88 : 0.4,
+      helpfulness: draftSection && chapterOk ? 0.88 : oreilly && !chapterOk ? 0.5 : draftSection ? 0.88 : 0.4,
       code_output:
         report.hasCodeFence && report.hasOutputSignal && report.hasCodeExplanation
           ? 0.9

@@ -75,6 +75,12 @@ export type AgentDef = z.infer<typeof AgentDefSchema>;
 export type Criterion = z.infer<typeof CriterionSchema>;
 export type WorkflowNode = z.infer<typeof WorkflowNodeSchema>;
 
+export interface BriefBlock {
+  id: string | number;
+  type: string;
+  text: string;
+}
+
 export interface BriefInput {
   brief: string;
   audience?: string;
@@ -83,6 +89,14 @@ export interface BriefInput {
   length?: string;
   theme?: string;
   goal?: string;
+  /** compose (default) or revise_blocks for selective block updates */
+  mode?: "compose" | "revise_blocks";
+  existingDraft?: string;
+  selectedBlocks?: BriefBlock[];
+  reviseInstruction?: string;
+  bookTitle?: string;
+  chapterTitle?: string;
+  chapterNumber?: number;
 }
 
 export interface ManagerEvaluation {
