@@ -54,7 +54,7 @@ Body for `/api/run`:
 }
 ```
 
-SQLite path: `SQLITE_PATH` (default `./data/quill.db`; Railway uses `/data/quill.db` on a persistent volume).
+SQLite: on Railway, `SQLITE_PATH=/data/quill.db` (persistent volume). Locally Quill does **not** write `./data/quill.db` — the studio saves books/chapters/articles to the Railway app via `QUILL_DATA_API_BASE` (defaults to the production URL).
 
 ## Railway
 

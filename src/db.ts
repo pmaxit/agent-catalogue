@@ -2,6 +2,7 @@ import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import Database from "better-sqlite3";
+import { isRailwayRuntime } from "./data-api.js";
 import { buildFlowMxfile, hasDrawioDiagram } from "./diagrams.js";
 
 export type Block = {
@@ -401,12 +402,20 @@ function titleFromMarkdown(md: string): string {
   return (first || "Untitled").trim().slice(0, 120);
 }
 
+/**
+ * Resolve SQLite path.
+ * Railway: durable volume file. Local: never ./data/quill.db — in-memory only
+ * (studio books/chapters/articles persist via the Railway data API).
+ */
 export function resolveDbPath(env: NodeJS.ProcessEnv = process.env): string {
-  if (env.SQLITE_PATH?.trim()) return env.SQLITE_PATH.trim();
-  if (env.RAILWAY_VOLUME_MOUNT_PATH?.trim()) {
-    return resolve(env.RAILWAY_VOLUME_MOUNT_PATH.trim(), "quill.db");
+  if (isRailwayRuntime(env)) {
+    if (env.SQLITE_PATH?.trim()) return env.SQLITE_PATH.trim();
+    if (env.RAILWAY_VOLUME_MOUNT_PATH?.trim()) {
+      return resolve(env.RAILWAY_VOLUME_MOUNT_PATH.trim(), "quill.db");
+    }
+    return "/data/quill.db";
   }
-  return resolve(process.cwd(), "data", "quill.db");
+  return ":memory:";
 }
 
 export class ArticleStore {
@@ -415,7 +424,9 @@ export class ArticleStore {
 
   constructor(dbPath = resolveDbPath()) {
     this.path = dbPath;
-    mkdirSync(dirname(dbPath), { recursive: true });
+    if (dbPath !== ":memory:") {
+      mkdirSync(dirname(dbPath), { recursive: true });
+    }
     this.db = new Database(dbPath);
     this.db.pragma("journal_mode = WAL");
     this.db.pragma("foreign_keys = ON");

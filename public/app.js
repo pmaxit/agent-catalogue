@@ -114,6 +114,16 @@ document.addEventListener("DOMContentLoaded", () => {
   let userEditedBriefAfterSuggest = false;
   let chapterDirty = false;
   let lastAutosaveAt = 0;
+  /** Railway data API origin when local studio must not use in-memory/local SQLite. */
+  let dataApiBase =
+    location.hostname === "localhost" || location.hostname === "127.0.0.1"
+      ? "https://writing-agent-production-b61f.up.railway.app"
+      : "";
+
+  function dataUrl(path) {
+    const p = path.startsWith("/") ? path : `/${path}`;
+    return `${dataApiBase}${p}`;
+  }
 
   const newId = () =>
     crypto.randomUUID ? crypto.randomUUID() : `b-${Date.now()}-${Math.random()}`;
@@ -135,10 +145,23 @@ document.addEventListener("DOMContentLoaded", () => {
       const health = await healthRes.json();
       const config = await configRes.json();
 
+      dataApiBase = String(config.dataApiBase || health.dataApiBase || "").replace(
+        /\/$/,
+        "",
+      );
+
       const mock = Boolean(health.mock ?? config.mock);
       modeBadge.textContent = mock ? "STATUS: MOCK" : "STATUS: LIVE";
       modelBadge.textContent = `MODEL: ${(config.defaults?.model || "—").toUpperCase()}`;
-      healthPill.textContent = mock ? "Mock mode" : "API connected";
+      if (dataApiBase) {
+        healthPill.textContent = mock
+          ? "Mock · Railway DB"
+          : "API · Railway DB";
+        healthPill.title = `Books/chapters save to ${dataApiBase}`;
+      } else {
+        healthPill.textContent = mock ? "Mock mode" : "API connected";
+        healthPill.title = "Same-origin SQLite (Railway volume)";
+      }
       healthPill.classList.toggle("mock", mock);
       healthPill.classList.toggle("live", !mock);
 
@@ -163,17 +186,17 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("kpi-runtime").textContent = mock
         ? "mock"
         : config.defaults?.runtime || "api";
-      document.getElementById("kpi-runtime-delta").textContent = mock
-        ? "Local mock runner active"
-        : "Cursor Cloud Agents API";
+      document.getElementById("kpi-runtime-delta").textContent = dataApiBase
+        ? `Data → ${dataApiBase.replace(/^https?:\/\//, "")}`
+        : mock
+          ? "Local mock runner active"
+          : "Cursor Cloud Agents API";
     } catch (err) {
       healthPill.textContent = "Offline";
       modeBadge.textContent = "STATUS: ERROR";
       console.error(err);
     }
   }
-
-  hydrateConfig();
 
   function resetEditorCanvas(message = "Waiting for draft") {
     currentDraftText = "";
@@ -324,7 +347,7 @@ document.addEventListener("DOMContentLoaded", () => {
       );
       if (bookGoal) bookGoal.click();
 
-      const res = await fetch("/api/books", {
+      const res = await fetch(dataUrl("/api/books"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -382,7 +405,7 @@ document.addEventListener("DOMContentLoaded", () => {
   async function refreshBooksList() {
     if (!booksList) return;
     try {
-      const res = await fetch("/api/books");
+      const res = await fetch(dataUrl("/api/books"));
       if (!res.ok) throw new Error("Failed to list books");
       const data = await res.json();
       const books = data.books || [];
@@ -438,7 +461,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function loadBook(id) {
-    const res = await fetch(`/api/books/${id}`);
+    const res = await fetch(dataUrl(`/api/books/${id}`));
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Load book failed");
     const book = data.book;
@@ -488,7 +511,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function loadChapter(id) {
-    const res = await fetch(`/api/chapters/${id}`);
+    const res = await fetch(dataUrl(`/api/chapters/${id}`));
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Load chapter failed");
     const chapter = data.chapter;
@@ -1316,7 +1339,7 @@ document.addEventListener("DOMContentLoaded", () => {
   async function refreshArticlesList() {
     if (!articlesList) return;
     try {
-      const res = await fetch("/api/articles");
+      const res = await fetch(dataUrl("/api/articles"));
       if (!res.ok) throw new Error("Failed to list articles");
       const data = await res.json();
       const articles = (data.articles || []).filter(
@@ -1393,8 +1416,8 @@ document.addEventListener("DOMContentLoaded", () => {
       };
       const res = await fetch(
         currentArticleId
-          ? `/api/articles/${currentArticleId}`
-          : "/api/articles",
+          ? dataUrl(`/api/articles/${currentArticleId}`)
+          : dataUrl("/api/articles"),
         {
           method: currentArticleId ? "PUT" : "POST",
           headers: { "Content-Type": "application/json" },
@@ -1459,8 +1482,8 @@ document.addEventListener("DOMContentLoaded", () => {
       };
       const res = await fetch(
         currentChapterId
-          ? `/api/chapters/${currentChapterId}`
-          : "/api/chapters",
+          ? dataUrl(`/api/chapters/${currentChapterId}`)
+          : dataUrl("/api/chapters"),
         {
           method: currentChapterId ? "PUT" : "POST",
           headers: { "Content-Type": "application/json" },
@@ -1506,7 +1529,7 @@ document.addEventListener("DOMContentLoaded", () => {
   async function refreshBookChaptersQuiet() {
     if (!currentBookId) return;
     try {
-      const res = await fetch(`/api/books/${currentBookId}`);
+      const res = await fetch(dataUrl(`/api/books/${currentBookId}`));
       const data = await res.json();
       if (!res.ok) return;
       bookChapters = data.book?.chapters || [];
@@ -1521,7 +1544,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function loadArticle(id) {
     try {
-      const res = await fetch(`/api/articles/${id}`);
+      const res = await fetch(dataUrl(`/api/articles/${id}`));
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Load failed");
       const article = data.article;
@@ -1552,9 +1575,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function loadHistory() {
     const base = currentChapterId
-      ? `/api/chapters/${currentChapterId}`
+      ? dataUrl(`/api/chapters/${currentChapterId}`)
       : currentArticleId
-        ? `/api/articles/${currentArticleId}`
+        ? dataUrl(`/api/articles/${currentArticleId}`)
         : null;
     if (!base) return;
     try {
@@ -1585,9 +1608,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function restoreRevision(revision) {
     const base = currentChapterId
-      ? `/api/chapters/${currentChapterId}`
+      ? dataUrl(`/api/chapters/${currentChapterId}`)
       : currentArticleId
-        ? `/api/articles/${currentArticleId}`
+        ? dataUrl(`/api/articles/${currentArticleId}`)
         : null;
     if (!base) return;
     try {
@@ -2058,7 +2081,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (currentChapterId) {
-      const res = await fetch(`/api/chapters/${currentChapterId}/apply-blocks`, {
+      const res = await fetch(dataUrl(`/api/chapters/${currentChapterId}/apply-blocks`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2073,7 +2096,7 @@ document.addEventListener("DOMContentLoaded", () => {
       currentDraftText = data.chapter.body_markdown;
       setChapterUi(data.chapter);
     } else if (currentArticleId) {
-      const res = await fetch(`/api/articles/${currentArticleId}/apply-blocks`, {
+      const res = await fetch(dataUrl(`/api/articles/${currentArticleId}/apply-blocks`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2360,6 +2383,8 @@ document.addEventListener("DOMContentLoaded", () => {
   downloadBtn.addEventListener("click", () => {
     void triggerDownload();
   });
-  refreshArticlesList();
-  refreshBooksList();
+  void hydrateConfig().then(() => {
+    refreshArticlesList();
+    refreshBooksList();
+  });
 });

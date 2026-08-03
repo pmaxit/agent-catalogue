@@ -15,6 +15,7 @@ import {
 } from "./book-pages.js";
 import { isMockMode, loadConfig, resolveApiKey } from "./config.js";
 import { CursorClient } from "./cursor-client.js";
+import { resolveDataApiBase, usesRemoteDataApi } from "./data-api.js";
 import { startSseHeartbeat } from "./sse.js";
 import {
   ArticleStore,
@@ -58,9 +59,11 @@ const client =
     : null;
 
 const orchestrator = new WritingOrchestrator(config, client, mock);
+const dataApiBase = resolveDataApiBase();
+const remoteData = usesRemoteDataApi();
 const store = new ArticleStore();
-const seeded = store.seedIfEmpty(SAMPLE_ARTICLES);
-const diagramsBackfilled = store.ensureDiagramsOnPublished();
+const seeded = remoteData ? 0 : store.seedIfEmpty(SAMPLE_ARTICLES);
+const diagramsBackfilled = remoteData ? 0 : store.ensureDiagramsOnPublished();
 
 const port = Number(config.app.port) || 8080;
 const publicDir = resolve(process.cwd(), config.app.public_dir);
@@ -87,10 +90,13 @@ app.get("/api/health", async () => ({
   workflow: config.workflow.name,
   goal: config.goal.name,
   agents: Object.keys(config.agents),
+  dataApiBase: dataApiBase || null,
+  remoteData,
   sqlite: {
     path: store.path,
-    articles: store.list(1000).length,
-    books: store.listBooks(1000).length,
+    durable: store.path !== ":memory:",
+    articles: remoteData ? null : store.list(1000).length,
+    books: remoteData ? null : store.listBooks(1000).length,
     seeded,
   },
 }));
@@ -99,6 +105,8 @@ app.get("/api/config", async () => ({
   title: config.app.title,
   tagline: config.app.tagline,
   mock,
+  dataApiBase,
+  remoteData,
   themes: listStudioThemePlaybooks().map((t) => ({
     id: t.id,
     label: t.label,
@@ -933,6 +941,8 @@ app.log.info(
     config: "config/agents.yaml",
     title: config.app.title,
     sqlite: store.path,
+    dataApiBase: dataApiBase || "(same-origin)",
+    remoteData,
     seeded,
     diagramsBackfilled,
   },
