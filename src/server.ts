@@ -15,6 +15,7 @@ import {
 } from "./book-pages.js";
 import { isMockMode, loadConfig, resolveApiKey } from "./config.js";
 import { CursorClient } from "./cursor-client.js";
+import { startSseHeartbeat } from "./sse.js";
 import {
   ArticleStore,
   SAMPLE_ARTICLES,
@@ -27,6 +28,19 @@ import {
   type PublishInput,
 } from "./db.js";
 import { WritingOrchestrator } from "./orchestrator.js";
+import {
+  buildQmd,
+  renderNotebookHtml,
+  suggestFilename,
+} from "./quarto.js";
+import {
+  suggestBrief,
+  type SuggestBriefInput,
+} from "./suggest-brief.js";
+import {
+  listStudioThemePlaybooks,
+  resolveThemePlaybook,
+} from "./themes.js";
 import type { BriefInput, PipelineEvent } from "./types.js";
 
 const config = loadConfig();
@@ -85,6 +99,12 @@ app.get("/api/config", async () => ({
   title: config.app.title,
   tagline: config.app.tagline,
   mock,
+  themes: listStudioThemePlaybooks().map((t) => ({
+    id: t.id,
+    label: t.label,
+    studioTheme: t.studioTheme,
+    quarto: t.quarto,
+  })),
   goal: {
     name: config.goal.name,
     max_iterations: config.goal.max_iterations,
@@ -724,6 +744,99 @@ app.get<{ Params: { bookSlug: string; chapterSlug: string } }>(
   },
 );
 
+type ExportQmdBody = {
+  markdown?: string;
+  title?: string;
+  subtitle?: string;
+  bookTitle?: string;
+  theme?: string;
+  format?: string;
+  audience?: string;
+  tone?: string;
+  length?: string;
+  goal?: string;
+  slug?: string;
+};
+
+app.post<{ Body: ExportQmdBody }>("/api/export/qmd", async (req, reply) => {
+  const body = req.body ?? {};
+  const markdown = typeof body.markdown === "string" ? body.markdown : "";
+  if (!markdown.trim()) {
+    return reply.code(400).send({ error: "markdown is required" });
+  }
+  const title =
+    (typeof body.title === "string" && body.title.trim()) ||
+    "Untitled draft";
+  const qmd = buildQmd({
+    title,
+    markdown,
+    subtitle: body.subtitle,
+    bookTitle: body.bookTitle,
+    theme: body.theme,
+    format: body.format,
+    audience: body.audience,
+    tone: body.tone,
+    length: body.length,
+    goal: body.goal,
+  });
+  const filename = suggestFilename({ title, slug: body.slug });
+  return reply
+    .header(
+      "Content-Disposition",
+      `attachment; filename="${filename.replace(/"/g, "")}"`,
+    )
+    .type("text/markdown; charset=utf-8")
+    .send(qmd);
+});
+
+app.post<{ Body: ExportQmdBody }>("/api/notebook/preview", async (req, reply) => {
+  const body = req.body ?? {};
+  const markdown = typeof body.markdown === "string" ? body.markdown : "";
+  if (!markdown.trim()) {
+    return reply.code(400).send({ error: "markdown is required" });
+  }
+  const title =
+    (typeof body.title === "string" && body.title.trim()) ||
+    "Untitled draft";
+  const html = renderNotebookHtml({
+    title,
+    markdown,
+    subtitle: body.subtitle,
+    bookTitle: body.bookTitle,
+    theme: body.theme,
+    format: body.format,
+    audience: body.audience,
+    tone: body.tone,
+    length: body.length,
+    goal: body.goal,
+  });
+  const playbook = resolveThemePlaybook(body.theme, body.format);
+  return { html, themeId: playbook.id, quarto: playbook.quarto };
+});
+
+app.post<{ Body: SuggestBriefInput }>("/api/suggest-brief", async (req, reply) => {
+  const body = req.body ?? {};
+  try {
+    const suggestion = await suggestBrief({
+      input: {
+        bookTitle: body.bookTitle,
+        bookSynopsis: body.bookSynopsis,
+        chapterTitle: body.chapterTitle,
+        chapterNumber: body.chapterNumber,
+        existingTheme: body.existingTheme,
+        existingGoal: body.existingGoal,
+      },
+      mock,
+      client,
+      config,
+    });
+    return { suggestion, mock };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return reply.code(502).send({ error: message });
+  }
+});
+
 app.post<{ Body: BriefInput }>("/api/run", async (req, reply) => {
   const body = req.body ?? ({} as BriefInput);
   if (!body.brief || typeof body.brief !== "string" || !body.brief.trim()) {
@@ -737,6 +850,7 @@ app.post<{ Body: BriefInput }>("/api/run", async (req, reply) => {
     Connection: "keep-alive",
     "Access-Control-Allow-Origin": "*",
   });
+  const stopHeartbeat = startSseHeartbeat(reply.raw);
 
   const send = (event: PipelineEvent) => {
     reply.raw.write(`event: ${event.type}\n`);
@@ -788,6 +902,7 @@ app.post<{ Body: BriefInput }>("/api/run", async (req, reply) => {
       });
     }
   } finally {
+    stopHeartbeat();
     if (!reply.raw.destroyed && !reply.raw.writableEnded) {
       reply.raw.end();
     }

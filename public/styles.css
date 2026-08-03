@@ -1535,6 +1535,112 @@ code {
   background: var(--border);
 }
 
+.agent-roster {
+  margin-bottom: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.agent-roster-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.agent-roster-head h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.agent-roster-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-3);
+}
+
+.agent-card {
+  display: grid;
+  gap: 6px;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #fafafa;
+}
+
+.agent-card[data-status="running"],
+.agent-card[data-status="streaming"],
+.agent-card[data-status="queued"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, #fff);
+}
+
+.agent-card[data-status="done"] {
+  border-color: color-mix(in srgb, var(--success) 45%, var(--border));
+}
+
+.agent-card[data-status="error"] {
+  border-color: color-mix(in srgb, var(--danger, #c62828) 55%, var(--border));
+}
+
+.agent-card-name {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.agent-card-role {
+  font-size: 0.75rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.agent-card-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-2);
+}
+
+.agent-card-status::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.agent-card[data-status="queued"] .agent-card-status::before,
+.agent-card[data-status="running"] .agent-card-status::before,
+.agent-card[data-status="streaming"] .agent-card-status::before {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.agent-card[data-status="done"] .agent-card-status::before {
+  background: var(--success);
+}
+
+.agent-card[data-status="error"] .agent-card-status::before {
+  background: var(--danger, #c62828);
+}
+
+.agent-card-detail {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .workspace-grid {
   display: grid;
   grid-template-columns: 420px 1fr;
@@ -1597,7 +1703,18 @@ code {
 .draft-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: var(--space-2);
+}
+
+.save-status {
+  color: var(--muted);
+  min-width: 7rem;
+}
+
+#save-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .stream-box {
@@ -1693,6 +1810,302 @@ code {
   padding-left: var(--space-4);
   border-left: 2px solid var(--accent);
   color: var(--fg);
+}
+
+/* AI brief suggestions */
+.suggest-banner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid color-mix(in oklab, var(--accent) 35%, var(--border));
+  background: color-mix(in oklab, var(--accent) 8%, var(--surface));
+  border-radius: 2px;
+}
+
+.suggest-banner[hidden] {
+  display: none !important;
+}
+
+.suggest-banner-main {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.suggest-rationale {
+  margin: 0;
+  color: var(--fg);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.suggest-status {
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+.suggest-banner-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--space-2);
+}
+
+/* Quarto notebook chrome (theme-styled in-app preview) */
+.qmd-notebook {
+  display: grid;
+  gap: var(--space-5);
+  --qmd-accent: var(--accent);
+  --qmd-chrome-bg: color-mix(in oklab, var(--surface) 92%, var(--accent));
+  --qmd-rule: color-mix(in oklab, var(--qmd-accent) 45%, var(--border));
+}
+
+.qmd-notebook-chrome {
+  padding: var(--space-4) var(--space-4) var(--space-5);
+  border-bottom: 2px solid var(--qmd-rule);
+  background:
+    linear-gradient(180deg, var(--qmd-chrome-bg), transparent);
+}
+
+.qmd-chrome-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.qmd-theme-label {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  color: var(--qmd-accent);
+}
+
+.qmd-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 2.4vw, 2.1rem);
+  letter-spacing: var(--tracking-display);
+  color: var(--fg);
+}
+
+.qmd-subtitle {
+  margin: var(--space-2) 0 0;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.qmd-blurb {
+  margin: var(--space-2) 0 0;
+  color: var(--fg-2);
+  font-size: 0.9rem;
+}
+
+.qmd-yaml-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.qmd-chip {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  background: var(--surface);
+}
+
+.qmd-body {
+  color: var(--fg-2);
+}
+
+.qmd-body h1,
+.qmd-body h2,
+.qmd-body h3 {
+  color: var(--fg);
+  font-family: var(--font-display);
+  letter-spacing: var(--tracking-display);
+}
+
+.qmd-body pre,
+.qmd-code pre {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-4);
+  overflow-x: auto;
+  background: color-mix(in oklab, var(--fg) 6%, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: var(--fg);
+  white-space: pre;
+}
+
+.qmd-body code,
+.qmd-code code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+.qmd-body p code,
+.qmd-body li code,
+.qmd-body td code,
+.qmd-body th code {
+  padding: 0.1em 0.35em;
+  background: color-mix(in oklab, var(--fg) 7%, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: 2px;
+}
+
+.qmd-code {
+  margin: var(--space-4) 0;
+}
+
+.qmd-code-label {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: var(--space-1);
+}
+
+.qmd-table-wrap {
+  margin: var(--space-4) 0;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+}
+
+.qmd-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+.qmd-table th,
+.qmd-table td {
+  padding: 0.65rem 0.85rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.qmd-table th {
+  background: color-mix(in oklab, var(--accent) 10%, var(--surface));
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.qmd-table tr:last-child td {
+  border-bottom: none;
+}
+
+.qmd-table tbody tr:nth-child(even) td {
+  background: color-mix(in oklab, var(--fg) 3%, transparent);
+}
+
+.code-block-editor,
+.table-block-editor {
+  width: 100%;
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  background: color-mix(in oklab, var(--fg) 5%, var(--surface));
+  border: 1px solid var(--border);
+  color: var(--fg);
+  resize: vertical;
+}
+
+.page-article .qmd-code,
+.page-article .qmd-table-wrap,
+.article .qmd-code,
+.article .qmd-table-wrap {
+  margin: var(--space-5) 0;
+}
+
+.qmd-callout {
+  margin: var(--space-4) 0;
+  padding: var(--space-3) var(--space-4);
+  border-left: 3px solid var(--qmd-accent);
+  background: color-mix(in oklab, var(--qmd-accent) 8%, var(--surface));
+}
+
+.qmd-callout strong {
+  display: block;
+  margin-bottom: var(--space-1);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.qmd-callout p {
+  margin: 0;
+}
+
+.qmd-callout-note {
+  --qmd-accent: #2a6f97;
+}
+
+.qmd-callout-tip {
+  --qmd-accent: #2d6a4f;
+}
+
+.qmd-callout-warning {
+  --qmd-accent: #9a3412;
+}
+
+.qmd-theme-oreilly {
+  --qmd-accent: #c45c26;
+  --qmd-chrome-bg: color-mix(in oklab, #f4e6d4 70%, var(--surface));
+}
+
+.qmd-theme-oreilly .qmd-title {
+  font-weight: 700;
+}
+
+.qmd-theme-agentic {
+  --qmd-accent: #3d8bfd;
+  --qmd-chrome-bg: color-mix(in oklab, #0b1220 12%, var(--surface));
+}
+
+.qmd-theme-technical {
+  --qmd-accent: #0f766e;
+  --qmd-chrome-bg: color-mix(in oklab, #134e4a 10%, var(--surface));
+}
+
+.qmd-theme-editorial {
+  --qmd-accent: #4c1d95;
+  --qmd-chrome-bg: color-mix(in oklab, #ede9fe 55%, var(--surface));
+}
+
+.qmd-theme-narrative {
+  --qmd-accent: #be123c;
+  --qmd-chrome-bg: color-mix(in oklab, #ffe4e6 50%, var(--surface));
+}
+
+.qmd-theme-executive {
+  --qmd-accent: #1e3a5f;
+  --qmd-chrome-bg: color-mix(in oklab, #e8eef5 60%, var(--surface));
+}
+
+.qmd-theme-default {
+  --qmd-accent: var(--accent);
 }
 
 .empty-state,

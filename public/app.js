@@ -71,6 +71,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const modelBadge = document.getElementById("model-badge");
   const healthPill = document.getElementById("health-pill");
   const studioSearch = document.getElementById("studio-search");
+  const agentRosterGrid = document.getElementById("agent-roster-grid");
+  const agentRosterMeta = document.getElementById("agent-roster-meta");
+  const suggestBanner = document.getElementById("suggest-banner");
+  const suggestRationale = document.getElementById("suggest-rationale");
+  const suggestStatus = document.getElementById("suggest-status");
+  const suggestBannerLabel = document.getElementById("suggest-banner-label");
+  const suggestAcceptBtn = document.getElementById("suggest-accept-btn");
+  const suggestDismissBtn = document.getElementById("suggest-dismiss-btn");
+  const saveStatusEl = document.getElementById("save-status");
 
   let currentGoal = "Thought Leadership & Opinion Essay";
   let currentTheme = "Agentic Command";
@@ -80,10 +89,13 @@ document.addEventListener("DOMContentLoaded", () => {
   let currentBookId = null;
   let currentBookSlug = null;
   let currentBookTitle = "";
+  let currentBookSynopsis = "";
   let currentChapterId = null;
   let currentChapterSlug = null;
+  let currentChapterTitle = "";
   let bookChapters = [];
   let composingChapter = false;
+  let composingChapterNumber = null;
   let isPublished = false;
   let blocks = [];
   let selectedBlockIds = new Set();
@@ -94,6 +106,14 @@ document.addEventListener("DOMContentLoaded", () => {
   let criterionThreshold = 0.75;
   let saveTimer = null;
   let saving = false;
+  const agentCards = new Map();
+  let pendingSuggestion = null;
+  let suggestAbort = null;
+  let suggestTimer = null;
+  let lastDismissedSuggestKey = "";
+  let userEditedBriefAfterSuggest = false;
+  let chapterDirty = false;
+  let lastAutosaveAt = 0;
 
   const newId = () =>
     crypto.randomUUID ? crypto.randomUUID() : `b-${Date.now()}-${Math.random()}`;
@@ -163,15 +183,16 @@ document.addEventListener("DOMContentLoaded", () => {
     pendingProposalMarkdown = "";
     awaitingBlockApply = false;
     isPublished = false;
+    chapterDirty = false;
     publishedBadge.hidden = true;
     editorBar.hidden = true;
     if (blockReviseBar) blockReviseBar.hidden = true;
     if (applyPanel) applyPanel.hidden = true;
-    if (saveBtn) saveBtn.hidden = true;
-    if (historyBtn) historyBtn.hidden = true;
     if (articleMeta) articleMeta.textContent = "";
     articleCanvas.classList.remove("block-editor-active");
     articleCanvas.innerHTML = `<div class="placeholder-notice empty-state"><h3>${escapeHtml(message)}</h3><p>Fire agents after setting the brief, theme, and length.</p></div>`;
+    setSaveStatus("");
+    updateDocumentActions();
   }
 
   function startNewArticle() {
@@ -179,12 +200,16 @@ document.addEventListener("DOMContentLoaded", () => {
     currentArticleSlug = null;
     currentChapterId = null;
     currentChapterSlug = null;
+    currentChapterTitle = "";
     composingChapter = false;
+    composingChapterNumber = null;
+    // Leave book rail open, but write standalone articles unless user starts a chapter
     briefInput.value = "";
     resetEditorCanvas();
     setActivity("compose");
     wizardSection.scrollIntoView({ behavior: "smooth" });
     briefInput.focus();
+    updateDocumentActions();
   }
 
   function closeNewMenu() {
@@ -338,8 +363,11 @@ document.addEventListener("DOMContentLoaded", () => {
     currentChapterSlug = null;
     composingChapter = true;
     const n = bookChapters.length + 1;
+    composingChapterNumber = n;
+    currentChapterTitle = `Chapter ${n}`;
     briefInput.value = `Write chapter ${n} of “${currentBookTitle}”. Cover the next practical topic a reader needs after the previous chapters.`;
     lengthInput.value = "4000–5500 words (full book chapter)";
+    userEditedBriefAfterSuggest = false;
     resetEditorCanvas(`Chapter ${n} draft`);
     if (articleMeta) {
       articleMeta.textContent = `New chapter · ${currentBookTitle}`;
@@ -347,6 +375,8 @@ document.addEventListener("DOMContentLoaded", () => {
     wizardSection.scrollIntoView({ behavior: "smooth" });
     briefInput.focus();
     addLog("BOOK", `Composing chapter ${n} for “${currentBookTitle}”`, "system");
+    updateDocumentActions();
+    scheduleBriefSuggestions({ reason: "new-chapter" });
   }
 
   async function refreshBooksList() {
@@ -415,6 +445,7 @@ document.addEventListener("DOMContentLoaded", () => {
     currentBookId = book.id;
     currentBookSlug = book.slug;
     currentBookTitle = book.title;
+    currentBookSynopsis = book.synopsis || "";
     bookChapters = book.chapters || [];
     if (menuNewChapter) menuNewChapter.hidden = false;
     if (bookRail) bookRail.hidden = false;
@@ -433,6 +464,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (book.goal) currentGoal = book.goal;
     await refreshBooksList();
     addLog("BOOK", `Opened “${book.title}”`, "system");
+    scheduleBriefSuggestions({ reason: "book" });
   }
 
   function renderBookChapterList() {
@@ -467,7 +499,9 @@ document.addEventListener("DOMContentLoaded", () => {
     currentArticleSlug = null;
     currentChapterId = chapter.id;
     currentChapterSlug = chapter.slug;
+    currentChapterTitle = chapter.title || "";
     composingChapter = false;
+    composingChapterNumber = chapter.sort_order ?? null;
     workspaceSection.hidden = false;
     currentDraftText = chapter.body_markdown;
     blocks = Array.isArray(chapter.blocks)
@@ -493,11 +527,13 @@ document.addEventListener("DOMContentLoaded", () => {
     if (applyPanel) applyPanel.hidden = true;
     if (blockReviseBar) blockReviseBar.hidden = true;
     reviseModeActive = false;
+    userEditedBriefAfterSuggest = false;
     renderBlockEditor();
     renderBookChapterList();
     await refreshBooksList();
     setActivity("library");
     addLog("BOOK", `Loaded chapter “${chapter.title}”`, "system");
+    scheduleBriefSuggestions({ reason: "chapter" });
     workspaceSection.scrollIntoView({ behavior: "smooth" });
   }
 
@@ -589,6 +625,64 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
+  function updateAgentRosterMeta() {
+    if (!agentRosterMeta) return;
+    const statuses = [...agentCards.values()].map((card) => card.status);
+    if (!statuses.length) {
+      agentRosterMeta.textContent = "Idle";
+      return;
+    }
+    const active = statuses.filter((status) =>
+      ["queued", "running", "streaming"].includes(status),
+    ).length;
+    const failed = statuses.filter((status) => status === "error").length;
+    const completed = statuses.filter((status) => status === "done").length;
+    agentRosterMeta.textContent = failed
+      ? `${failed} error${failed === 1 ? "" : "s"}`
+      : active
+        ? `${active} active`
+        : `${completed}/${statuses.length} done`;
+  }
+
+  function renderAgentRoster(agents) {
+    if (!agentRosterGrid) return;
+    agentCards.clear();
+    agentRosterGrid.innerHTML = "";
+    for (const agent of agents) {
+      const key = `${agent.nodeId}:${agent.agentId}`;
+      const card = document.createElement("article");
+      card.className = "agent-card";
+      card.dataset.status = "idle";
+      const name = document.createElement("strong");
+      name.className = "agent-card-name";
+      name.textContent = agent.agentName;
+      const role = document.createElement("span");
+      role.className = "agent-card-role";
+      role.textContent = agent.role;
+      const status = document.createElement("span");
+      status.className = "agent-card-status";
+      status.textContent = "Idle";
+      const detail = document.createElement("span");
+      detail.className = "agent-card-detail";
+      detail.textContent = "Waiting for turn";
+      card.append(name, role, status, detail);
+      agentRosterGrid.appendChild(card);
+      agentCards.set(key, { card, status: "idle", statusLabel: status, detail });
+    }
+    updateAgentRosterMeta();
+  }
+
+  function updateAgentStatus(event) {
+    const key = `${event.nodeId}:${event.agentId}`;
+    const entry = agentCards.get(key);
+    if (!entry) return;
+    entry.status = event.status;
+    entry.card.dataset.status = event.status;
+    entry.statusLabel.textContent = event.status;
+    entry.detail.textContent = event.detail || "";
+    updateAgentRosterMeta();
+  }
+
   agentForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const brief = briefInput.value.trim();
@@ -600,27 +694,39 @@ document.addEventListener("DOMContentLoaded", () => {
     workspaceSection.hidden = false;
     workspaceSection.scrollIntoView({ behavior: "smooth" });
 
+    if (currentBookId) ensureComposingChapter();
+
     fireBtn.disabled = true;
     const label = fireBtn.querySelector("span");
     if (label) label.textContent = "Agents running…";
     streamBox.innerHTML = "";
+    if (agentRosterGrid) {
+      agentRosterGrid.innerHTML =
+        `<p class="side-hint">Loading the live agent roster…</p>`;
+    }
+    agentCards.clear();
+    if (agentRosterMeta) agentRosterMeta.textContent = "Starting";
     articleCanvas.innerHTML = `<div class="placeholder-notice empty-state"><h3>Pipeline started</h3><p>Planner is shaping the strategy for this brief…</p></div>`;
     criteriaGrid.innerHTML = "";
     iterationBadge.textContent = "Loop: 1";
     publishedBadge.hidden = true;
     editorBar.hidden = true;
     isPublished = false;
-    currentArticleId = null;
-    currentArticleSlug = null;
+    // Keep chapter identity when regenerating a chapter in a book
+    if (!isBookChapterContext()) {
+      currentArticleId = null;
+      currentArticleSlug = null;
+    }
     blocks = [];
-    if (saveBtn) saveBtn.hidden = true;
-    if (historyBtn) historyBtn.hidden = true;
+    chapterDirty = false;
+    setSaveStatus(isBookChapterContext() ? "Drafting…" : "");
     if (articleMeta) articleMeta.textContent = "";
     if (historyPanel) historyPanel.hidden = true;
     articleCanvas.classList.remove("block-editor-active");
     streamStatus.textContent = "Pipeline active";
     liveDot.classList.add("pulsating");
     liveDot.style.backgroundColor = "";
+    updateDocumentActions();
 
     ["plan", "research", "write", "manage"].forEach((id) =>
       setNodeState(id, "pending"),
@@ -644,12 +750,15 @@ document.addEventListener("DOMContentLoaded", () => {
           theme: currentTheme,
           goal: currentGoal,
           bookTitle: currentBookTitle || undefined,
-          chapterTitle: currentChapterSlug
-            ? bookChapters.find((c) => c.id === currentChapterId)?.title
-            : undefined,
+          chapterTitle:
+            currentChapterTitle ||
+            bookChapters.find((c) => c.id === currentChapterId)?.title ||
+            undefined,
           chapterNumber: currentBookId
-            ? (bookChapters.findIndex((c) => c.id === currentChapterId) + 1) ||
-              bookChapters.length + 1
+            ? composingChapterNumber ||
+              (bookChapters.findIndex((c) => c.id === currentChapterId) >= 0
+                ? bookChapters.findIndex((c) => c.id === currentChapterId) + 1
+                : bookChapters.length + 1)
             : undefined,
         }),
       });
@@ -687,6 +796,7 @@ document.addEventListener("DOMContentLoaded", () => {
     } finally {
       fireBtn.disabled = false;
       if (label) label.textContent = "Fire agents";
+      updateDocumentActions();
     }
   });
 
@@ -694,6 +804,12 @@ document.addEventListener("DOMContentLoaded", () => {
     switch (event.type) {
       case "pipeline_started":
         addLog("PIPELINE", `Workflow "${event.workflow}" started`, "system");
+        break;
+      case "agents_roster":
+        renderAgentRoster(event.agents);
+        break;
+      case "agent_status":
+        updateAgentStatus(event);
         break;
       case "node_started":
         addLog("NODE", `Started ${event.agentId} (${event.nodeId})`, "node");
@@ -722,6 +838,7 @@ document.addEventListener("DOMContentLoaded", () => {
           } else {
             currentDraftText = event.output;
             renderRawDraft(event.output);
+            updateDocumentActions();
           }
         }
         if (event.evaluation) renderEvaluation(event.evaluation);
@@ -750,11 +867,34 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         if (event.draft) {
           currentDraftText = event.draft;
+          chapterDirty = true;
           if (awaitingBlockApply) {
             showApplyProposals(event.draft);
           } else {
             renderRawDraft(event.draft);
           }
+        }
+        updateDocumentActions();
+        if (
+          isBookChapterContext() &&
+          currentDraftText?.trim() &&
+          !awaitingBlockApply &&
+          (event.status === "completed" || event.status === "max_iterations")
+        ) {
+          addLog(
+            "BOOK",
+            "Chapter draft ready — autosaving into the book…",
+            "finish",
+          );
+          void autosaveChapterDraft("Autosave after pipeline").then((saved) => {
+            if (saved) {
+              addLog(
+                "BOOK",
+                `Autosaved “${saved.title}” · r${saved.revision}`,
+                "finish",
+              );
+            }
+          });
         }
         break;
       default:
@@ -762,49 +902,339 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  function renderRawDraft(text) {
-    const withDiagrams = text.replace(
+  function themeNotebookClass(theme) {
+    const t = String(theme || "").toLowerCase();
+    if (t.includes("o'reilly") || t.includes("oreilly") || t.includes("book chapter")) {
+      return "qmd-theme-oreilly";
+    }
+    if (t.includes("technical") || t.includes("trace")) return "qmd-theme-technical";
+    if (t.includes("editorial")) return "qmd-theme-editorial";
+    if (t.includes("narrative")) return "qmd-theme-narrative";
+    if (t.includes("executive")) return "qmd-theme-executive";
+    if (t.includes("agentic")) return "qmd-theme-agentic";
+    return "qmd-theme-default";
+  }
+
+  function draftDisplayTitle() {
+    if (currentChapterTitle) return currentChapterTitle;
+    if (composingChapter && composingChapterNumber) {
+      return `Chapter ${composingChapterNumber}`;
+    }
+    if (currentBookTitle) return currentBookTitle;
+    const h1 = String(currentDraftText || "").match(/^#\s+(.+)$/m);
+    if (h1) return h1[1].trim();
+    return "Untitled draft";
+  }
+
+  function inlineFormatHtml(escaped) {
+    return escaped
+      .replace(/`([^`]+)`/g, "<code>$1</code>")
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.*?)\*/g, "<em>$1</em>");
+  }
+
+  function splitTableRow(line) {
+    let row = line.trim();
+    if (row.startsWith("|")) row = row.slice(1);
+    if (row.endsWith("|")) row = row.slice(0, -1);
+    return row.split("|").map((c) => c.trim());
+  }
+
+  function isTableSeparator(line) {
+    const cells = splitTableRow(line);
+    return (
+      cells.length > 0 &&
+      cells.every((c) => /^:?-{3,}:?$/.test(c.replace(/\s/g, "")))
+    );
+  }
+
+  function isTableRow(line) {
+    const t = line.trim();
+    return t.includes("|") && !t.startsWith("```");
+  }
+
+  function markdownTableToHtml(tableMarkdown) {
+    const lines = tableMarkdown
+      .split("\n")
+      .map((l) => l.trimEnd())
+      .filter((l) => l.trim());
+    if (lines.length < 2) {
+      return `<p>${inlineFormatHtml(escapeHtml(tableMarkdown))}</p>`;
+    }
+    const header = splitTableRow(lines[0]);
+    let bodyLines = lines.slice(1);
+    if (bodyLines[0] && isTableSeparator(bodyLines[0])) {
+      bodyLines = bodyLines.slice(1);
+    }
+    const thead = `<thead><tr>${header
+      .map((c) => `<th>${inlineFormatHtml(escapeHtml(c))}</th>`)
+      .join("")}</tr></thead>`;
+    const tbody = `<tbody>${bodyLines
+      .map((line) => {
+        const cells = splitTableRow(line);
+        while (cells.length < header.length) cells.push("");
+        return `<tr>${cells
+          .slice(0, Math.max(header.length, cells.length))
+          .map((c) => `<td>${inlineFormatHtml(escapeHtml(c))}</td>`)
+          .join("")}</tr>`;
+      })
+      .join("")}</tbody>`;
+    return `<div class="qmd-table-wrap"><table class="qmd-table">${thead}${tbody}</table></div>`;
+  }
+
+  function renderCodeBlockHtml(lang, code) {
+    const language = String(lang || "").trim();
+    const cls = language ? ` class="language-${escapeHtml(language)}"` : "";
+    const label = language
+      ? `<div class="qmd-code-label">${escapeHtml(language)}</div>`
+      : "";
+    return `<div class="qmd-code">${label}<pre><code${cls}>${escapeHtml(String(code).replace(/\n$/, ""))}</code></pre></div>`;
+  }
+
+  /** Studio draft markdown → HTML (code fences, tables, lists, callouts). */
+  function markdownToPreviewHtml(markdown) {
+    let text = String(markdown || "").replace(/\r\n/g, "\n");
+    const placeholders = [];
+    const hold = (html) => {
+      placeholders.push(html);
+      return `\n\n%%HOLD_${placeholders.length - 1}%%\n\n`;
+    };
+
+    text = text.replace(
       /```(?:drawio|diagrams\.net|mxfile)\s*\n([\s\S]*?)```/gi,
       (_m, xml) => {
         const encoded = "R" + encodeURIComponent(String(xml).trim());
         const viewer = `https://viewer.diagrams.net/?highlight=0000ff&edit=_blank&layers=1&nav=1&title=Diagram#${encoded}`;
         const editor = `https://app.diagrams.net/?splash=0&libs=general;flowchart#${encoded}`;
-        return `<figure class="diagram-figure" data-diagram="drawio">
+        return hold(`<figure class="diagram-figure" data-diagram="drawio">
           <div class="diagram-toolbar">
             <span class="mono-stamp">draw.io</span>
             <a class="diagram-link" href="${editor}" target="_blank" rel="noopener">Open in draw.io</a>
           </div>
           <iframe class="diagram-frame" title="draw.io diagram" src="${viewer}" loading="lazy" referrerpolicy="no-referrer"></iframe>
-        </figure>`;
+        </figure>`);
       },
     );
-    const html = escapeHtml(withDiagrams)
-      .replace(
-        /&lt;figure class="diagram-figure"[\s\S]*?&lt;\/figure&gt;/g,
-        (escaped) =>
-          escaped
-            .replace(/&lt;/g, "<")
-            .replace(/&gt;/g, ">")
-            .replace(/&quot;/g, '"')
-            .replace(/&amp;/g, "&"),
-      )
-      .replace(/^### (.*$)/gim, "<h3>$1</h3>")
-      .replace(/^## (.*$)/gim, "<h2>$1</h2>")
-      .replace(/^# (.*$)/gim, "<h1>$1</h1>")
-      .replace(/^&gt; (.*$)/gim, "<blockquote>$1</blockquote>")
-      .replace(/\*\*(.*?)\*\*/gim, "<strong>$1</strong>")
-      .replace(/\*(.*?)\*/gim, "<em>$1</em>")
-      .replace(/\n\n/g, "</p><p>");
-    articleCanvas.innerHTML = `<p>${html}</p>`;
+
+    text = text.replace(/```([^\n`]*)\n([\s\S]*?)```/g, (_m, lang, code) =>
+      hold(renderCodeBlockHtml(lang, code)),
+    );
+
+    const lines = text.split("\n");
+    const outLines = [];
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (
+        isTableRow(line) &&
+        i + 1 < lines.length &&
+        (isTableSeparator(lines[i + 1]) || isTableRow(lines[i + 1]))
+      ) {
+        const tableLines = [line];
+        i += 1;
+        while (i < lines.length && isTableRow(lines[i])) {
+          tableLines.push(lines[i]);
+          i += 1;
+        }
+        i -= 1;
+        outLines.push(hold(markdownTableToHtml(tableLines.join("\n"))));
+      } else {
+        outLines.push(line);
+      }
+    }
+    text = outLines.join("\n");
+
+    const chunks = text.split(/\n{2,}/);
+    const htmlParts = [];
+    for (const rawChunk of chunks) {
+      const chunk = rawChunk.trim();
+      if (!chunk) continue;
+      const holdOnly = chunk.match(/^%%HOLD_(\d+)%%$/);
+      if (holdOnly) {
+        htmlParts.push(placeholders[Number(holdOnly[1])] || "");
+        continue;
+      }
+      if (/%%HOLD_\d+%%/.test(chunk)) {
+        htmlParts.push(
+          chunk.replace(
+            /%%HOLD_(\d+)%%/g,
+            (_m, idx) => placeholders[Number(idx)] || "",
+          ),
+        );
+        continue;
+      }
+
+      const chunkLines = chunk.split("\n");
+      if (/^### /.test(chunk)) {
+        htmlParts.push(
+          `<h3>${inlineFormatHtml(escapeHtml(chunk.replace(/^### /, "")))}</h3>`,
+        );
+        continue;
+      }
+      if (/^## /.test(chunk)) {
+        htmlParts.push(
+          `<h2>${inlineFormatHtml(escapeHtml(chunk.replace(/^## /, "")))}</h2>`,
+        );
+        continue;
+      }
+      if (/^# /.test(chunk)) {
+        htmlParts.push(
+          `<h1>${inlineFormatHtml(escapeHtml(chunk.replace(/^# /, "")))}</h1>`,
+        );
+        continue;
+      }
+
+      if (chunkLines.every((l) => /^>\s?/.test(l) || l.trim() === "")) {
+        const body = chunkLines
+          .map((l) => l.replace(/^>\s?/, ""))
+          .join("\n")
+          .trim();
+        const note = body.match(/^\*\*(Note|Tip|Warning):\*\*\s*([\s\S]*)$/i);
+        if (note) {
+          htmlParts.push(
+            `<aside class="qmd-callout qmd-callout-${note[1].toLowerCase()}"><strong>${escapeHtml(note[1])}</strong><p>${inlineFormatHtml(escapeHtml(note[2].trim()))}</p></aside>`,
+          );
+        } else {
+          htmlParts.push(
+            `<blockquote>${body
+              .split("\n")
+              .map((l) => `<p>${inlineFormatHtml(escapeHtml(l))}</p>`)
+              .join("")}</blockquote>`,
+          );
+        }
+        continue;
+      }
+
+      if (chunkLines.filter((l) => l.trim()).every((l) => /^[-*]\s+/.test(l))) {
+        htmlParts.push(
+          `<ul>${chunkLines
+            .filter((l) => l.trim())
+            .map(
+              (l) =>
+                `<li>${inlineFormatHtml(escapeHtml(l.replace(/^[-*]\s+/, "")))}</li>`,
+            )
+            .join("")}</ul>`,
+        );
+        continue;
+      }
+
+      if (
+        chunkLines.filter((l) => l.trim()).every((l) => /^\d+\.\s+/.test(l))
+      ) {
+        htmlParts.push(
+          `<ol>${chunkLines
+            .filter((l) => l.trim())
+            .map(
+              (l) =>
+                `<li>${inlineFormatHtml(escapeHtml(l.replace(/^\d+\.\s+/, "")))}</li>`,
+            )
+            .join("")}</ol>`,
+        );
+        continue;
+      }
+
+      htmlParts.push(
+        `<p>${inlineFormatHtml(escapeHtml(chunk)).replace(/\n/g, "<br />")}</p>`,
+      );
+    }
+    return htmlParts.join("\n");
+  }
+
+  function renderRawDraft(text) {
+    const bodyHtml = markdownToPreviewHtml(text);
+    const title = draftDisplayTitle();
+    const subtitle =
+      currentBookTitle && currentBookTitle !== title ? currentBookTitle : "";
+    const themeClass = themeNotebookClass(currentTheme);
+    articleCanvas.innerHTML = `<article class="qmd-notebook ${themeClass}" data-theme="${escapeHtml(currentTheme)}">
+      <header class="qmd-notebook-chrome">
+        <div class="qmd-chrome-row">
+          <span class="mono-stamp">Quarto notebook · .qmd</span>
+          <span class="qmd-theme-label">${escapeHtml(currentTheme)}</span>
+        </div>
+        <h1 class="qmd-title">${escapeHtml(title)}</h1>
+        ${subtitle ? `<p class="qmd-subtitle">${escapeHtml(subtitle)}</p>` : ""}
+        <div class="qmd-yaml-chips">
+          <span class="qmd-chip">${escapeHtml(formatInput.value || "html")}</span>
+          <span class="qmd-chip">${escapeHtml(lengthInput.value || "")}</span>
+        </div>
+      </header>
+      <div class="qmd-body">${bodyHtml}</div>
+    </article>`;
   }
 
   publishBtn.addEventListener("click", () => enablePublishMode(true));
-  saveBtn?.addEventListener("click", () => persistArticle("Manual save"));
+  saveBtn?.addEventListener("click", () => {
+    void persistArticle(
+      isBookChapterContext() ? "Save chapter" : "Manual save",
+    );
+  });
   historyBtn?.addEventListener("click", loadHistory);
   closeHistoryBtn?.addEventListener("click", () => {
     historyPanel.hidden = true;
   });
   addBlockBtn.addEventListener("click", () => addNewBlockBelow(blocks.length - 1));
+
+  function isBookChapterContext() {
+    return Boolean(
+      currentBookId && (composingChapter || currentChapterId),
+    );
+  }
+
+  function ensureComposingChapter() {
+    if (!currentBookId) return;
+    if (currentChapterId) return;
+    if (!composingChapter) {
+      composingChapter = true;
+      composingChapterNumber = bookChapters.length + 1;
+      if (!currentChapterTitle) {
+        currentChapterTitle = `Chapter ${composingChapterNumber}`;
+      }
+    }
+  }
+
+  function setSaveStatus(text) {
+    if (saveStatusEl) saveStatusEl.textContent = text || "";
+  }
+
+  function canPersistDocument() {
+    const hasBody = Boolean(
+      (blocks.length && blocksToMarkdown(blocks).trim()) ||
+        currentDraftText?.trim(),
+    );
+    if (!hasBody) return false;
+    if (isBookChapterContext()) return true;
+    if (currentArticleId) return true;
+    return Boolean(currentDraftText?.trim() || blocks.length);
+  }
+
+  function updateDocumentActions() {
+    const isChapterCtx = isBookChapterContext();
+    const hasDraft = Boolean(currentDraftText?.trim() || blocks.length);
+    if (publishBtn) {
+      if (isChapterCtx) {
+        publishBtn.textContent = "Edit blocks";
+        publishBtn.title =
+          "Save the chapter (if needed) and open the block editor";
+      } else {
+        publishBtn.textContent = currentArticleId ? "Publish update" : "Publish";
+        publishBtn.title =
+          "Publish to the article library and open the block editor";
+      }
+      publishBtn.disabled = !hasDraft;
+      publishBtn.hidden = false;
+    }
+    if (saveBtn) {
+      saveBtn.hidden = false;
+      saveBtn.textContent = isChapterCtx ? "Save chapter" : "Save";
+      saveBtn.title = isChapterCtx
+        ? "Save this draft into the open book"
+        : "Save article draft";
+      saveBtn.disabled = !canPersistDocument();
+    }
+    if (historyBtn) {
+      historyBtn.hidden = !(currentChapterId || currentArticleId);
+    }
+  }
 
   function blocksToMarkdown(list) {
     return list
@@ -825,15 +1255,35 @@ document.addEventListener("DOMContentLoaded", () => {
             .map((line) => (line.startsWith("- ") ? line : `- ${line}`))
             .join("\n");
         if (b.type === "drawio") return "```drawio\n" + text + "\n```";
+        if (b.type === "code") {
+          const nl = text.indexOf("\n");
+          const lang = nl >= 0 ? text.slice(0, nl) : "";
+          const body = nl >= 0 ? text.slice(nl + 1) : text;
+          return "```" + lang + "\n" + body + "\n```";
+        }
+        if (b.type === "table") return text;
         return text;
       })
       .join("\n\n");
   }
 
-  function scheduleSave() {
-    if (!currentArticleId && !currentChapterId) return;
+  function scheduleSave(summary = "Autosave") {
+    if (!canPersistDocument()) return;
+    if (isBookChapterContext()) ensureComposingChapter();
+    if (!currentArticleId && !currentChapterId && !composingChapter) return;
+    chapterDirty = true;
+    setSaveStatus("Unsaved changes…");
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => persistArticle("Autosave edit"), 900);
+    saveTimer = setTimeout(() => {
+      void persistArticle(summary);
+    }, 900);
+  }
+
+  async function autosaveChapterDraft(reason = "Autosave chapter draft") {
+    if (!isBookChapterContext()) return null;
+    if (!currentDraftText?.trim() && !blocks.length) return null;
+    ensureComposingChapter();
+    return persistArticle(reason);
   }
 
   function setLibraryUi(article) {
@@ -842,12 +1292,11 @@ document.addEventListener("DOMContentLoaded", () => {
     currentChapterId = null;
     currentChapterSlug = null;
     composingChapter = false;
-    if (saveBtn) saveBtn.hidden = false;
-    if (historyBtn) historyBtn.hidden = false;
     if (articleMeta) {
       const url = `/articles/${article.slug}`;
       articleMeta.innerHTML = `<a href="${url}" target="_blank" rel="noopener">/${escapeHtml(article.slug)}</a> · r${article.revision}`;
     }
+    updateDocumentActions();
   }
 
   function setChapterUi(chapter) {
@@ -856,13 +1305,12 @@ document.addEventListener("DOMContentLoaded", () => {
     currentArticleId = null;
     currentArticleSlug = null;
     composingChapter = false;
-    if (saveBtn) saveBtn.hidden = false;
-    if (historyBtn) historyBtn.hidden = false;
     if (articleMeta) {
       articleMeta.innerHTML = `<a href="${escapeHtml(chapter.url)}" target="_blank" rel="noopener">${escapeHtml(chapter.url)}</a> · r${chapter.revision}`;
     }
     publishedBadge.hidden = false;
-    publishedBadge.textContent = "Chapter · block editor";
+    publishedBadge.textContent = "Chapter · saved";
+    updateDocumentActions();
   }
 
   async function refreshArticlesList() {
@@ -914,15 +1362,19 @@ document.addEventListener("DOMContentLoaded", () => {
     const bodyMarkdown =
       blocks.length > 0 ? blocksToMarkdown(blocks) : currentDraftText;
     if (!bodyMarkdown?.trim()) {
-      window.alert("Nothing to publish yet.");
+      if (!String(changeSummary).toLowerCase().includes("autosave")) {
+        window.alert("Nothing to publish yet.");
+      }
       return null;
     }
 
-    if (currentBookId && (currentChapterId || composingChapter)) {
+    if (isBookChapterContext()) {
+      ensureComposingChapter();
       return persistChapter(changeSummary, bodyMarkdown);
     }
 
     saving = true;
+    setSaveStatus("Saving…");
     try {
       const payload = {
         id: currentArticleId || undefined,
@@ -957,16 +1409,22 @@ document.addEventListener("DOMContentLoaded", () => {
       if (Array.isArray(article.blocks) && article.blocks.length) {
         blocks = article.blocks;
       }
+      chapterDirty = false;
+      setSaveStatus(`Saved · r${article.revision}`);
       addLog(
         "DB",
         `Saved “${article.title}” as revision ${article.revision}`,
         "finish",
       );
       await refreshArticlesList();
+      updateDocumentActions();
       return article;
     } catch (err) {
+      setSaveStatus("Save failed");
       addLog("ERROR", err.message, "eval");
-      window.alert(err.message);
+      if (!String(changeSummary).toLowerCase().includes("autosave")) {
+        window.alert(err.message);
+      }
       return null;
     } finally {
       saving = false;
@@ -975,11 +1433,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function persistChapter(changeSummary, bodyMarkdown) {
     saving = true;
+    setSaveStatus("Saving chapter…");
     try {
+      const inferredTitle =
+        bodyMarkdown.match(/^#\s+(.+)$/m)?.[1]?.trim() ||
+        currentChapterTitle ||
+        `Chapter ${composingChapterNumber || bookChapters.length + 1}`;
       const payload = {
         id: currentChapterId || undefined,
         bookId: currentBookId,
-        title: bodyMarkdown.match(/^#\s+(.+)$/m)?.[1] || `Chapter ${bookChapters.length + 1}`,
+        title: inferredTitle,
         bodyMarkdown,
         blocks: blocks.length
           ? blocks.map((b) => ({ ...b, id: b.id ?? newId() }))
@@ -1009,25 +1472,50 @@ document.addEventListener("DOMContentLoaded", () => {
       const chapter = data.chapter;
       setChapterUi(chapter);
       currentDraftText = chapter.body_markdown;
+      currentChapterTitle = chapter.title || currentChapterTitle;
       if (Array.isArray(chapter.blocks) && chapter.blocks.length) {
         blocks = chapter.blocks;
       }
+      chapterDirty = false;
+      lastAutosaveAt = Date.now();
+      setSaveStatus(`Saved · r${chapter.revision}`);
       addLog(
         "BOOK",
         `Saved chapter “${chapter.title}” r${chapter.revision}`,
         "finish",
       );
-      await loadBook(currentBookId);
+      // Refresh chapter list without re-triggering AI suggestions
+      await refreshBookChaptersQuiet();
       currentChapterId = chapter.id;
       currentChapterSlug = chapter.slug;
       renderBookChapterList();
+      updateDocumentActions();
       return chapter;
     } catch (err) {
+      setSaveStatus("Save failed");
       addLog("ERROR", err.message, "eval");
-      window.alert(err.message);
+      if (!String(changeSummary).toLowerCase().includes("autosave")) {
+        window.alert(err.message);
+      }
       return null;
     } finally {
       saving = false;
+    }
+  }
+
+  async function refreshBookChaptersQuiet() {
+    if (!currentBookId) return;
+    try {
+      const res = await fetch(`/api/books/${currentBookId}`);
+      const data = await res.json();
+      if (!res.ok) return;
+      bookChapters = data.book?.chapters || [];
+      if (bookRailMeta) {
+        bookRailMeta.textContent = `${bookChapters.length} chapter${bookChapters.length === 1 ? "" : "s"} · expand in Library rail`;
+      }
+      await refreshBooksList();
+    } catch {
+      /* ignore */
     }
   }
 
@@ -1128,27 +1616,79 @@ document.addEventListener("DOMContentLoaded", () => {
     articleCanvas.classList.add("block-editor-active");
 
     if (!blocks.length) {
-      const fenceRe = /```(?:drawio|diagrams\.net|mxfile)\s*\n([\s\S]*?)```/gi;
+      // Prefer server-parity parse via markdown patterns (code + tables + drawio)
+      const fenceRe = /```([^\n`]*)\n([\s\S]*?)```/g;
       const fences = [];
       let m;
       while ((m = fenceRe.exec(currentDraftText)) !== null) {
-        fences.push({ start: m.index, end: m.index + m[0].length, xml: m[1].trim() });
+        fences.push({
+          start: m.index,
+          end: m.index + m[0].length,
+          lang: (m[1] || "").trim(),
+          body: m[2].replace(/\n$/, ""),
+        });
       }
       const pushProse = (chunk) => {
-        chunk
-          .split(/\n\s*\n/)
-          .filter((p) => p.trim())
-          .forEach((pText) => {
-            let type = "paragraph";
-            if (pText.startsWith("# ")) type = "h1";
-            else if (pText.startsWith("## ")) type = "h2";
-            else if (pText.startsWith("### ")) type = "h3";
-            else if (pText.startsWith("> ")) type = "blockquote";
-            const cleanText = pText
-              .replace(/^#{1,3}\s+/, "")
-              .replace(/^>\s+/gm, "");
-            blocks.push({ id: newId(), type, text: cleanText });
-          });
+        if (!chunk?.trim()) return;
+        // Reuse preview splitter for tables by converting through simple heuristics
+        const parts = [];
+        const lines = chunk.replace(/\r\n/g, "\n").split("\n");
+        let i = 0;
+        let buf = [];
+        const flush = () => {
+          const pText = buf.join("\n").trim();
+          buf = [];
+          if (!pText) return;
+          parts.push(pText);
+        };
+        while (i < lines.length) {
+          const line = lines[i];
+          if (
+            isTableRow(line) &&
+            i + 1 < lines.length &&
+            (isTableSeparator(lines[i + 1]) || isTableRow(lines[i + 1]))
+          ) {
+            flush();
+            const tableLines = [line];
+            i += 1;
+            while (i < lines.length && isTableRow(lines[i])) {
+              tableLines.push(lines[i]);
+              i += 1;
+            }
+            blocks.push({
+              id: newId(),
+              type: "table",
+              text: tableLines.join("\n"),
+            });
+            continue;
+          }
+          if (line.trim() === "") {
+            flush();
+            i += 1;
+            continue;
+          }
+          buf.push(line);
+          i += 1;
+        }
+        flush();
+        for (const pText of parts) {
+          let type = "paragraph";
+          let cleanText = pText;
+          if (pText.startsWith("# ")) {
+            type = "h1";
+            cleanText = pText.replace(/^#\s+/, "");
+          } else if (pText.startsWith("## ")) {
+            type = "h2";
+            cleanText = pText.replace(/^##\s+/, "");
+          } else if (pText.startsWith("### ")) {
+            type = "h3";
+            cleanText = pText.replace(/^###\s+/, "");
+          } else if (pText.startsWith("> ")) {
+            type = "blockquote";
+            cleanText = pText.replace(/^>\s+/gm, "");
+          }
+          blocks.push({ id: newId(), type, text: cleanText });
+        }
       };
       if (!fences.length) {
         pushProse(currentDraftText);
@@ -1156,7 +1696,20 @@ document.addEventListener("DOMContentLoaded", () => {
         let last = 0;
         for (const f of fences) {
           pushProse(currentDraftText.slice(last, f.start));
-          blocks.push({ id: newId(), type: "drawio", text: f.xml });
+          const langLower = f.lang.toLowerCase();
+          if (
+            langLower === "drawio" ||
+            langLower === "diagrams.net" ||
+            langLower === "mxfile"
+          ) {
+            blocks.push({ id: newId(), type: "drawio", text: f.body.trim() });
+          } else {
+            blocks.push({
+              id: newId(),
+              type: "code",
+              text: `${f.lang}\n${f.body}`,
+            });
+          }
           last = f.end;
         }
         pushProse(currentDraftText.slice(last));
@@ -1164,15 +1717,23 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     renderBlockEditor();
     if (persist) {
-      const article = await persistArticle(
-        currentArticleId ? "Republish with edits" : "Initial publish",
+      const saved = await persistArticle(
+        isBookChapterContext()
+          ? currentChapterId
+            ? "Save chapter with block editor"
+            : "Initial chapter save"
+          : currentArticleId
+            ? "Republish with edits"
+            : "Initial publish",
       );
-      if (article) {
-        addLog("PUBLISH", `Stored in SQLite · ${article.slug}`, "finish");
+      if (saved) {
+        const label = saved.slug || saved.title || "document";
+        addLog("PUBLISH", `Stored in SQLite · ${label}`, "finish");
       }
     } else {
       addLog("PUBLISH", "Block editor active.", "finish");
     }
+    updateDocumentActions();
   }
 
   function updateSelectedCount() {
@@ -1230,6 +1791,36 @@ document.addEventListener("DOMContentLoaded", () => {
           blocks[index].text = ta.value;
           scheduleSave();
         });
+      } else if (block.type === "code") {
+        contentElem = document.createElement("div");
+        contentElem.className = "block-content code-block";
+        const nl = String(block.text || "").indexOf("\n");
+        const lang = nl >= 0 ? block.text.slice(0, nl) : "";
+        const body = nl >= 0 ? block.text.slice(nl + 1) : block.text || "";
+        contentElem.innerHTML = `
+          <div class="qmd-code-label">${escapeHtml(lang || "code")}</div>
+          <textarea class="code-block-editor" rows="8" spellcheck="false" aria-label="Code block">${escapeHtml(body)}</textarea>
+        `;
+        const ta = contentElem.querySelector(".code-block-editor");
+        ta.addEventListener("input", () => {
+          blocks[index].text = `${lang}\n${ta.value}`;
+          scheduleSave();
+        });
+      } else if (block.type === "table") {
+        contentElem = document.createElement("div");
+        contentElem.className = "block-content table-block";
+        contentElem.innerHTML = `
+          <div class="qmd-code-label">table</div>
+          <div class="table-block-preview">${markdownTableToHtml(block.text || "")}</div>
+          <textarea class="table-block-editor" rows="6" spellcheck="false" aria-label="Table markdown">${escapeHtml(block.text || "")}</textarea>
+        `;
+        const ta = contentElem.querySelector(".table-block-editor");
+        const preview = contentElem.querySelector(".table-block-preview");
+        ta.addEventListener("input", () => {
+          blocks[index].text = ta.value;
+          preview.innerHTML = markdownTableToHtml(ta.value);
+          scheduleSave();
+        });
       } else if (block.type === "h1") contentElem = document.createElement("h1");
       else if (block.type === "h2") contentElem = document.createElement("h2");
       else if (block.type === "h3") contentElem = document.createElement("h3");
@@ -1237,7 +1828,11 @@ document.addEventListener("DOMContentLoaded", () => {
         contentElem = document.createElement("blockquote");
       else contentElem = document.createElement("p");
 
-      if (block.type !== "drawio") {
+      if (
+        block.type !== "drawio" &&
+        block.type !== "code" &&
+        block.type !== "table"
+      ) {
         contentElem.className = "block-content";
         contentElem.contentEditable = "true";
         contentElem.innerHTML = escapeHtml(block.text);
@@ -1409,8 +2004,9 @@ document.addEventListener("DOMContentLoaded", () => {
           theme: currentTheme,
           goal: currentGoal,
           bookTitle: currentBookTitle || undefined,
-          chapterTitle: bookChapters.find((c) => c.id === currentChapterId)
-            ?.title,
+          chapterTitle:
+            currentChapterTitle ||
+            bookChapters.find((c) => c.id === currentChapterId)?.title,
         }),
       });
       if (!response.ok) throw new Error(`Server returned ${response.status}`);
@@ -1561,6 +2157,148 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  function suggestContextKey() {
+    return [
+      currentBookId || "",
+      currentBookTitle || "",
+      currentChapterId || "",
+      currentChapterTitle || "",
+      composingChapterNumber || "",
+    ].join("|");
+  }
+
+  function hideSuggestBanner() {
+    if (suggestBanner) suggestBanner.hidden = true;
+    pendingSuggestion = null;
+  }
+
+  function selectThemeCard(themeName) {
+    if (!themesSelector || !themeName) return;
+    const card = [...themesSelector.querySelectorAll(".theme-card")].find(
+      (c) => c.dataset.theme === themeName,
+    );
+    if (card) card.click();
+    else currentTheme = themeName;
+  }
+
+  function selectGoalCard(goalName) {
+    if (!goalsSelector || !goalName) return;
+    const card = [...goalsSelector.querySelectorAll(".option-card")].find(
+      (c) => c.dataset.goal === goalName,
+    );
+    if (card) card.click();
+    else currentGoal = goalName;
+  }
+
+  function applySuggestion(suggestion) {
+    if (!suggestion) return;
+    briefInput.value = suggestion.brief || briefInput.value;
+    if (suggestion.audience) audienceInput.value = suggestion.audience;
+    if (suggestion.tone) toneInput.value = suggestion.tone;
+    if (suggestion.format) formatInput.value = suggestion.format;
+    if (suggestion.length) lengthInput.value = suggestion.length;
+    if (suggestion.theme) selectThemeCard(suggestion.theme);
+    if (suggestion.goal) selectGoalCard(suggestion.goal);
+    // Theme card click overwrites tone/format/length — re-apply suggestion values
+    if (suggestion.tone) toneInput.value = suggestion.tone;
+    if (suggestion.format) formatInput.value = suggestion.format;
+    if (suggestion.length) lengthInput.value = suggestion.length;
+    userEditedBriefAfterSuggest = false;
+    hideSuggestBanner();
+    addLog("SUGGEST", "Accepted AI brief & parameter suggestions", "finish");
+  }
+
+  function showSuggestBanner(suggestion) {
+    pendingSuggestion = suggestion;
+    if (!suggestBanner) return;
+    suggestBanner.hidden = false;
+    if (suggestStatus) suggestStatus.hidden = true;
+    if (suggestAcceptBtn) suggestAcceptBtn.hidden = false;
+    if (suggestDismissBtn) suggestDismissBtn.hidden = false;
+    const labelBits = [currentBookTitle, currentChapterTitle].filter(Boolean);
+    if (suggestBannerLabel) {
+      suggestBannerLabel.textContent = labelBits.length
+        ? `AI suggestions · ${labelBits.join(" / ")}`
+        : "AI suggestions";
+    }
+    if (suggestRationale) {
+      suggestRationale.textContent =
+        suggestion.rationale ||
+        "Suggested brief and parameters based on book and chapter titles.";
+    }
+  }
+
+  function scheduleBriefSuggestions() {
+    if (!currentBookTitle && !currentChapterTitle) return;
+    const key = suggestContextKey();
+    if (key === lastDismissedSuggestKey) return;
+    if (suggestTimer) clearTimeout(suggestTimer);
+    suggestTimer = setTimeout(() => {
+      void requestBriefSuggestions();
+    }, 400);
+  }
+
+  async function requestBriefSuggestions() {
+    if (!currentBookTitle && !currentChapterTitle) return;
+    const key = suggestContextKey();
+    if (key === lastDismissedSuggestKey) return;
+    if (userEditedBriefAfterSuggest && pendingSuggestion) return;
+
+    if (suggestAbort) suggestAbort.abort();
+    suggestAbort = new AbortController();
+
+    if (suggestBanner) {
+      suggestBanner.hidden = false;
+      if (suggestRationale) suggestRationale.textContent = "";
+      if (suggestStatus) {
+        suggestStatus.hidden = false;
+        suggestStatus.textContent =
+          "Generating suggestions from book and chapter titles…";
+      }
+      if (suggestAcceptBtn) suggestAcceptBtn.hidden = true;
+      if (suggestDismissBtn) suggestDismissBtn.hidden = true;
+    }
+
+    try {
+      const res = await fetch("/api/suggest-brief", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: suggestAbort.signal,
+        body: JSON.stringify({
+          bookTitle: currentBookTitle || undefined,
+          bookSynopsis: currentBookSynopsis || undefined,
+          chapterTitle: currentChapterTitle || undefined,
+          chapterNumber: composingChapterNumber || undefined,
+          existingTheme: currentTheme,
+          existingGoal: currentGoal,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Suggest failed");
+      if (suggestContextKey() !== key) return;
+      showSuggestBanner(data.suggestion);
+      addLog("SUGGEST", "Ready — Accept or Dismiss AI brief suggestions", "system");
+    } catch (err) {
+      if (err.name === "AbortError") return;
+      hideSuggestBanner();
+      addLog("SUGGEST", err.message || "Could not suggest brief", "eval");
+    }
+  }
+
+  suggestAcceptBtn?.addEventListener("click", () => {
+    applySuggestion(pendingSuggestion);
+  });
+  suggestDismissBtn?.addEventListener("click", () => {
+    lastDismissedSuggestKey = suggestContextKey();
+    hideSuggestBanner();
+    addLog("SUGGEST", "Dismissed AI suggestions for this chapter context", "system");
+  });
+  briefInput?.addEventListener("input", () => {
+    if (pendingSuggestion || (suggestBanner && !suggestBanner.hidden)) {
+      userEditedBriefAfterSuggest = true;
+    }
+  });
+
   function getLatestArticleText() {
     if (isPublished && blocks.length > 0) return blocksToMarkdown(blocks);
     return currentDraftText;
@@ -1576,22 +2314,52 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 2000);
   });
 
-  function triggerDownload() {
+  async function triggerDownload() {
     const text = getLatestArticleText();
     if (!text) {
       window.alert("Nothing to export yet.");
       return;
     }
-    const blob = new Blob([text], { type: "text/markdown" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `quill-article-${currentArticleSlug || Date.now()}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+      const res = await fetch("/api/export/qmd", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          markdown: text,
+          title: draftDisplayTitle(),
+          bookTitle: currentBookTitle || undefined,
+          theme: currentTheme,
+          format: formatInput.value,
+          audience: audienceInput.value,
+          tone: toneInput.value,
+          length: lengthInput.value,
+          goal: currentGoal,
+          slug: currentChapterSlug || currentArticleSlug || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Export failed (${res.status})`);
+      }
+      const qmd = await res.text();
+      const disposition = res.headers.get("Content-Disposition") || "";
+      const match = disposition.match(/filename="([^"]+)"/);
+      const filename = match?.[1] || `quill-${Date.now()}.qmd`;
+      const blob = new Blob([qmd], { type: "text/markdown;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      window.alert(err.message || "Export failed");
+    }
   }
 
-  downloadBtn.addEventListener("click", triggerDownload);
+  downloadBtn.addEventListener("click", () => {
+    void triggerDownload();
+  });
   refreshArticlesList();
   refreshBooksList();
 });

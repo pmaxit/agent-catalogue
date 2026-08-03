@@ -1,5 +1,6 @@
 import type { ArticleRecord, Block } from "./db.js";
 import { renderDrawioEmbed } from "./diagrams.js";
+import { markdownTableToHtml } from "./quarto.js";
 
 function escapeHtml(str: string): string {
   return String(str)
@@ -43,6 +44,18 @@ export function blocksToHtml(blocks: Block[]): string {
             title: `Workflow diagram ${index + 1}`,
             index,
           });
+        case "code": {
+          const nl = text.indexOf("\n");
+          const lang = nl >= 0 ? text.slice(0, nl).trim() : "";
+          const body = nl >= 0 ? text.slice(nl + 1) : text;
+          const cls = lang ? ` class="language-${escapeHtml(lang)}"` : "";
+          const label = lang
+            ? `<div class="qmd-code-label">${escapeHtml(lang)}</div>`
+            : "";
+          return `<div class="qmd-code">${label}<pre><code${cls}>${escapeHtml(body)}</code></pre></div>`;
+        }
+        case "table":
+          return markdownTableToHtml(text);
         default:
           return `<p>${inlineFormat(text).replace(/\n/g, "<br />")}</p>`;
       }

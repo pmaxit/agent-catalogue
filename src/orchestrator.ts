@@ -4,6 +4,7 @@ import { analyzeDraftHeuristics, enforceStrictJudgment } from "./judge.js";
 import { renderTemplate } from "./template.js";
 import { isOreillyChapterTheme, resolveThemePlaybook } from "./themes.js";
 import type {
+  AgentRunStatus,
   BriefInput,
   ManagerEvaluation,
   PipelineConfig,
@@ -16,6 +17,46 @@ export interface RunOptions {
   brief: BriefInput;
   onEvent?: EventHandler;
   signal?: AbortSignal;
+}
+
+const RESEARCH_FOCUS: Record<string, string> = {
+  researcher_facts: "facts, definitions, constraints, and evidence",
+  researcher_examples: "worked examples, code·output pairs, pitfalls, exercises",
+  researcher_visuals: "draw.io diagram specs and image briefs",
+};
+
+function buildRoster(config: PipelineConfig): Array<{
+  agentId: string;
+  agentName: string;
+  nodeId: string;
+  role: string;
+}> {
+  const seen = new Set<string>();
+  const roster: Array<{
+    agentId: string;
+    agentName: string;
+    nodeId: string;
+    role: string;
+  }> = [];
+  for (const [nodeId, node] of Object.entries(config.workflow.nodes)) {
+    const keys =
+      node.parallel_agents && node.parallel_agents.length
+        ? node.parallel_agents
+        : [node.agent];
+    for (const agentId of keys) {
+      const dedupe = `${nodeId}:${agentId}`;
+      if (seen.has(dedupe)) continue;
+      seen.add(dedupe);
+      const def = config.agents[agentId];
+      roster.push({
+        agentId,
+        agentName: def?.name ?? agentId,
+        nodeId,
+        role: def?.description ?? nodeId,
+      });
+    }
+  }
+  return roster;
 }
 
 function parseJsonBlock(text: string): ManagerEvaluation | null {
@@ -127,6 +168,24 @@ export class WritingOrchestrator {
       brief: options.brief,
     });
 
+    await emit({
+      type: "agents_roster",
+      agents: buildRoster(this.config),
+    });
+
+    // Mark full roster idle at start so the UI can paint every agent name
+    for (const row of buildRoster(this.config)) {
+      await emit({
+        type: "agent_status",
+        agentId: row.agentId,
+        agentName: row.agentName,
+        nodeId: row.nodeId,
+        instanceId: `${row.nodeId}:${row.agentId}`,
+        status: "idle",
+        detail: "Waiting for turn",
+      });
+    }
+
     try {
       while (nodeId !== this.config.workflow.end) {
         if (options.signal?.aborted) {
@@ -136,97 +195,65 @@ export class WritingOrchestrator {
         const node = this.config.workflow.nodes[nodeId];
         if (!node) throw new Error(`Unknown workflow node: ${nodeId}`);
 
-        const agentDef = this.config.agents[node.agent];
-        if (!agentDef) throw new Error(`Unknown agent: ${node.agent}`);
+        const primaryDef = this.config.agents[node.agent];
+        if (!primaryDef) throw new Error(`Unknown agent: ${node.agent}`);
+
+        const parallelKeys =
+          node.parallel_agents && node.parallel_agents.length > 0
+            ? node.parallel_agents
+            : null;
 
         await emit({
           type: "node_started",
           nodeId,
           agentId: node.agent,
+          agentName: primaryDef.name,
           iteration,
-        });
-
-        const prompt = renderTemplate(agentDef.instruction, {
-          ...state,
-          criteria: this.config.goal.criteria,
-          iteration,
-          max_iterations: this.config.goal.max_iterations,
-        });
-
-        const model = agentDef.model ?? this.config.defaults.model;
-        const mode = agentDef.mode ?? this.config.defaults.mode;
-
-        const { text, cursorAgentId, cursorRunId, url } = await this.invokeAgent({
-          agentKey: node.agent,
-          displayName: `${agentDef.name} · ${nodeId}`,
-          prompt,
-          model,
-          mode,
-          sharedAgentId,
-          onDelta: async (delta) => {
-            await emit({ type: "assistant_delta", nodeId, text: delta });
-          },
-          onStatus: async (status) => {
-            await emit({ type: "status", nodeId, status });
-          },
-        });
-
-        if (this.config.defaults.session === "shared") {
-          sharedAgentId = cursorAgentId;
-        }
-
-        await emit({
-          type: "agent_created",
-          nodeId,
-          cursorAgentId,
-          cursorRunId,
-          url,
         });
 
         let evaluation: ManagerEvaluation | undefined;
-        let output = text;
+        let output = "";
 
-        if (agentDef.response_format === "json") {
-          evaluation = parseJsonBlock(text) ?? {
-            scores: Object.fromEntries(
-              this.config.goal.criteria.map((c) => [c.id, 0]),
-            ),
-            passed: false,
-            route: "revise",
-            feedback:
-              "Manager returned unparseable JSON. Revise for clarity; add code+output+explanation, draw.io diagram, and a stronger hook.",
-            summary: "Parse failure — forcing revise",
-          };
-          // Strict user-perspective enforcement: hard-cap soft LLM scores
-          evaluation = enforceStrictJudgment(
-            this.config,
-            evaluation,
-            state.draft || "",
-            { skipArtifactCaps: Boolean(state.revise_mode) },
-          );
-          if (
-            evaluation.route === "done" &&
-            !criteriaMet(this.config, evaluation)
-          ) {
-            evaluation.route = "revise";
-            evaluation.passed = false;
-            evaluation.feedback =
-              evaluation.feedback ||
-              "Scores below threshold — continue revising.";
+        if (parallelKeys) {
+          const merged = await this.runParallelAgents({
+            nodeId,
+            agentKeys: parallelKeys,
+            state,
+            iteration,
+            emit,
+            signal: options.signal,
+          });
+          output = merged;
+          state[primaryDef.output_key] = merged;
+          if (primaryDef.output_key === "research" || nodeId === "research") {
+            state.research = merged;
           }
-          lastEvaluation = evaluation;
-          output = JSON.stringify(evaluation, null, 2);
+        } else {
+          const result = await this.runSingleAgent({
+            nodeId,
+            agentKey: node.agent,
+            state,
+            iteration,
+            sharedAgentId,
+            emit,
+          });
+          if (this.config.defaults.session === "shared") {
+            sharedAgentId = result.cursorAgentId;
+          }
+          evaluation = result.evaluation;
+          output = result.output;
+          state[primaryDef.output_key] = output;
+          if (primaryDef.output_key === "draft") state.draft = result.rawText;
+          if (evaluation?.feedback) state.feedback = evaluation.feedback;
+          if (evaluation) lastEvaluation = evaluation;
         }
-
-        state[agentDef.output_key] = output;
-        if (agentDef.output_key === "draft") state.draft = text;
-        if (evaluation?.feedback) state.feedback = evaluation.feedback;
 
         await emit({
           type: "node_finished",
           nodeId,
           agentId: node.agent,
-          outputKey: agentDef.output_key,
+          agentName: primaryDef.name,
+          outputKey: primaryDef.output_key,
           output,
           evaluation,
         });
@@ -303,6 +330,291 @@ export class WritingOrchestrator {
       await emit({ type: "pipeline_finished", ...result });
       return result;
     }
+  }
+
+  private async emitStatus(
+    emit: EventHandler,
+    args: {
+      agentId: string;
+      agentName: string;
+      nodeId: string;
+      instanceId: string;
+      status: AgentRunStatus;
+      detail?: string;
+    },
+  ): Promise<void> {
+    await emit({ type: "agent_status", ...args });
+  }
+
+  private async runParallelAgents(args: {
+    nodeId: string;
+    agentKeys: string[];
+    state: Record<string, string>;
+    iteration: number;
+    emit: EventHandler;
+    signal?: AbortSignal;
+  }): Promise<string> {
+    const { nodeId, agentKeys, state, iteration, emit, signal } = args;
+
+    for (const agentKey of agentKeys) {
+      const def = this.config.agents[agentKey];
+      if (!def) throw new Error(`Unknown parallel agent: ${agentKey}`);
+      await this.emitStatus(emit, {
+        agentId: agentKey,
+        agentName: def.name,
+        nodeId,
+        instanceId: `${nodeId}:${agentKey}`,
+        status: "queued",
+        detail: "Queued for parallel fan-out",
+      });
+    }
+
+    const settled = await Promise.all(
+      agentKeys.map(async (agentKey) => {
+        if (signal?.aborted) throw new Error("Pipeline aborted");
+        const def = this.config.agents[agentKey]!;
+        const instanceId = `${nodeId}:${agentKey}`;
+        await this.emitStatus(emit, {
+          agentId: agentKey,
+          agentName: def.name,
+          nodeId,
+          instanceId,
+          status: "running",
+          detail: "Spawned",
+        });
+
+        const prompt = renderTemplate(def.instruction, {
+          ...state,
+          research_focus: RESEARCH_FOCUS[agentKey] ?? def.description ?? agentKey,
+          criteria: this.config.goal.criteria,
+          iteration,
+          max_iterations: this.config.goal.max_iterations,
+        });
+
+        const model = def.model ?? this.config.defaults.model;
+        const mode = def.mode ?? this.config.defaults.mode;
+
+        try {
+          const { text, cursorAgentId, cursorRunId, url } =
+            await this.invokeAgent({
+              agentKey,
+              displayName: `${def.name} · ${nodeId}`,
+              prompt,
+              model,
+              mode,
+              // Parallel agents always get isolated sessions
+              sharedAgentId: undefined,
+              onDelta: async (delta) => {
+                await this.emitStatus(emit, {
+                  agentId: agentKey,
+                  agentName: def.name,
+                  nodeId,
+                  instanceId,
+                  status: "streaming",
+                  detail: String(delta).slice(0, 80),
+                });
+                await emit({
+                  type: "assistant_delta",
+                  nodeId,
+                  agentId: agentKey,
+                  agentName: def.name,
+                  text: delta,
+                });
+              },
+              onStatus: async (status) => {
+                await emit({
+                  type: "status",
+                  nodeId,
+                  agentId: agentKey,
+                  agentName: def.name,
+                  status,
+                });
+              },
+            });
+
+          await emit({
+            type: "agent_created",
+            nodeId,
+            agentId: agentKey,
+            agentName: def.name,
+            cursorAgentId,
+            cursorRunId,
+            url,
+          });
+
+          await this.emitStatus(emit, {
+            agentId: agentKey,
+            agentName: def.name,
+            nodeId,
+            instanceId,
+            status: "done",
+            detail: "Completed",
+          });
+
+          return {
+            agentKey,
+            name: def.name,
+            outputKey: def.output_key,
+            text,
+          };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          await this.emitStatus(emit, {
+            agentId: agentKey,
+            agentName: def.name,
+            nodeId,
+            instanceId,
+            status: "error",
+            detail: message,
+          });
+          throw err;
+        }
+      }),
+    );
+
+    // Join — wait for all before advancing (Promise.all already enforces this)
+    const sections = settled.map(
+      (s) => `## ${s.name}\n\n${s.text.trim()}`,
+    );
+    for (const s of settled) {
+      state[s.outputKey] = s.text;
+    }
+    return `# Parallel research join\n\n${sections.join("\n\n")}\n`;
+  }
+
+  private async runSingleAgent(args: {
+    nodeId: string;
+    agentKey: string;
+    state: Record<string, string>;
+    iteration: number;
+    sharedAgentId?: string;
+    emit: EventHandler;
+  }): Promise<{
+    output: string;
+    rawText: string;
+    evaluation?: ManagerEvaluation;
+    cursorAgentId: string;
+  }> {
+    const { nodeId, agentKey, state, iteration, sharedAgentId, emit } = args;
+    const agentDef = this.config.agents[agentKey]!;
+    const instanceId = `${nodeId}:${agentKey}:${iteration}`;
+
+    await this.emitStatus(emit, {
+      agentId: agentKey,
+      agentName: agentDef.name,
+      nodeId,
+      instanceId,
+      status: "queued",
+      detail: "Queued",
+    });
+    await this.emitStatus(emit, {
+      agentId: agentKey,
+      agentName: agentDef.name,
+      nodeId,
+      instanceId,
+      status: "running",
+      detail: "Spawned",
+    });
+
+    const prompt = renderTemplate(agentDef.instruction, {
+      ...state,
+      research_focus: RESEARCH_FOCUS[agentKey] ?? "",
+      criteria: this.config.goal.criteria,
+      iteration,
+      max_iterations: this.config.goal.max_iterations,
+    });
+
+    const model = agentDef.model ?? this.config.defaults.model;
+    const mode = agentDef.mode ?? this.config.defaults.mode;
+
+    const { text, cursorAgentId, cursorRunId, url } = await this.invokeAgent({
+      agentKey,
+      displayName: `${agentDef.name} · ${nodeId}`,
+      prompt,
+      model,
+      mode,
+      sharedAgentId,
+      onDelta: async (delta) => {
+        await this.emitStatus(emit, {
+          agentId: agentKey,
+          agentName: agentDef.name,
+          nodeId,
+          instanceId,
+          status: "streaming",
+          detail: String(delta).slice(0, 80),
+        });
+        await emit({
+          type: "assistant_delta",
+          nodeId,
+          agentId: agentKey,
+          agentName: agentDef.name,
+          text: delta,
+        });
+      },
+      onStatus: async (status) => {
+        await emit({
+          type: "status",
+          nodeId,
+          agentId: agentKey,
+          agentName: agentDef.name,
+          status,
+        });
+      },
+    });
+
+    await emit({
+      type: "agent_created",
+      nodeId,
+      agentId: agentKey,
+      agentName: agentDef.name,
+      cursorAgentId,
+      cursorRunId,
+      url,
+    });
+
+    let evaluation: ManagerEvaluation | undefined;
+    let output = text;
+
+    if (agentDef.response_format === "json") {
+      evaluation = parseJsonBlock(text) ?? {
+        scores: Object.fromEntries(
+          this.config.goal.criteria.map((c) => [c.id, 0]),
+        ),
+        passed: false,
+        route: "revise",
+        feedback:
+          "Manager returned unparseable JSON. Revise for clarity; add code+output+explanation, draw.io diagram, and a stronger hook.",
+        summary: "Parse failure — forcing revise",
+      };
+      evaluation = enforceStrictJudgment(
+        this.config,
+        evaluation,
+        state.draft || "",
+        { skipArtifactCaps: Boolean(state.revise_mode) },
+      );
+      if (
+        evaluation.route === "done" &&
+        !criteriaMet(this.config, evaluation)
+      ) {
+        evaluation.route = "revise";
+        evaluation.passed = false;
+        evaluation.feedback =
+          evaluation.feedback ||
+          "Scores below threshold — continue revising.";
+      }
+      output = JSON.stringify(evaluation, null, 2);
+    }
+
+    await this.emitStatus(emit, {
+      agentId: agentKey,
+      agentName: agentDef.name,
+      nodeId,
+      instanceId,
+      status: "done",
+      detail: evaluation ? `route=${evaluation.route}` : "Completed",
+    });
+
+    return { output, rawText: text, evaluation, cursorAgentId };
   }
 
   private async invokeAgent(args: {
@@ -660,43 +972,64 @@ Readers want clarity, credible framing, and something they can use today.
 `;
   }
 
-  if (agentKey === "researcher") {
-    if (oreilly) {
-      return `# Research notes (book chapter)
+  if (agentKey === "researcher" || agentKey.startsWith("researcher_")) {
+    const focus =
+      agentKey === "researcher_examples"
+        ? "examples"
+        : agentKey === "researcher_visuals"
+          ? "visuals"
+          : "facts";
+    if (focus === "examples") {
+      return `# Examples research
 
-## Key findings
-- ${brief} is best taught as concept → tiny lab → output literacy → pitfall.
-- Readers retain more when each listing shows Output and a plain-language Explanation.
-- Tip/Note/Warning callouts reduce support load without bloating prose.
+## Worked example ideas
+- Minimal failing case that motivates the chapter
+- Corrected lab with predicted output
 
-## Evidence / rationale
-- Example-first chapters outperform theory-first chapters for practitioners.
-- Exercises with a 20–40 minute scope convert reading into skill.
-- Architecture diagrams prevent "I followed steps but don't see the system."
+## Code · output pairs
+- Listing that fails for an obvious reason + sample output
+- Repaired listing + success output
 
-## Open questions
-- Exact product versions drift — keep examples version-tolerant and mark assumptions.
+## Common pitfalls
+- Tutorial theater without predicting output
+- Shipping code without explanation
 
-## Suggested source types
-- Primary docs, RFCs, reputable engineering blogs, first-party experiments
+## Exercise prompts
+1. Reproduce the warm-up failure
+2. Extend the repaired lab with one new constraint
+`;
+    }
+    if (focus === "visuals") {
+      return `# Visuals research
 
 ## Image research notes
-- Style: animal-book adjacent — clean line art, parchment-adjacent neutrals
-- Depict the warm-up failure and the repaired flow side by side
+- Style: clean line art, parchment-adjacent neutrals for book chapters
+- Depict warm-up failure vs repaired flow
 
 ## Diagram specs (draw.io)
 - Nodes: Problem, Concept, Lab, Output, Pitfall, Exercise
 - Edges: Problem→Concept→Lab→Output; Output→Pitfall; Output→Exercise
 
-## Code · output pairs
-- Minimal repro that fails for an obvious reason
-- Corrected lab with success output
-- Integration snippet for the longer practice section
+## Suggested figure captions
+- "Chapter learning loop from warm-up to exercise"
+`;
+    }
+    if (oreilly) {
+      return `# Facts research (book chapter)
 
-## Exercise ideas
-1. Reproduce the warm-up failure locally
-2. Extend Listing 2 with one constraint from the brief
-3. Draw the system before coding the integration path
+## Key findings
+- ${brief} is best taught as concept → tiny lab → output literacy → pitfall.
+- Tip/Note/Warning callouts reduce support load without bloating prose.
+
+## Evidence / rationale
+- Example-first chapters outperform theory-first for practitioners.
+- Exercises with a 20–40 minute scope convert reading into skill.
+
+## Open questions
+- Exact product versions drift — keep examples version-tolerant.
+
+## Suggested source types
+- Primary docs, RFCs, reputable engineering blogs
 `;
     }
     return `# Research notes
@@ -716,14 +1049,6 @@ Readers want clarity, credible framing, and something they can use today.
 
 ## Suggested source types
 - Primary docs, reputable industry reports, first-party experiments
-
-## Image research notes
-- Style: editorial line illustration, muted ink on warm paper
-- Depict the 3-step loop: plan → research → write
-
-## Diagram specs (draw.io)
-- Nodes: Plan, Research, Write, Judge
-- Edges: sequential arrows; Judge → Write labeled "revise"; Judge → Done labeled "publish"
 `;
   }
 

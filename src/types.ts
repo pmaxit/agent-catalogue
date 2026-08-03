@@ -31,6 +31,8 @@ const WorkflowNodeSchema = z.object({
   next: z.string().optional(),
   routes: z.record(z.string()).optional(),
   counts_as_iteration: z.boolean().optional().default(false),
+  /** When set, these agents run concurrently; all must finish before `next`. */
+  parallel_agents: z.array(z.string().min(1)).optional(),
 });
 
 export const PipelineConfigSchema = z.object({
@@ -107,22 +109,69 @@ export interface ManagerEvaluation {
   summary: string;
 }
 
+export type AgentRunStatus =
+  | "idle"
+  | "queued"
+  | "running"
+  | "streaming"
+  | "done"
+  | "error";
+
 export type PipelineEvent =
   | { type: "pipeline_started"; workflow: string; brief: BriefInput }
-  | { type: "node_started"; nodeId: string; agentId: string; iteration: number }
+  | {
+      type: "agents_roster";
+      agents: Array<{
+        agentId: string;
+        agentName: string;
+        nodeId: string;
+        role: string;
+      }>;
+    }
+  | {
+      type: "agent_status";
+      agentId: string;
+      agentName: string;
+      nodeId: string;
+      instanceId: string;
+      status: AgentRunStatus;
+      detail?: string;
+    }
+  | {
+      type: "node_started";
+      nodeId: string;
+      agentId: string;
+      agentName?: string;
+      iteration: number;
+    }
   | {
       type: "agent_created";
       nodeId: string;
+      agentId?: string;
+      agentName?: string;
       cursorAgentId: string;
       cursorRunId: string;
       url?: string;
     }
-  | { type: "assistant_delta"; nodeId: string; text: string }
-  | { type: "status"; nodeId: string; status: string }
+  | {
+      type: "assistant_delta";
+      nodeId: string;
+      agentId?: string;
+      agentName?: string;
+      text: string;
+    }
+  | {
+      type: "status";
+      nodeId: string;
+      agentId?: string;
+      agentName?: string;
+      status: string;
+    }
   | {
       type: "node_finished";
       nodeId: string;
       agentId: string;
+      agentName?: string;
       outputKey: string;
       output: string;
       evaluation?: ManagerEvaluation;

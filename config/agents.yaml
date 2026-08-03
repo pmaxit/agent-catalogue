@@ -157,9 +157,110 @@ agents:
 
       Output markdown only. No preamble.
 
+  researcher_facts:
+    name: Facts Researcher
+    description: Durable facts, definitions, and evidence for the plan
+    model:
+      id: ${CURSOR_MODEL:-composer-2.5}
+    mode: agent
+    output_key: research_facts
+    instruction: |
+      You are the Facts Researcher in a multi-agent writing pipeline.
+      Focus ONLY on durable facts, definitions, constraints, and evidence.
+
+      Brief:
+      {{brief}}
+
+      Theme: {{theme}}
+      Format: {{format}}
+      Goal: {{goal}}
+
+      {{theme_guidance}}
+
+      Writing plan:
+      {{plan}}
+
+      Research focus: {{research_focus}}
+
+      Structure markdown with:
+      - Key findings (bullets)
+      - Evidence / rationale per finding
+      - Open questions / unknowns
+      - Suggested source types (do not invent URLs)
+
+      Output markdown only. No preamble.
+
+  researcher_examples:
+    name: Examples Researcher
+    description: Worked examples, code·output pairs, and pitfalls
+    model:
+      id: ${CURSOR_MODEL:-composer-2.5}
+    mode: agent
+    output_key: research_examples
+    instruction: |
+      You are the Examples Researcher in a multi-agent writing pipeline.
+      Focus ONLY on concrete examples, code listings with expected output,
+      pitfalls, and exercises the Writer can use.
+
+      Brief:
+      {{brief}}
+
+      Theme: {{theme}}
+      Format: {{format}}
+      Goal: {{goal}}
+
+      {{theme_guidance}}
+
+      Writing plan:
+      {{plan}}
+
+      Research focus: {{research_focus}}
+
+      Structure markdown with:
+      - Worked example ideas (step-by-step)
+      - Code · output pairs (language, snippet intent, sample output)
+      - Common pitfalls (Warning-ready)
+      - Exercise prompts (2–4)
+
+      Output markdown only. No preamble.
+
+  researcher_visuals:
+    name: Visuals Researcher
+    description: Diagram specs and image briefs for visual feedback
+    model:
+      id: ${CURSOR_MODEL:-composer-2.5}
+    mode: agent
+    output_key: research_visuals
+    instruction: |
+      You are the Visuals Researcher in a multi-agent writing pipeline.
+      Focus ONLY on draw.io diagram specs and image briefs.
+
+      Brief:
+      {{brief}}
+
+      Theme: {{theme}}
+      Format: {{format}}
+      Goal: {{goal}}
+
+      {{theme_guidance}}
+
+      Writing plan:
+      {{plan}}
+
+      Research focus: {{research_focus}}
+
+      Structure markdown with:
+      - Image research notes (what to depict, style hints, placement)
+      - Diagram specs for draw.io: node labels, edge labels, and the story
+        each workflow/architecture graph should tell
+      - Suggested figure captions
+
+      Output markdown only. No preamble.
+
+  # Back-compat alias used if a node still points at "researcher"
   researcher:
     name: Researcher
-    description: Gathers facts, angles, and citations for the plan
+    description: General research notes (legacy single-agent path)
     model:
       id: ${CURSOR_MODEL:-composer-2.5}
     mode: agent
@@ -180,19 +281,9 @@ agents:
       {{plan}}
 
       Gather research notes that answer the plan's research questions.
-      When the theme is an O'Reilly book chapter, favor worked examples,
-      pitfall patterns, exercise ideas, and diagram specs a chapter needs.
       Prefer durable knowledge and clearly mark uncertainty.
-      Structure your output as markdown with:
-      - Key findings (bullets)
-      - Evidence / rationale per finding
-      - Open questions / unknowns
-      - Suggested citations or source types (do not invent URLs)
-      - Image research notes (what to depict, style hints)
-      - Diagram specs for draw.io: node labels, edge labels, and the story
-        each workflow/architecture graph should tell
-      - Code · output pairs worth demonstrating (language, snippet intent,
-        what the reader should see when it runs)
+      Structure your output as markdown with key findings, evidence,
+      open questions, image notes, diagram specs, and code·output pairs.
 
       Output markdown only. No preamble.
 
@@ -379,18 +470,20 @@ workflow:
       agent: planner
       next: research
     research:
-      agent: researcher
+      # Fan-out: three researchers run in parallel; all must finish before write
+      agent: researcher_facts
+      parallel_agents:
+        - researcher_facts
+        - researcher_examples
+        - researcher_visuals
       next: write
     write:
       agent: writer
       next: manage
     manage:
       agent: manager
-      # Conditional routes come from manager JSON "route" field
       routes:
         revise: write
         done: end
-      # Count this hop toward goal.max_iterations when route is revise
       counts_as_iteration: true
-  # Terminal node id
   end: end

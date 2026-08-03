@@ -174,6 +174,14 @@ export function blocksToMarkdown(blocks: Block[]): string {
             .join("\n");
         case "drawio":
           return `\`\`\`drawio\n${text}\n\`\`\``;
+        case "code": {
+          const nl = text.indexOf("\n");
+          const lang = nl >= 0 ? text.slice(0, nl) : "";
+          const body = nl >= 0 ? text.slice(nl + 1) : text;
+          return `\`\`\`${lang}\n${body}\n\`\`\``;
+        }
+        case "table":
+          return text;
         default:
           return text;
       }
@@ -181,26 +189,57 @@ export function blocksToMarkdown(blocks: Block[]): string {
     .join("\n\n");
 }
 
+function isMdTableSeparator(line: string): boolean {
+  const cells = line
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((c) => c.trim());
+  return (
+    cells.length > 0 &&
+    cells.every((c) => /^:?-{3,}:?$/.test(c.replace(/\s/g, "")))
+  );
+}
+
+function isMdTableRow(line: string): boolean {
+  const t = line.trim();
+  return t.includes("|") && !t.startsWith("```");
+}
+
 export function markdownToBlocks(markdown: string): Block[] {
   const blocks: Block[] = [];
-  const fenceRe =
-    /```(drawio|diagrams\.net|mxfile)\s*\n([\s\S]*?)```/gi;
+  // All fenced blocks (drawio or code)
+  const fenceRe = /```([^\n`]*)\n([\s\S]*?)```/g;
   let last = 0;
   let match: RegExpExecArray | null;
-  const fenceMatches: Array<{ start: number; end: number; xml: string }> = [];
+  const fenceMatches: Array<{
+    start: number;
+    end: number;
+    lang: string;
+    body: string;
+  }> = [];
   while ((match = fenceRe.exec(markdown)) !== null) {
     fenceMatches.push({
       start: match.index,
       end: match.index + match[0].length,
-      xml: match[2].trim(),
+      lang: (match[1] || "").trim(),
+      body: match[2].replace(/\n$/, ""),
     });
   }
 
   const pushProse = (chunk: string) => {
-    const parts = chunk.split(/\n\s*\n/).filter((p) => p.trim());
-    for (const pText of parts) {
+    const normalized = chunk.replace(/\r\n/g, "\n");
+    const lines = normalized.split("\n");
+    let i = 0;
+    let buf: string[] = [];
+
+    const flushBuf = () => {
+      const pText = buf.join("\n").trim();
+      buf = [];
+      if (!pText) return;
       let type: Block["type"] = "paragraph";
-      let clean = pText.trim();
+      let clean = pText;
       if (clean.startsWith("# ")) {
         type = "h1";
         clean = clean.replace(/^#\s+/, "");
@@ -228,7 +267,38 @@ export function markdownToBlocks(markdown: string): Block[] {
           .join("\n");
       }
       blocks.push({ id: randomUUID(), type, text: clean });
+    };
+
+    while (i < lines.length) {
+      const line = lines[i]!;
+      if (
+        isMdTableRow(line) &&
+        i + 1 < lines.length &&
+        (isMdTableSeparator(lines[i + 1]!) || isMdTableRow(lines[i + 1]!))
+      ) {
+        flushBuf();
+        const tableLines: string[] = [line];
+        i += 1;
+        while (i < lines.length && isMdTableRow(lines[i]!)) {
+          tableLines.push(lines[i]!);
+          i += 1;
+        }
+        blocks.push({
+          id: randomUUID(),
+          type: "table",
+          text: tableLines.join("\n"),
+        });
+        continue;
+      }
+      if (line.trim() === "") {
+        flushBuf();
+        i += 1;
+        continue;
+      }
+      buf.push(line);
+      i += 1;
     }
+    flushBuf();
   };
 
   if (!fenceMatches.length) {
@@ -238,11 +308,24 @@ export function markdownToBlocks(markdown: string): Block[] {
 
   for (const f of fenceMatches) {
     pushProse(markdown.slice(last, f.start));
-    blocks.push({
-      id: randomUUID(),
-      type: "drawio",
-      text: f.xml,
-    });
+    const langLower = f.lang.toLowerCase();
+    if (
+      langLower === "drawio" ||
+      langLower === "diagrams.net" ||
+      langLower === "mxfile"
+    ) {
+      blocks.push({
+        id: randomUUID(),
+        type: "drawio",
+        text: f.body.trim(),
+      });
+    } else {
+      blocks.push({
+        id: randomUUID(),
+        type: "code",
+        text: `${f.lang}\n${f.body}`,
+      });
+    }
     last = f.end;
   }
   pushProse(markdown.slice(last));

@@ -238,6 +238,17 @@
               <h2>III · Brief &amp; parameters</h2>
               <p>Core prompt and audience constraints.</p>
             </div>
+            <aside class="suggest-banner" id="suggest-banner" hidden data-od-id="studio-suggest-banner">
+              <div class="suggest-banner-main">
+                <span class="mono-stamp" id="suggest-banner-label">AI suggestions</span>
+                <p class="suggest-rationale" id="suggest-rationale"></p>
+                <p class="suggest-status" id="suggest-status" hidden>Generating suggestions from book and chapter titles…</p>
+              </div>
+              <div class="suggest-banner-actions">
+                <button type="button" class="btn btn-primary sm" id="suggest-accept-btn">Accept</button>
+                <button type="button" class="btn btn-ghost sm" id="suggest-dismiss-btn">Dismiss</button>
+              </div>
+            </aside>
             <form id="agent-form" class="agent-form">
               <div class="field-full">
                 <label for="brief-input" class="field-label">
@@ -305,7 +316,7 @@
             <div class="stage-arrow" aria-hidden="true"></div>
             <div class="stage-node" id="node-research">
               <span class="node-num">02</span>
-              <span class="node-name">Researcher</span>
+              <span class="node-name">Research (×3)</span>
               <span class="node-status">Pending</span>
             </div>
             <div class="stage-arrow" aria-hidden="true"></div>
@@ -321,6 +332,16 @@
               <span class="node-status">Pending</span>
             </div>
           </div>
+
+          <section class="agent-roster" id="agent-roster" aria-label="Agent status board" data-od-id="studio-agent-roster">
+            <div class="agent-roster-head">
+              <h3>Agents</h3>
+              <span class="mono-stamp" id="agent-roster-meta">Idle</span>
+            </div>
+            <div class="agent-roster-grid" id="agent-roster-grid">
+              <p class="side-hint">Fire agents to populate the live roster.</p>
+            </div>
+          </section>
 
           <div class="workspace-grid" id="workspace-grid">
             <div class="console-panel" id="console-panel" data-od-id="studio-console">
@@ -352,11 +373,12 @@
                   <span class="publish-badge" id="published-badge" hidden>Published · block editor</span>
                 </div>
                 <div class="draft-actions">
-                  <button type="button" class="btn btn-primary sm" id="publish-btn">Publish</button>
-                  <button type="button" class="btn btn-ghost sm" id="save-btn" hidden>Save edit</button>
+                  <button type="button" class="btn btn-primary sm" id="save-btn">Save chapter</button>
+                  <button type="button" class="btn btn-ghost sm" id="publish-btn">Edit blocks</button>
+                  <span class="mono-stamp save-status" id="save-status" aria-live="polite"></span>
                   <button type="button" class="btn btn-ghost sm" id="history-btn" hidden>History</button>
                   <button type="button" class="btn btn-ghost sm" id="copy-btn">Copy</button>
-                  <button type="button" class="btn btn-ghost sm" id="download-btn" title="Export markdown">Export</button>
+                  <button type="button" class="btn btn-ghost sm" id="download-btn" title="Export Quarto notebook (.qmd)">Export .qmd</button>
                   <button type="button" class="btn btn-ghost sm" id="toggle-console-draft" title="Show or hide live stream">Console</button>
                 </div>
               </div>
