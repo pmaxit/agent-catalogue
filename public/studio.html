@@ -1,441 +1,209 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Quill Studio — Writing Agent Dashboard</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inconsolata:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
-    <link rel="stylesheet" href="/tokens.css" />
-    <link rel="stylesheet" href="/styles.css" />
-  </head>
-  <body class="page-studio">
-    <div class="studio-shell">
-      <aside class="sidebar sidebar-ab" data-od-id="studio-sidebar" aria-label="Studio navigation">
-        <nav class="activity-rail" aria-label="Studio activities">
-          <a class="rail-brand" href="/" title="Quill home">
-            <span class="brand-mark sm" aria-hidden="true"></span>
-            <span class="sr-only">Quill</span>
-          </a>
-          <button type="button" class="rail-btn active" data-activity="library" title="Library" aria-pressed="true">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 4h6v16H5zM13 4h6v10h-6z" stroke="currentColor" stroke-width="1.6"/></svg>
-            <span>Lib</span>
-          </button>
-          <button type="button" class="rail-btn" data-activity="compose" title="Compose" aria-pressed="false">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 19h14M7 5h10v10H7z" stroke="currentColor" stroke-width="1.6"/></svg>
-            <span>Write</span>
-          </button>
-          <button type="button" class="rail-btn" data-activity="run" title="Pipeline and console" aria-pressed="false">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 8h6v8H4zM14 4h6v8h-6zM14 14h6v6h-6z" stroke="currentColor" stroke-width="1.6"/></svg>
-            <span>Run</span>
-          </button>
-          <div class="rail-spacer" aria-hidden="true"></div>
-          <a class="rail-btn rail-link" href="/books" title="Public books" target="_blank" rel="noopener">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 4h9l3 3v13H6z" stroke="currentColor" stroke-width="1.6"/></svg>
-            <span>Web</span>
-          </a>
-        </nav>
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Quill Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="/tokens.css"/>
+<link rel="stylesheet" href="/styles.css"/>
+<style>
+/* Minimal sidepanel override */
+.drawer-panel[hidden]{display:none !important}
+.center-subtabs{display:flex;gap:6px;padding:10px 0 14px;border-bottom:1px solid var(--border);margin-bottom:16px;position:sticky;top:0;background:rgba(255,255,255,0.92);backdrop-filter:blur(8px);z-index:5}
+.subtab{padding:7px 14px;border-radius:9999px;border:1px solid var(--border);background:#fff;font-size:13px;font-weight:500;cursor:pointer;color:var(--muted);transition:all .12s}
+.subtab.active{background:var(--fg-2);color:#fff;border-color:var(--fg-2)}
+.subtab-panel{display:none}
+.subtab-panel.active{display:block;animation:fadeIn .18s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body class="page-studio">
+<div class="ambient" aria-hidden="true"></div>
+<div class="studio-shell">
+  <!-- Left: rail + minimal drawer -->
+  <aside class="sidebar sidebar-ab" aria-label="Navigation">
+    <nav class="activity-rail">
+      <a class="rail-brand" href="/" title="Home"><span class="brand-mark sm"></span><span class="sr-only">Q</span></a>
+      <button type="button" class="rail-btn active" data-activity="library" title="Books"><svg viewBox="0 0 24 24" fill="none"><path d="M5 4h6v16H5zM13 4h6v10h-6z" stroke="currentColor" stroke-width="1.6"/></svg><span>Books</span></button>
+      <button type="button" class="rail-btn" data-activity="compose" title="Write"><svg viewBox="0 0 24 24" fill="none"><path d="M5 19h14M7 5h10v10H7z" stroke="currentColor" stroke-width="1.6"/></svg><span>Write</span></button>
+      <button type="button" class="rail-btn" data-activity="run" title="Run"><svg viewBox="0 0 24 24" fill="none"><path d="M4 8h6v8H4zM14 4h6v8h-6zM14 14h6v6h-6z" stroke="currentColor" stroke-width="1.6"/></svg><span>Run</span></button>
+      <div class="rail-spacer"></div>
+      <a class="rail-btn rail-link" href="/books" target="_blank" title="Public"><svg viewBox="0 0 24 24" fill="none"><path d="M6 4h9l3 3v13H6z" stroke="currentColor" stroke-width="1.6"/></svg><span>Web</span></a>
+    </nav>
 
-        <div class="sidebar-drawer" id="sidebar-drawer">
-          <section class="drawer-panel" data-panel="library" id="drawer-library">
-            <div class="drawer-head">
-              <div>
-                <p class="drawer-kicker">Library</p>
-                <h2 class="drawer-title">Your work</h2>
-              </div>
-              <div class="new-menu" id="new-menu">
-                <button type="button" class="btn btn-primary sm" id="new-menu-btn" aria-haspopup="menu" aria-expanded="false">+ New</button>
-                <div class="new-menu-pop" id="new-menu-pop" role="menu" hidden>
-                  <button type="button" role="menuitem" id="menu-new-book">Book</button>
-                  <button type="button" role="menuitem" id="menu-new-chapter" hidden>Chapter</button>
-                  <button type="button" role="menuitem" id="menu-new-piece">Article</button>
-                </div>
-              </div>
+    <div class="sidebar-drawer" id="sidebar-drawer">
+      <!-- LIBRARY — minimal -->
+      <section class="drawer-panel" data-panel="library" id="drawer-library">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:12px;border-bottom:1px solid var(--border);">
+          <span style="font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);">Library</span>
+          <div class="new-menu" id="new-menu">
+            <button type="button" class="btn btn-ghost sm" id="new-menu-btn" aria-haspopup="menu" aria-expanded="false" style="height:28px;padding:0 10px;font-size:12px;border-radius:9999px;border:1px solid var(--border);background:#fff;">+ New</button>
+            <div class="new-menu-pop" id="new-menu-pop" role="menu" hidden>
+              <button type="button" role="menuitem" id="menu-new-book">Book</button>
+              <button type="button" role="menuitem" id="menu-new-chapter" hidden>Chapter</button>
+              <button type="button" role="menuitem" id="menu-new-piece">Article</button>
             </div>
-            <div class="library-tabs" role="tablist" aria-label="Library type">
-              <button type="button" class="library-tab active" role="tab" aria-selected="true" data-lib-tab="books">Books</button>
-              <button type="button" class="library-tab" role="tab" aria-selected="false" data-lib-tab="articles">Articles</button>
-            </div>
-            <div class="library-pane" data-lib-pane="books" id="books-list" aria-live="polite">
-              <p class="side-hint">Loading books…</p>
-            </div>
-            <div class="library-pane" data-lib-pane="articles" id="articles-list" aria-live="polite" hidden>
-              <p class="side-hint">Loading articles…</p>
-            </div>
-            <div class="sidebar-foot">
-              <span class="mono-stamp" id="mode-badge">STATUS: READY</span>
-              <span class="mono-stamp muted" id="model-badge">MODEL: —</span>
-              <a class="drawer-quiet-link" href="/articles" target="_blank" rel="noopener">Public articles →</a>
-            </div>
-          </section>
+          </div>
+        </div>
 
-          <section class="drawer-panel" data-panel="compose" id="drawer-compose" hidden>
-            <div class="drawer-head">
-              <div>
-                <p class="drawer-kicker">Compose</p>
-                <h2 class="drawer-title">Brief &amp; voice</h2>
-              </div>
-            </div>
-            <p class="side-hint drawer-copy">Set the goal, theme, and brief in the main canvas, then fire agents.</p>
-            <button type="button" class="side-link" id="nav-compose-brief">Jump to brief</button>
-            <button type="button" class="side-link" id="nav-compose-theme">Jump to theme</button>
-            <button type="button" class="side-link" id="menu-new-piece-compose">New article draft</button>
-          </section>
+        <label class="search-field" for="studio-search" style="margin-top:12px;"><input id="studio-search" type="search" placeholder="Search…" style="height:32px;border-radius:8px;background:#fff;border:1px solid var(--border);font-size:13px;"/></label>
 
-          <section class="drawer-panel" data-panel="run" id="drawer-run" hidden>
-            <div class="drawer-head">
-              <div>
-                <p class="drawer-kicker">Run</p>
-                <h2 class="drawer-title">Pipeline</h2>
-              </div>
+        <div id="books-list" class="library-pane" data-lib-pane="books" aria-live="polite" style="margin-top:12px;"><p class="side-hint">Loading…</p></div>
+        <div id="articles-list" class="library-pane" data-lib-pane="articles" hidden><p class="side-hint">Loading…</p></div>
+
+        <div class="book-context-bar" id="book-rail" hidden style="margin-top:12px;padding:10px;border:1px solid var(--border);border-radius:10px;background:#fff;">
+          <div class="book-context-copy"><p class="eyebrow" id="book-rail-title" style="margin:0;font-size:11px;">Book</p><p class="book-context-meta" id="book-rail-meta" style="font-size:11px;">Chapters</p></div>
+          <div style="display:flex;gap:6px;margin-top:8px;"><a class="btn btn-ghost sm" id="book-public-link" href="/books" target="_blank" style="height:28px;padding:0 10px;border-radius:8px;font-size:11px;">↗ Open</a><button type="button" class="btn btn-ghost sm" id="book-add-chapter-btn" style="height:28px;padding:0 10px;border-radius:8px;font-size:11px;">+ Chapter</button></div>
+          <ol class="book-chapter-list" id="book-chapter-list" hidden style="width:100%;margin-top:8px;"></ol>
+        </div>
+
+        <div class="sidebar-foot" style="margin-top:auto;padding-top:12px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+          <span class="mono-stamp" id="mode-badge" style="font-size:10px;">READY</span>
+          <span class="mono-stamp muted" id="model-badge" style="font-size:10px;">—</span>
+        </div>
+      </section>
+
+      <!-- COMPOSE — minimal, only 2 links -->
+      <section class="drawer-panel" data-panel="compose" id="drawer-compose" hidden>
+        <div style="padding-bottom:12px;border-bottom:1px solid var(--border);"><span style="font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);">Write</span></div>
+        <div style="display:grid;gap:4px;margin-top:12px;">
+          <button type="button" class="side-link" id="nav-compose-brief" style="font-size:13px;padding:8px 10px;">→ Brief</button>
+          <button type="button" class="side-link" id="nav-compose-theme" style="font-size:13px;padding:8px 10px;">→ Theme</button>
+        </div>
+      </section>
+
+      <!-- RUN — minimal, only 2 links -->
+      <section class="drawer-panel" data-panel="run" id="drawer-run" hidden>
+        <div style="padding-bottom:12px;border-bottom:1px solid var(--border);"><span style="font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);">Run</span></div>
+        <div style="display:grid;gap:4px;margin-top:12px;">
+          <button type="button" class="side-link" id="nav-pipeline" style="font-size:13px;padding:8px 10px;">→ Pipeline</button>
+          <button type="button" class="side-link" id="nav-draft" style="font-size:13px;padding:8px 10px;">→ Draft</button>
+        </div>
+      </section>
+    </div>
+  </aside>
+
+  <div class="studio-main">
+    <header class="topbar">
+      <div><p class="eyebrow" style="margin:0;">Writing studio</p><h1 style="font-size:20px;font-weight:700;">Compose</h1></div>
+      <div class="topbar-right"><span class="status-pill" id="health-pill">Checking…</span></div>
+    </header>
+
+    <section class="studio-intro" style="padding-bottom:16px;margin-bottom:16px;">
+      <div><h2 style="font-size:24px;margin:0 0 4px;">Give the agents a point of view.</h2><p class="studio-intro-copy" style="font-size:13px;margin:0;color:var(--muted);">Brief, theme, quality bar — then fire agents.</p></div>
+    </section>
+
+    <div class="gitbook-layout">
+      <div style="min-width:0;">
+        <div class="center-subtabs" role="tablist">
+          <button class="subtab active" role="tab" aria-selected="true" data-center-tab="brief">Brief</button>
+          <button class="subtab" role="tab" aria-selected="false" data-center-tab="pipeline">Pipeline</button>
+          <button class="subtab" role="tab" aria-selected="false" data-center-tab="draft">Draft</button>
+        </div>
+
+        <div class="subtab-panel active" data-panel="brief" id="center-brief">
+          <section class="wizard-panel" id="wizard-section">
+            <div class="panel-card" style="padding:16px;">
+              <div class="panel-head-inline"><h2 style="font-size:15px;margin:0 0 4px;">I · Writing goal</h2><p style="font-size:12px;margin:0 0 12px;">Pick one.</p></div>
+              <div class="options-grid goals-grid" id="goals-selector" role="listbox"></div>
             </div>
-            <p class="side-hint drawer-copy">Watch agents, toggle the console, and open the draft.</p>
-            <button type="button" class="side-link" id="nav-pipeline">Jump to pipeline</button>
-            <button type="button" class="side-link" id="nav-draft">Jump to draft</button>
-            <button type="button" class="side-link" id="menu-toggle-console">Toggle console</button>
-            <button type="button" class="side-link" id="menu-publish-toggle">Publish &amp; edit blocks</button>
+            <div class="panel-card" style="padding:16px;">
+              <div class="panel-head-inline"><h2 style="font-size:15px;margin:0 0 4px;">II · Theme & voice</h2><p style="font-size:12px;margin:0 0 12px;">Choose voice.</p></div>
+              <div class="options-grid themes-grid" id="themes-selector" role="listbox"></div>
+            </div>
+            <div class="panel-card" style="padding:16px;">
+              <div class="panel-head-inline"><h2 style="font-size:15px;margin:0 0 4px;">III · Brief</h2><p style="font-size:12px;margin:0 0 12px;">Core prompt.</p></div>
+              <div class="brief-spec-strip" style="padding:8px 12px;margin:0 0 12px;"><div><span class="spec-label">Direction</span><strong id="selected-theme-label" style="font-size:12px;">—</strong></div><div><span class="spec-label">Audience</span><strong id="selected-audience-label" style="font-size:12px;">—</strong></div><span class="brief-readiness" id="brief-readiness" style="font-size:10px;padding:2px 6px;">1 of 3</span></div>
+              <aside class="suggest-banner" id="suggest-banner" hidden><div class="suggest-banner-main"><div class="suggest-banner-title-row"><span class="suggest-live-dot"></span><span class="mono-stamp" id="suggest-banner-label" style="font-size:10px;">AI suggestions</span></div><p class="suggest-rationale" id="suggest-rationale" style="font-size:12px;"></p><p class="suggest-status" id="suggest-status" hidden style="font-size:11px;">Generating…</p></div><div class="suggest-banner-actions"><button type="button" class="btn btn-brand sm" id="suggest-accept-btn" style="height:28px;">Accept</button><button type="button" class="btn btn-ghost sm" id="suggest-dismiss-btn" style="height:28px;">Dismiss</button></div></aside>
+              <form id="agent-form" class="agent-form" style="gap:12px;">
+                <div class="field-full"><label for="brief-input" class="field-label" style="font-size:10px;"><span>Brief</span><span class="field-hint">Required</span></label><textarea id="brief-input" name="brief" rows="4" required placeholder="Describe subject, angle, constraints…"></textarea></div>
+                <div class="params-row" id="params-row"><div class="field-group"><label for="audience-input" class="field-label">Audience</label><input id="audience-input" name="audience" value="Engineering leads & product directors"/></div><div class="field-group"><label for="tone-input" class="field-label">Tone</label><input id="tone-input" name="tone" value="precise, delegated, outcome-first"/></div><div class="field-group"><label for="format-input" class="field-label">Format</label><input id="format-input" name="format" value="Long-form essay"/></div><div class="field-group"><label for="length-input" class="field-label">Length</label><input id="length-input" name="length" value="1000–1500 words"/></div></div>
+                <div class="quality-bar" style="padding:8px 12px;"><div class="quality-info"><span class="quality-label">Loops</span><span class="quality-val" id="max-iter-val">5</span></div><div class="quality-info"><span class="quality-label">Threshold</span><span class="quality-val" id="threshold-val">0.75+</span></div></div>
+                <div class="actions-row"><button type="submit" class="btn btn-primary" id="fire-btn" style="min-width:140px;height:36px;"><span>Fire agents</span></button><button type="button" class="btn btn-ghost" id="reset-btn" style="height:36px;">Reset</button></div>
+              </form>
+            </div>
+            <div class="panel-card criteria-builder-card" style="padding:16px;">
+              <div class="panel-head-inline criteria-head"><div><h2 style="font-size:15px;margin:0 0 4px;">IV · Criteria</h2><p style="font-size:12px;margin:0;">Quality gates.</p></div><span class="mono-badge" id="criteria-count" style="font-size:10px;">6 selected</span></div>
+              <div class="criteria-builder-grid" id="criteria-selector"></div>
+            </div>
           </section>
         </div>
-      </aside>
 
-      <div class="studio-main">
-        <header class="topbar" data-od-id="studio-topbar">
-          <div>
-            <p class="eyebrow">Writing agent studio</p>
-            <h1>Compose &amp; run</h1>
-          </div>
-          <div class="topbar-right">
-            <label class="search-field" for="studio-search">
-              <span class="sr-only">Search studio</span>
-              <input id="studio-search" type="search" placeholder="Search goals, themes…" autocomplete="off" />
-            </label>
-            <span class="status-pill" id="health-pill">Checking…</span>
-          </div>
-        </header>
-
-        <section class="kpi-row" data-od-id="studio-kpis" aria-label="Studio metrics">
-          <article class="kpi">
-            <span class="kpi-label">Agents in graph</span>
-            <span class="kpi-value" id="kpi-agents">4</span>
-            <span class="kpi-delta up" id="kpi-agents-delta">plan · research · write · manage</span>
-          </article>
-          <article class="kpi">
-            <span class="kpi-label">Max iterations</span>
-            <span class="kpi-value" id="kpi-iters">5</span>
-            <span class="kpi-delta" id="kpi-iters-delta">Quality loop ceiling</span>
-          </article>
-          <article class="kpi">
-            <span class="kpi-label">Criteria bar</span>
-            <span class="kpi-value" id="kpi-threshold">0.75</span>
-            <span class="kpi-delta" id="kpi-threshold-delta">All scores must clear</span>
-          </article>
-          <article class="kpi">
-            <span class="kpi-label">Runtime</span>
-            <span class="kpi-value" id="kpi-runtime">mock</span>
-            <span class="kpi-delta" id="kpi-runtime-delta">Cursor API or local mock</span>
-          </article>
-        </section>
-
-        <section class="book-context-bar" id="book-rail" hidden data-od-id="studio-book-rail">
-          <div class="book-context-copy">
-            <p class="eyebrow" id="book-rail-title">Book</p>
-            <p class="book-context-meta" id="book-rail-meta">Chapters live in the Library rail.</p>
-          </div>
-          <div class="book-rail-actions">
-            <a class="btn btn-ghost sm" id="book-public-link" href="/books" target="_blank" rel="noopener">Open book URL</a>
-            <button type="button" class="btn btn-primary sm" id="book-add-chapter-btn">Add chapter</button>
-          </div>
-          <ol class="book-chapter-list" id="book-chapter-list" hidden></ol>
-        </section>
-
-        <section class="wizard-panel" id="wizard-section" data-od-id="studio-wizard">
-          <div class="panel-card">
-            <div class="panel-head-inline">
-              <h2>I · Writing goal</h2>
-              <p>Strategic objective for planner and research agents.</p>
+        <div class="subtab-panel" data-panel="pipeline" id="center-pipeline">
+          <section class="workspace-section" style="display:block;">
+            <div class="pipeline-map" id="pipeline-map">
+              <div class="stage-node" id="node-plan"><span class="node-num">01</span><span class="node-name">Planner</span><span class="node-status">Pending</span></div><div class="stage-arrow"></div>
+              <div class="stage-node" id="node-research"><span class="node-num">02</span><span class="node-name">Research ×3</span><span class="node-status">Pending</span></div><div class="stage-arrow"></div>
+              <div class="stage-node" id="node-write"><span class="node-num">03</span><span class="node-name">Writer</span><span class="node-status">Pending</span></div><div class="stage-arrow"></div>
+              <div class="stage-node" id="node-manage"><span class="node-num">04</span><span class="node-name">Judge</span><span class="node-status">Pending</span></div>
             </div>
-            <div class="options-grid goals-grid" id="goals-selector" role="listbox" aria-label="Writing goals">
-              <button type="button" class="option-card active" data-goal="Thought Leadership & Opinion Essay" role="option" aria-selected="true">
-                <span class="card-title">Thought Leadership</span>
-                <span class="card-sub">Provocative analysis &amp; industry vision</span>
-              </button>
-              <button type="button" class="option-card" data-goal="Technical Case Study & Architecture Runbook" role="option" aria-selected="false">
-                <span class="card-title">Technical Deep Dive</span>
-                <span class="card-sub">Architecture breakdowns &amp; runbooks</span>
-              </button>
-              <button type="button" class="option-card" data-goal="Product Launch & Brand Storytelling" role="option" aria-selected="false">
-                <span class="card-title">Product Narrative</span>
-                <span class="card-sub">Feature announcements &amp; customer value</span>
-              </button>
-              <button type="button" class="option-card" data-goal="Executive Brief & Strategic Report" role="option" aria-selected="false">
-                <span class="card-title">Executive Brief</span>
-                <span class="card-sub">Decision-oriented takeaways</span>
-              </button>
-              <button type="button" class="option-card" data-goal="O'Reilly-Style Technical Book Chapter" role="option" aria-selected="false">
-                <span class="card-title">Book Chapter</span>
-                <span class="card-sub">Full chapter: concepts, labs, exercises</span>
-              </button>
-            </div>
-          </div>
-
-          <div class="panel-card">
-            <div class="panel-head-inline">
-              <h2>II · Theme &amp; voice</h2>
-              <p>Narrative aesthetic for writer and evaluator agents.</p>
-            </div>
-            <div class="options-grid themes-grid" id="themes-selector" role="listbox" aria-label="Themes">
-              <button type="button" class="theme-card active" data-theme="Agentic Command" data-tone="precise, delegated, outcome-first, traceable" data-format="Long-form Agentic Essay" data-length="1000–1500 words">
-                <div class="theme-swatch agentic"></div>
-                <div class="theme-info">
-                  <span class="theme-title">Agentic Command</span>
-                  <span class="theme-sub">Dark command surfaces, clear outcomes, delegated task flows.</span>
-                </div>
-              </button>
-              <button type="button" class="theme-card" data-theme="Technical Trace" data-tone="sharp, analytical, code-dense, high-clarity" data-format="Technical Deep-Dive & Guide" data-length="1500–2200 words">
-                <div class="theme-swatch cyber"></div>
-                <div class="theme-info">
-                  <span class="theme-title">Technical Trace</span>
-                  <span class="theme-sub">Monospace density, evidence-first engineering voice.</span>
-                </div>
-              </button>
-              <button type="button" class="theme-card" data-theme="Editorial Signal" data-tone="authoritative, structured, reflective, formal" data-format="Research Report" data-length="1200–1800 words">
-                <div class="theme-swatch editorial"></div>
-                <div class="theme-info">
-                  <span class="theme-title">Editorial Signal</span>
-                  <span class="theme-sub">Structured arguments, formal scholarly cadence.</span>
-                </div>
-              </button>
-              <button type="button" class="theme-card" data-theme="Narrative Pulse" data-tone="vivid, narrative-driven, punchy, evocative" data-format="Narrative Feature" data-length="900–1400 words">
-                <div class="theme-swatch narrative"></div>
-                <div class="theme-info">
-                  <span class="theme-title">Narrative Pulse</span>
-                  <span class="theme-sub">Story hooks, imagery, memorable rhythm.</span>
-                </div>
-              </button>
-              <button type="button" class="theme-card" data-theme="Executive Crisp" data-tone="concise, action-oriented, high impact, strategic" data-format="Executive Briefing" data-length="600–900 words">
-                <div class="theme-swatch executive"></div>
-                <div class="theme-info">
-                  <span class="theme-title">Executive Crisp</span>
-                  <span class="theme-sub">Scannable summaries, bold takeaways, zero fluff.</span>
-                </div>
-              </button>
-              <button type="button" class="theme-card" data-theme="O'Reilly Book Chapter" data-tone="practical, example-first, authoritative yet approachable, you-addressed" data-format="O'Reilly-Style Book Chapter" data-length="4000–5500 words (full book chapter)">
-                <div class="theme-swatch oreilly"></div>
-                <div class="theme-info">
-                  <span class="theme-title">O'Reilly Book Chapter</span>
-                  <span class="theme-sub">Full chapter voice: labs, Tip/Note callouts, exercises.</span>
-                </div>
-              </button>
-            </div>
-          </div>
-
-          <div class="panel-card">
-            <div class="panel-head-inline">
-              <h2>III · Brief &amp; parameters</h2>
-              <p>Core prompt and audience constraints.</p>
-            </div>
-            <aside class="suggest-banner" id="suggest-banner" hidden data-od-id="studio-suggest-banner">
-              <div class="suggest-banner-main">
-                <span class="mono-stamp" id="suggest-banner-label">AI suggestions</span>
-                <p class="suggest-rationale" id="suggest-rationale"></p>
-                <p class="suggest-status" id="suggest-status" hidden>Generating suggestions from book and chapter titles…</p>
+            <div class="workspace-grid" style="grid-template-columns:1fr;">
+              <div class="console-panel" id="console-panel">
+                <div class="panel-head" style="padding:10px 12px;"><div class="head-title" style="font-size:11px;"><span class="indicator-dot" id="live-dot"></span><span>Live stream</span></div><span class="mono-badge" id="stream-status" style="font-size:10px;">Idle</span></div>
+                <div class="stream-box" id="stream-box" role="log" aria-live="polite"><div class="stream-log-entry"><span class="log-time">[00:00:00]</span><span class="log-tag system">SYSTEM</span><span class="log-msg">Ready.</span></div></div>
               </div>
-              <div class="suggest-banner-actions">
-                <button type="button" class="btn btn-primary sm" id="suggest-accept-btn">Accept</button>
-                <button type="button" class="btn btn-ghost sm" id="suggest-dismiss-btn">Dismiss</button>
-              </div>
-            </aside>
-            <form id="agent-form" class="agent-form">
-              <div class="field-full">
-                <label for="brief-input" class="field-label">
-                  <span>Article brief</span>
-                  <span class="field-hint">Required</span>
-                </label>
-                <textarea
-                  id="brief-input"
-                  name="brief"
-                  rows="5"
-                  required
-                  placeholder="Describe the subject, angle, and constraints for the agents…"
-                ></textarea>
-              </div>
-              <div class="params-row">
-                <div class="field-group">
-                  <label for="audience-input" class="field-label">Audience</label>
-                  <input id="audience-input" name="audience" value="Engineering leads & product directors" />
-                </div>
-                <div class="field-group">
-                  <label for="tone-input" class="field-label">Tone</label>
-                  <input id="tone-input" name="tone" value="precise, delegated, outcome-first, traceable" />
-                </div>
-                <div class="field-group">
-                  <label for="format-input" class="field-label">Format</label>
-                  <input id="format-input" name="format" value="Long-form Agentic Essay" />
-                </div>
-                <div class="field-group">
-                  <label for="length-input" class="field-label">Length</label>
-                  <input id="length-input" name="length" value="1000–1500 words" />
-                </div>
-              </div>
-              <div class="quality-bar">
-                <div class="quality-info">
-                  <span class="quality-label">Max loops</span>
-                  <span class="quality-val" id="max-iter-val">5</span>
-                </div>
-                <div class="quality-info">
-                  <span class="quality-label">Judge threshold</span>
-                  <span class="quality-val" id="threshold-val">0.75+</span>
-                </div>
-              </div>
-              <div class="actions-row">
-                <button type="submit" class="btn btn-primary" id="fire-btn">
-                  <span>Fire agents</span>
-                  <span class="mono-shortcut">Enter</span>
-                </button>
-                <button type="button" class="btn btn-ghost" id="reset-btn">Reset brief</button>
-              </div>
-            </form>
-          </div>
-        </section>
-
-        <section class="workspace-section" id="workspace-section" data-od-id="studio-workspace" hidden>
-          <div class="section-divider">
-            <span class="mono-stamp">IV · MULTI-AGENT PIPELINE</span>
-          </div>
-
-          <div class="pipeline-map" id="pipeline-map" data-od-id="studio-pipeline-map">
-            <div class="stage-node" id="node-plan">
-              <span class="node-num">01</span>
-              <span class="node-name">Planner</span>
-              <span class="node-status">Pending</span>
-            </div>
-            <div class="stage-arrow" aria-hidden="true"></div>
-            <div class="stage-node" id="node-research">
-              <span class="node-num">02</span>
-              <span class="node-name">Research (×3)</span>
-              <span class="node-status">Pending</span>
-            </div>
-            <div class="stage-arrow" aria-hidden="true"></div>
-            <div class="stage-node" id="node-write">
-              <span class="node-num">03</span>
-              <span class="node-name">Writer</span>
-              <span class="node-status">Pending</span>
-            </div>
-            <div class="stage-arrow" aria-hidden="true"></div>
-            <div class="stage-node" id="node-manage">
-              <span class="node-num">04</span>
-              <span class="node-name">Judge</span>
-              <span class="node-status">Pending</span>
-            </div>
-          </div>
-
-          <section class="agent-roster" id="agent-roster" aria-label="Agent status board" data-od-id="studio-agent-roster">
-            <div class="agent-roster-head">
-              <h3>Agents</h3>
-              <span class="mono-stamp" id="agent-roster-meta">Idle</span>
-            </div>
-            <div class="agent-roster-grid" id="agent-roster-grid">
-              <p class="side-hint">Fire agents to populate the live roster.</p>
+              <div class="agent-roster" style="padding:12px;"><div class="agent-roster-head"><h3 style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;">Agents</h3><span class="mono-stamp" id="agent-roster-meta" style="font-size:10px;">Idle</span></div><div class="agent-roster-grid" id="agent-roster-grid"><p class="side-hint">Fire agents to populate.</p></div></div>
             </div>
           </section>
+        </div>
 
-          <div class="workspace-grid" id="workspace-grid">
-            <div class="console-panel" id="console-panel" data-od-id="studio-console">
-              <div class="panel-head">
-                <div class="head-title">
-                  <span class="indicator-dot" id="live-dot"></span>
-                  <span>Live stream</span>
-                </div>
-                <span class="mono-badge" id="stream-status">Idle</span>
-              </div>
-              <div class="stream-box" id="stream-box" role="log" aria-live="polite">
-                <div class="stream-log-entry">
-                  <span class="log-time">[00:00:00]</span>
-                  <span class="log-tag system">SYSTEM</span>
-                  <span class="log-msg">Ready. Fire agents to start the pipeline.</span>
-                </div>
-              </div>
-              <div class="empty-state" id="console-empty" hidden>
-                <h3>No events yet</h3>
-                <p>Submit a brief to stream planner, research, write, and judge events here.</p>
-              </div>
+        <div class="subtab-panel" data-panel="draft" id="center-draft">
+          <section class="workspace-section" style="display:block;">
+            <div class="draft-panel" id="draft-panel" style="min-height:400px;">
+              <div class="panel-head" style="padding:10px 12px;"><div class="head-title"><span style="font-size:11px;">Draft output</span><span class="mono-badge" id="iteration-badge" style="font-size:10px;">Loop: 0</span><span class="publish-badge" id="published-badge" hidden style="font-size:10px;">Published</span></div><div class="draft-actions"><button type="button" class="btn btn-brand sm" id="save-btn" style="height:28px;">Save</button><button type="button" class="btn btn-ghost sm" id="publish-btn" style="height:28px;">Edit</button><span class="mono-stamp save-status" id="save-status" style="font-size:10px;"></span><button type="button" class="btn btn-ghost sm" id="history-btn" hidden style="height:28px;">History</button><button type="button" class="btn btn-ghost sm" id="copy-btn" style="height:28px;">Copy</button><button type="button" class="btn btn-ghost sm" id="download-btn" style="height:28px;">.qmd</button></div></div>
+              <div class="criteria-card-grid" id="criteria-card-grid" style="padding:8px;"></div>
+              <div class="block-revise-bar" id="block-revise-bar" hidden><div class="block-revise-left"><span class="mono-stamp" style="font-size:10px;">Block updates</span><label class="block-select-all" style="font-size:11px;"><input type="checkbox" id="select-all-blocks"/> All</label><span class="mono-stamp" id="selected-blocks-count" style="font-size:10px;">0</span></div><div class="block-revise-right"><input id="revise-instruction" type="text" placeholder="How should selected change?" style="min-width:200px;height:32px;font-size:12px;"/><button type="button" class="btn btn-brand sm" id="revise-blocks-btn" style="height:32px;">Update</button></div></div>
+              <aside class="apply-panel" id="apply-panel" hidden><div class="panel-head"><div class="head-title"><span style="font-size:11px;">Apply updates</span></div><div class="draft-actions"><button type="button" class="btn btn-ghost sm" id="apply-select-all-btn" style="height:28px;">All</button><button type="button" class="btn btn-primary sm" id="apply-selected-btn" style="height:28px;">Apply</button><button type="button" class="btn btn-ghost sm" id="dismiss-apply-btn" style="height:28px;">×</button></div></div><div id="apply-list" class="apply-list"></div></aside>
+              <div class="article-canvas" id="article-canvas" style="padding:16px;"><div class="placeholder-notice empty-state"><h3 style="font-size:14px;">Waiting for draft</h3><p style="font-size:12px;">Writer will stream here.</p></div></div>
+              <div class="editor-bar" id="editor-bar" hidden style="padding:8px 12px;"><div class="editor-bar-left"><span class="mono-stamp" style="font-size:10px;">Block editor</span><span class="blocks-count" id="blocks-count" style="font-size:10px;">0 blocks</span><span class="mono-stamp" id="article-meta" style="font-size:10px;"></span></div><div class="editor-bar-right"><button type="button" class="btn btn-ghost sm" id="toggle-revise-btn" style="height:28px;font-size:11px;">Update…</button><button type="button" class="btn btn-ghost sm" id="add-block-btn" style="height:28px;font-size:11px;">+ Paragraph</button></div></div>
+              <aside class="history-panel" id="history-panel" hidden><div class="panel-head"><div class="head-title"><span style="font-size:11px;">History</span></div><button type="button" class="btn btn-ghost sm" id="close-history-btn" style="height:28px;">Close</button></div><ol class="history-list" id="history-list"></ol></aside>
             </div>
-
-            <div class="draft-panel" id="draft-panel" data-od-id="studio-draft">
-              <div class="panel-head">
-                <div class="head-title">
-                  <span>Draft output</span>
-                  <span class="mono-badge" id="iteration-badge">Loop: 0</span>
-                  <span class="publish-badge" id="published-badge" hidden>Published · block editor</span>
-                </div>
-                <div class="draft-actions">
-                  <button type="button" class="btn btn-primary sm" id="save-btn">Save chapter</button>
-                  <button type="button" class="btn btn-ghost sm" id="publish-btn">Edit blocks</button>
-                  <span class="mono-stamp save-status" id="save-status" aria-live="polite"></span>
-                  <button type="button" class="btn btn-ghost sm" id="history-btn" hidden>History</button>
-                  <button type="button" class="btn btn-ghost sm" id="copy-btn">Copy</button>
-                  <button type="button" class="btn btn-ghost sm" id="download-btn" title="Export Quarto notebook (.qmd)">Export .qmd</button>
-                  <button type="button" class="btn btn-ghost sm" id="toggle-console-draft" title="Show or hide live stream">Console</button>
-                </div>
-              </div>
-              <div class="criteria-card-grid" id="criteria-card-grid"></div>
-              <div class="block-revise-bar" id="block-revise-bar" hidden>
-                <div class="block-revise-left">
-                  <span class="mono-stamp">Block updates</span>
-                  <label class="block-select-all"><input type="checkbox" id="select-all-blocks" /> All blocks</label>
-                  <span class="mono-stamp" id="selected-blocks-count">0 selected</span>
-                </div>
-                <div class="block-revise-right">
-                  <input id="revise-instruction" type="text" placeholder="How should selected blocks change?" />
-                  <button type="button" class="btn btn-primary sm" id="revise-blocks-btn">Update selected</button>
-                </div>
-              </div>
-              <aside class="apply-panel" id="apply-panel" hidden>
-                <div class="panel-head">
-                  <div class="head-title"><span>Apply agent updates</span></div>
-                  <div class="draft-actions">
-                    <button type="button" class="btn btn-ghost sm" id="apply-select-all-btn">Select all</button>
-                    <button type="button" class="btn btn-primary sm" id="apply-selected-btn">Apply selected</button>
-                    <button type="button" class="btn btn-ghost sm" id="dismiss-apply-btn">Dismiss</button>
-                  </div>
-                </div>
-                <p class="side-hint">Choose which proposed blocks to merge into the chapter (or article). Unchecked blocks stay as-is.</p>
-                <div id="apply-list" class="apply-list"></div>
-              </aside>
-              <div class="article-canvas" id="article-canvas">
-                <div class="placeholder-notice empty-state">
-                  <h3>Waiting for draft</h3>
-                  <p>The writer agent will stream the article here once planning and research finish.</p>
-                </div>
-              </div>
-              <div class="editor-bar" id="editor-bar" hidden>
-                <div class="editor-bar-left">
-                  <span class="mono-stamp">Block editor</span>
-                  <span class="blocks-count" id="blocks-count">0 blocks</span>
-                  <span class="mono-stamp" id="article-meta"></span>
-                </div>
-                <div class="editor-bar-right">
-                  <button type="button" class="btn btn-ghost sm" id="toggle-revise-btn">Update blocks…</button>
-                  <button type="button" class="btn btn-ghost sm" id="add-block-btn">Add paragraph</button>
-                </div>
-              </div>
-              <aside class="history-panel" id="history-panel" hidden>
-                <div class="panel-head">
-                  <div class="head-title"><span>Revision history</span></div>
-                  <button type="button" class="btn btn-ghost sm" id="close-history-btn">Close</button>
-                </div>
-                <ol class="history-list" id="history-list"></ol>
-              </aside>
-            </div>
-          </div>
-        </section>
+          </section>
+        </div>
       </div>
-    </div>
 
-    <script type="module" src="/app.js"></script>
-  </body>
+      <aside class="right-rail" aria-label="Pipeline status">
+        <section class="agent-roster" id="agent-roster">
+          <div class="agent-roster-head"><h3 style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;">Agents</h3><span class="mono-stamp" id="agent-roster-meta-duplicate" style="font-size:10px;">Idle</span></div>
+          <div class="agent-roster-grid" id="agent-roster-grid-duplicate"><p class="side-hint">Live roster mirrors pipeline.</p></div>
+        </section>
+        <div style="padding:12px;border:1px solid var(--border);border-radius:10px;background:#fff;">
+          <p class="eyebrow" style="font-size:10px;margin:0 0 6px;">Quality gate</p>
+          <p style="font-size:12px;color:var(--muted);margin:0 0 8px;line-height:1.4;">All must clear threshold or loops.</p>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<script>
+const subtabBtns = document.querySelectorAll('.subtab');
+const subtabPanels = document.querySelectorAll('.subtab-panel');
+function setCenterTab(name){
+  subtabBtns.forEach(b=>{ const on=b.dataset.centerTab===name; b.classList.toggle('active',on); b.setAttribute('aria-selected', on?'true':'false');});
+  subtabPanels.forEach(p=>{ p.classList.toggle('active', p.dataset.panel===name); });
+  try{ localStorage.setItem('quill-center-tab-min', name);}catch{}
+}
+subtabBtns.forEach(btn=>{ btn.addEventListener('click',()=> setCenterTab(btn.dataset.centerTab)); });
+try{ const saved=localStorage.getItem('quill-center-tab-min'); if(saved) setCenterTab(saved);}catch{}
+document.addEventListener('keydown', e=>{
+  if(e.target.tagName==='INPUT' || e.target.tagName==='TEXTAREA') return;
+  if(e.metaKey||e.ctrlKey){
+    if(e.key==='1'){ e.preventDefault(); setCenterTab('brief'); }
+    if(e.key==='2'){ e.preventDefault(); setCenterTab('pipeline'); }
+    if(e.key==='3'){ e.preventDefault(); setCenterTab('draft'); }
+  }
+});
+const origMeta = document.getElementById('agent-roster-meta');
+const dupMeta = document.getElementById('agent-roster-meta-duplicate');
+if(origMeta && dupMeta){
+  const obs = new MutationObserver(()=>{ dupMeta.textContent = origMeta.textContent; });
+  obs.observe(origMeta, {childList:true, characterData:true, subtree:true});
+}
+</script>
+<script type="module" src="/app.js"></script>
+</body>
 </html>

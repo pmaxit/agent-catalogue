@@ -79,7 +79,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const suggestBannerLabel = document.getElementById("suggest-banner-label");
   const suggestAcceptBtn = document.getElementById("suggest-accept-btn");
   const suggestDismissBtn = document.getElementById("suggest-dismiss-btn");
+  const paramsRow = document.getElementById("params-row");
   const saveStatusEl = document.getElementById("save-status");
+  const criteriaSelector = document.getElementById("criteria-selector");
+  const criteriaCount = document.getElementById("criteria-count");
+  const selectedThemeLabel = document.getElementById("selected-theme-label");
+  const selectedAudienceLabel = document.getElementById("selected-audience-label");
+  const briefReadiness = document.getElementById("brief-readiness");
 
   let currentGoal = "Thought Leadership & Opinion Essay";
   let currentTheme = "Agentic Command";
@@ -110,8 +116,11 @@ document.addEventListener("DOMContentLoaded", () => {
   let pendingSuggestion = null;
   let suggestAbort = null;
   let suggestTimer = null;
+  let suggestFlashTimer = null;
   let lastDismissedSuggestKey = "";
   let userEditedBriefAfterSuggest = false;
+  let suggestUndoSnapshot = null;
+  let suggestMode = "idle"; // idle | loading | ready | applied
   let chapterDirty = false;
   let lastAutosaveAt = 0;
   /** Railway data API origin when local studio must not use in-memory/local SQLite. */
@@ -119,6 +128,20 @@ document.addEventListener("DOMContentLoaded", () => {
     location.hostname === "localhost" || location.hostname === "127.0.0.1"
       ? "https://writing-agent-production-b61f.up.railway.app"
       : "";
+
+  function selectedCriteria() {
+    return [...(criteriaSelector?.querySelectorAll("input:checked") || [])].map(
+      (input) => input.dataset.criterion,
+    );
+  }
+
+  function updateBriefReadiness() {
+    const ready = [Boolean(currentTheme), Boolean(briefInput?.value.trim()), selectedCriteria().length > 0].filter(Boolean).length;
+    if (briefReadiness) briefReadiness.textContent = `${ready} of 3 ready`;
+    if (criteriaCount) criteriaCount.textContent = `${selectedCriteria().length} selected`;
+    if (selectedThemeLabel) selectedThemeLabel.textContent = currentTheme;
+    if (selectedAudienceLabel) selectedAudienceLabel.textContent = audienceInput?.value || "Audience not set";
+  }
 
   function dataUrl(path) {
     const p = path.startsWith("/") ? path : `/${path}`;
@@ -402,6 +425,67 @@ document.addEventListener("DOMContentLoaded", () => {
     scheduleBriefSuggestions({ reason: "new-chapter" });
   }
 
+  // ——— Simplified sidepanel with edit capability ———
+  let editingBookId = null;
+
+  async function saveBookEdit(bookId, newTitle, newSynopsis) {
+    if (!newTitle.trim()) {
+      window.alert("Title is required");
+      return;
+    }
+    try {
+      const res = await fetch(dataUrl(`/api/books/${bookId}`), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: newTitle.trim(),
+          synopsis: newSynopsis.trim(),
+          overviewMarkdown: newSynopsis.trim()
+            ? `# ${newTitle.trim()}\n\n${newSynopsis.trim()}`
+            : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to save book");
+      editingBookId = null;
+      if (bookId === currentBookId) {
+        currentBookTitle = data.book.title;
+        currentBookSynopsis = data.book.synopsis || "";
+        if (bookRailTitle) bookRailTitle.textContent = data.book.title;
+      }
+      addLog("BOOK", `Updated “${data.book.title}”`, "finish");
+      await refreshBooksList();
+    } catch (err) {
+      window.alert(err.message);
+    }
+  }
+
+  function renderBookEditForm(container, book) {
+    container.innerHTML = "";
+    const form = document.createElement("div");
+    form.className = "book-edit-form";
+    form.innerHTML = `
+      <input class="book-edit-title" type="text" value="${escapeHtml(book.title)}" placeholder="Book title" />
+      <textarea class="book-edit-synopsis" rows="2" placeholder="Synopsis (optional)">${escapeHtml(book.synopsis || "")}</textarea>
+      <div class="book-edit-actions">
+        <button type="button" class="btn btn-primary sm btn-save">Save</button>
+        <button type="button" class="btn btn-ghost sm btn-cancel">Cancel</button>
+      </div>
+    `;
+    const titleInput = form.querySelector(".book-edit-title");
+    const synInput = form.querySelector(".book-edit-synopsis");
+    form.querySelector(".btn-save").addEventListener("click", () => {
+      saveBookEdit(book.id, titleInput.value, synInput.value);
+    });
+    form.querySelector(".btn-cancel").addEventListener("click", () => {
+      editingBookId = null;
+      refreshBooksList();
+    });
+    container.appendChild(form);
+    titleInput.focus();
+    titleInput.select();
+  }
+
   async function refreshBooksList() {
     if (!booksList) return;
     try {
@@ -410,43 +494,77 @@ document.addEventListener("DOMContentLoaded", () => {
       const data = await res.json();
       const books = data.books || [];
       if (!books.length) {
-        booksList.innerHTML = `<p class="side-hint">No books yet — use + New</p>`;
+        booksList.innerHTML = `<div class="empty-books"><p class="side-hint">No books yet</p><button type="button" class="btn btn-primary sm" id="empty-new-book">+ Create your first book</button></div>`;
+        document.getElementById("empty-new-book")?.addEventListener("click", createBookFlow);
         return;
       }
       booksList.innerHTML = "";
       for (const b of books) {
         const wrap = document.createElement("div");
-        wrap.className = `book-tree-item${b.id === currentBookId ? " open" : ""}`;
+        wrap.className = `book-simple-item${b.id === currentBookId ? " active" : ""}`;
+        wrap.dataset.bookId = b.id;
+
+        // If this book is being edited, show inline form
+        if (editingBookId === b.id) {
+          const editContainer = document.createElement("div");
+          editContainer.className = "book-simple-row editing";
+          renderBookEditForm(editContainer, b);
+          wrap.appendChild(editContainer);
+          booksList.appendChild(wrap);
+          continue;
+        }
+
         const row = document.createElement("div");
-        row.className = `article-link-row${b.id === currentBookId ? " active" : ""}`;
-        const open = document.createElement("button");
-        open.type = "button";
-        open.className = "article-link";
-        open.innerHTML = `
-          <span class="article-link-title">${escapeHtml(b.title)}</span>
-          <span class="article-link-meta">/${escapeHtml(b.slug)} · ${b.chapterCount || 0} ch</span>
+        row.className = `book-simple-row${b.id === currentBookId ? " active" : ""}`;
+
+        const main = document.createElement("button");
+        main.type = "button";
+        main.className = "book-simple-main";
+        main.title = b.synopsis || b.title;
+        main.innerHTML = `
+          <span class="book-simple-title">${escapeHtml(b.title)}</span>
+          <span class="book-simple-meta">${b.chapterCount || 0} chapter${(b.chapterCount||0)===1?"":"s"} · ${escapeHtml(b.slug)}</span>
         `;
-        open.addEventListener("click", () => loadBook(b.id));
+        main.addEventListener("click", () => loadBook(b.id));
+
+        const actions = document.createElement("div");
+        actions.className = "book-simple-actions";
+
+        const editBtn = document.createElement("button");
+        editBtn.type = "button";
+        editBtn.className = "book-action-btn edit";
+        editBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M11.5 2.5l2 2-7 7H4.5v-2l7-7z M10 3.5l2 2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+        editBtn.title = "Edit book";
+        editBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          editingBookId = b.id;
+          refreshBooksList();
+        });
+
         const ext = document.createElement("a");
-        ext.className = "article-edit-btn";
+        ext.className = "book-action-btn open";
         ext.href = b.url || `/books/${b.slug}`;
         ext.target = "_blank";
         ext.rel = "noopener";
-        ext.textContent = "↗";
-        ext.title = "Open public URL";
-        row.appendChild(open);
-        row.appendChild(ext);
+        ext.innerHTML = `↗`;
+        ext.title = "Open public book";
+
+        actions.appendChild(editBtn);
+        actions.appendChild(ext);
+
+        row.appendChild(main);
+        row.appendChild(actions);
         wrap.appendChild(row);
 
         if (b.id === currentBookId && bookChapters.length) {
           const ul = document.createElement("ul");
-          ul.className = "book-tree-chapters";
+          ul.className = "book-simple-chapters";
           bookChapters.forEach((c, i) => {
             const li = document.createElement("li");
             li.className = c.id === currentChapterId ? "active" : "";
             const btn = document.createElement("button");
             btn.type = "button";
-            btn.textContent = `${i + 1}. ${c.title}`;
+            btn.innerHTML = `<span class="ch-num">Ch. ${i+1}</span><span class="ch-title">${escapeHtml(c.title)}</span>`;
             btn.addEventListener("click", () => loadChapter(c.id));
             li.appendChild(btn);
             ul.appendChild(li);
@@ -556,7 +674,12 @@ document.addEventListener("DOMContentLoaded", () => {
     await refreshBooksList();
     setActivity("library");
     addLog("BOOK", `Loaded chapter “${chapter.title}”`, "system");
-    scheduleBriefSuggestions({ reason: "chapter" });
+    // Don't overwrite a saved chapter brief — only suggest when empty/placeholder
+    if (!chapter.brief || isPlaceholderBrief(chapter.brief)) {
+      scheduleBriefSuggestions({ reason: "chapter" });
+    } else {
+      hideSuggestBanner();
+    }
     workspaceSection.scrollIntoView({ behavior: "smooth" });
   }
 
@@ -594,7 +717,21 @@ document.addEventListener("DOMContentLoaded", () => {
     toneInput.value = card.dataset.tone;
     formatInput.value = card.dataset.format;
     if (card.dataset.length) lengthInput.value = card.dataset.length;
+    updateBriefReadiness();
   });
+
+  criteriaSelector?.addEventListener("change", () => {
+    const inputs = [...criteriaSelector.querySelectorAll("input")];
+    if (!selectedCriteria().length) {
+      const changed = inputs.find((input) => input === document.activeElement);
+      if (changed) changed.checked = true;
+      return;
+    }
+    updateBriefReadiness();
+  });
+
+  briefInput?.addEventListener("input", updateBriefReadiness);
+  audienceInput?.addEventListener("input", updateBriefReadiness);
 
   if (studioSearch) {
     studioSearch.addEventListener("input", () => {
@@ -621,7 +758,10 @@ document.addEventListener("DOMContentLoaded", () => {
   resetBtn.addEventListener("click", () => {
     briefInput.value = "";
     briefInput.focus();
+    updateBriefReadiness();
   });
+
+  updateBriefReadiness();
 
   const addLog = (tag, msg, tagClass = "system") => {
     const timeStr = new Date().toTimeString().split(" ")[0];
@@ -764,7 +904,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const response = await fetch("/api/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      body: JSON.stringify({
           brief,
           audience: audienceInput.value,
           tone: toneInput.value,
@@ -772,6 +912,7 @@ document.addEventListener("DOMContentLoaded", () => {
           length: lengthInput.value,
           theme: currentTheme,
           goal: currentGoal,
+          judgingCriteria: selectedCriteria(),
           bookTitle: currentBookTitle || undefined,
           chapterTitle:
             currentChapterTitle ||
@@ -2190,9 +2331,75 @@ document.addEventListener("DOMContentLoaded", () => {
     ].join("|");
   }
 
+  function isPlaceholderBrief(text) {
+    const t = (text || "").trim();
+    if (!t) return true;
+    return /^Write chapter \d+ of [“"'].+[”"']. Cover the next practical topic/i.test(
+      t,
+    );
+  }
+
+  function captureSuggestSnapshot() {
+    return {
+      brief: briefInput?.value ?? "",
+      audience: audienceInput?.value ?? "",
+      tone: toneInput?.value ?? "",
+      format: formatInput?.value ?? "",
+      length: lengthInput?.value ?? "",
+      theme: currentTheme,
+      goal: currentGoal,
+    };
+  }
+
+  function restoreSuggestSnapshot(snapshot) {
+    if (!snapshot) return;
+    if (briefInput) briefInput.value = snapshot.brief;
+    if (audienceInput) audienceInput.value = snapshot.audience;
+    if (toneInput) toneInput.value = snapshot.tone;
+    if (formatInput) formatInput.value = snapshot.format;
+    if (lengthInput) lengthInput.value = snapshot.length;
+    if (snapshot.theme) selectThemeCard(snapshot.theme);
+    if (snapshot.goal) selectGoalCard(snapshot.goal);
+    if (snapshot.tone && toneInput) toneInput.value = snapshot.tone;
+    if (snapshot.format && formatInput) formatInput.value = snapshot.format;
+    if (snapshot.length && lengthInput) lengthInput.value = snapshot.length;
+  }
+
   function hideSuggestBanner() {
-    if (suggestBanner) suggestBanner.hidden = true;
+    if (suggestBanner) {
+      suggestBanner.hidden = true;
+      suggestBanner.classList.remove("is-loading", "is-ready", "is-applied");
+    }
     pendingSuggestion = null;
+    suggestUndoSnapshot = null;
+    suggestMode = "idle";
+    if (suggestAcceptBtn) suggestAcceptBtn.textContent = "Accept";
+  }
+
+  function flashSuggestedFields(suggestion) {
+    const targets = [briefInput, paramsRow].filter(Boolean);
+    if (suggestion?.theme && themesSelector) {
+      const themeCard = [...themesSelector.querySelectorAll(".theme-card")].find(
+        (c) => c.dataset.theme === suggestion.theme,
+      );
+      if (themeCard) targets.push(themeCard);
+    }
+    if (suggestion?.goal && goalsSelector) {
+      const goalCard = [...goalsSelector.querySelectorAll(".option-card")].find(
+        (c) => c.dataset.goal === suggestion.goal,
+      );
+      if (goalCard) targets.push(goalCard);
+    }
+    for (const el of targets) {
+      el.classList.remove("suggest-flash");
+      // Force restart animation if re-applied quickly
+      void el.offsetWidth;
+      el.classList.add("suggest-flash");
+    }
+    if (suggestFlashTimer) clearTimeout(suggestFlashTimer);
+    suggestFlashTimer = setTimeout(() => {
+      for (const el of targets) el.classList.remove("suggest-flash");
+    }, 1200);
   }
 
   function selectThemeCard(themeName) {
@@ -2213,9 +2420,9 @@ document.addEventListener("DOMContentLoaded", () => {
     else currentGoal = goalName;
   }
 
-  function applySuggestion(suggestion) {
+  function fillSuggestionFields(suggestion) {
     if (!suggestion) return;
-    briefInput.value = suggestion.brief || briefInput.value;
+    if (suggestion.brief) briefInput.value = suggestion.brief;
     if (suggestion.audience) audienceInput.value = suggestion.audience;
     if (suggestion.tone) toneInput.value = suggestion.tone;
     if (suggestion.format) formatInput.value = suggestion.format;
@@ -2226,29 +2433,77 @@ document.addEventListener("DOMContentLoaded", () => {
     if (suggestion.tone) toneInput.value = suggestion.tone;
     if (suggestion.format) formatInput.value = suggestion.format;
     if (suggestion.length) lengthInput.value = suggestion.length;
-    userEditedBriefAfterSuggest = false;
-    hideSuggestBanner();
-    addLog("SUGGEST", "Accepted AI brief & parameter suggestions", "finish");
+    if (suggestion.brief && briefInput) {
+      const text = String(suggestion.brief);
+      const hardLines = text.split(/\n/).length;
+      const wrapLines = Math.ceil(text.length / 72);
+      briefInput.rows = Math.min(14, Math.max(6, hardLines, wrapLines));
+    }
   }
 
-  function showSuggestBanner(suggestion) {
+  function showSuggestBanner(suggestion, { applied = false } = {}) {
     pendingSuggestion = suggestion;
     if (!suggestBanner) return;
     suggestBanner.hidden = false;
+    suggestBanner.classList.remove("is-loading", "is-ready", "is-applied");
+    suggestBanner.classList.add(applied ? "is-applied" : "is-ready");
+    suggestMode = applied ? "applied" : "ready";
     if (suggestStatus) suggestStatus.hidden = true;
-    if (suggestAcceptBtn) suggestAcceptBtn.hidden = false;
+    if (suggestAcceptBtn) {
+      suggestAcceptBtn.hidden = false;
+      suggestAcceptBtn.textContent = applied ? "Undo" : "Accept";
+    }
     if (suggestDismissBtn) suggestDismissBtn.hidden = false;
     const labelBits = [currentBookTitle, currentChapterTitle].filter(Boolean);
     if (suggestBannerLabel) {
+      const prefix = applied ? "AI suggestions applied" : "AI suggestions ready";
       suggestBannerLabel.textContent = labelBits.length
-        ? `AI suggestions · ${labelBits.join(" / ")}`
-        : "AI suggestions";
+        ? `${prefix} · ${labelBits.join(" / ")}`
+        : prefix;
     }
     if (suggestRationale) {
       suggestRationale.textContent =
         suggestion.rationale ||
-        "Suggested brief and parameters based on book and chapter titles.";
+        (applied
+          ? "Brief, audience, tone, format, length, theme, and goal were filled from book/chapter context."
+          : "Suggested brief and parameters based on book and chapter titles.");
     }
+    suggestBanner.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  function applySuggestion(suggestion, { auto = false } = {}) {
+    if (!suggestion) return;
+    if (auto || !suggestUndoSnapshot) {
+      suggestUndoSnapshot = captureSuggestSnapshot();
+    }
+    fillSuggestionFields(suggestion);
+    userEditedBriefAfterSuggest = false;
+    showSuggestBanner(suggestion, { applied: true });
+    flashSuggestedFields(suggestion);
+    addLog(
+      "SUGGEST",
+      auto
+        ? "Applied AI brief & parameter suggestions"
+        : "Accepted AI brief & parameter suggestions",
+      "finish",
+    );
+  }
+
+  function undoSuggestion() {
+    if (!suggestUndoSnapshot) {
+      hideSuggestBanner();
+      return;
+    }
+    restoreSuggestSnapshot(suggestUndoSnapshot);
+    suggestUndoSnapshot = null;
+    pendingSuggestion = null;
+    if (suggestBanner) {
+      suggestBanner.classList.remove("is-loading", "is-ready", "is-applied");
+      suggestBanner.hidden = true;
+    }
+    suggestMode = "idle";
+    if (suggestAcceptBtn) suggestAcceptBtn.textContent = "Accept";
+    addLog("SUGGEST", "Undid AI brief suggestions", "system");
   }
 
   function scheduleBriefSuggestions() {
@@ -2269,17 +2524,30 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (suggestAbort) suggestAbort.abort();
     suggestAbort = new AbortController();
+    suggestMode = "loading";
 
     if (suggestBanner) {
       suggestBanner.hidden = false;
+      suggestBanner.classList.remove("is-ready", "is-applied");
+      suggestBanner.classList.add("is-loading");
       if (suggestRationale) suggestRationale.textContent = "";
       if (suggestStatus) {
         suggestStatus.hidden = false;
         suggestStatus.textContent =
           "Generating suggestions from book and chapter titles…";
       }
-      if (suggestAcceptBtn) suggestAcceptBtn.hidden = true;
+      if (suggestBannerLabel) {
+        const labelBits = [currentBookTitle, currentChapterTitle].filter(Boolean);
+        suggestBannerLabel.textContent = labelBits.length
+          ? `Generating AI suggestions · ${labelBits.join(" / ")}`
+          : "Generating AI suggestions";
+      }
+      if (suggestAcceptBtn) {
+        suggestAcceptBtn.hidden = true;
+        suggestAcceptBtn.textContent = "Accept";
+      }
       if (suggestDismissBtn) suggestDismissBtn.hidden = true;
+      suggestBanner.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
 
     try {
@@ -2299,8 +2567,19 @@ document.addEventListener("DOMContentLoaded", () => {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Suggest failed");
       if (suggestContextKey() !== key) return;
-      showSuggestBanner(data.suggestion);
-      addLog("SUGGEST", "Ready — Accept or Dismiss AI brief suggestions", "system");
+      const suggestion = data.suggestion;
+      // Apply by default unless the user already edited the brief while waiting
+      if (userEditedBriefAfterSuggest) {
+        pendingSuggestion = suggestion;
+        showSuggestBanner(suggestion, { applied: false });
+        addLog(
+          "SUGGEST",
+          "Ready — Accept or Dismiss AI brief suggestions",
+          "system",
+        );
+      } else {
+        applySuggestion(suggestion, { auto: true });
+      }
     } catch (err) {
       if (err.name === "AbortError") return;
       hideSuggestBanner();
@@ -2309,7 +2588,11 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   suggestAcceptBtn?.addEventListener("click", () => {
-    applySuggestion(pendingSuggestion);
+    if (suggestMode === "applied") {
+      undoSuggestion();
+      return;
+    }
+    applySuggestion(pendingSuggestion, { auto: false });
   });
   suggestDismissBtn?.addEventListener("click", () => {
     lastDismissedSuggestKey = suggestContextKey();
@@ -2317,7 +2600,13 @@ document.addEventListener("DOMContentLoaded", () => {
     addLog("SUGGEST", "Dismissed AI suggestions for this chapter context", "system");
   });
   briefInput?.addEventListener("input", () => {
-    if (pendingSuggestion || (suggestBanner && !suggestBanner.hidden)) {
+    if (
+      suggestMode === "loading" ||
+      suggestMode === "ready" ||
+      suggestMode === "applied" ||
+      pendingSuggestion ||
+      (suggestBanner && !suggestBanner.hidden)
+    ) {
       userEditedBriefAfterSuggest = true;
     }
   });
