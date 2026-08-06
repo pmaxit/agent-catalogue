@@ -1,48 +1,44 @@
-/* ─────────────────────────────────────────────────────────
- * Quill — Notion Warm (Option B) — Implemented as main design
- * Warm neutrals #f6f5f4, whisper borders, Notion blue CTA
- * Tokens extracted from OD Option B artifact
- * ─────────────────────────────────────────────────────── */
+/* Quill — macOS native tokens (Apple HIG / system blue) */
 :root {
   --bg: #ffffff;
-  --surface: #f6f5f4;                 /* Warm white — left/right panes */
-  --surface-warm: #efeeec;            /* Deeper warm */
-  --surface-card: #ffffff;            /* Cards on warm */
-  --fg: rgba(0,0,0,0.95);             /* Near-black 95% — micro warmth */
-  --fg-2: #31302e;                    /* Warm dark */
-  --muted: #615d59;                   /* Warm gray 500 */
-  --meta: #a39e98;                    /* Warm gray 300 */
-  --border: rgba(0, 0, 0, 0.10);       /* Whisper border - standard */
-  --border-soft: rgba(0, 0, 0, 0.06);  /* Whisper soft */
-  --border-medium: rgba(0,0,0,0.16);
-  --border-strong: rgba(0,0,0,0.22);
-  --accent: #0075de;                  /* Notion Blue */
+  --surface: #f5f5f7;
+  --surface-warm: #fbfbfd;
+  --surface-card: #ffffff;
+  --fg: #1d1d1f;
+  --fg-2: #1d1d1f;
+  --muted: #6e6e73;
+  --meta: #86868b;
+  --border: #d2d2d7;
+  --border-soft: #e8e8ed;
+  --border-medium: #c7c7cc;
+  --border-strong: #8e8e93;
+  --accent: #007aff;
   --accent-on: #ffffff;
-  --accent-hover: #005bab;
-  --accent-active: #004a9a;
-  --brand: #0075de;                   /* Alias for linear compatibility */
-  --brand-light: #f2f9ff;             /* Tinted blue badge bg */
-  --brand-deep: #097fe8;              /* Badge text */
-  --success: #1aae39;
-  --success-bg: #eefaf1;
-  --warn: #dd5b00;
-  --warn-bg: #fff7ed;
-  --danger: #dc2626;
-  --danger-bg: #fee2e2;
-  --font-display: "Inter", -apple-system, system-ui, "Segoe UI", Helvetica, Arial, sans-serif;
-  --font-body: "Inter", -apple-system, system-ui, "Segoe UI", Helvetica, Arial, sans-serif;
-  --font-mono: ui-monospace, "Geist Mono", "SF Mono", "JetBrains Mono", Menlo, Monaco, Consolas, monospace;
+  --accent-hover: #248cff;
+  --accent-active: #006adc;
+  --brand: #007aff;
+  --brand-light: #e8f2ff;
+  --brand-deep: #0066cc;
+  --success: #30d158;
+  --success-bg: rgba(48, 209, 88, 0.12);
+  --warn: #ff9f0a;
+  --warn-bg: rgba(255, 159, 10, 0.12);
+  --danger: #ff453a;
+  --danger-bg: rgba(255, 69, 58, 0.12);
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace;
   --text-xs: 12px;
-  --text-sm: 14px;
-  --text-base: 16px;
-  --text-lg: 20px;
-  --text-xl: 26px;
-  --text-2xl: 40px;
-  --text-3xl: 48px;
-  --text-4xl: 64px;
-  --leading-body: 1.5;
-  --leading-tight: 1.02;
-  --tracking-display: -0.033em;
+  --text-sm: 13px;
+  --text-base: 15px;
+  --text-lg: 17px;
+  --text-xl: 22px;
+  --text-2xl: 28px;
+  --text-3xl: 40px;
+  --text-4xl: 56px;
+  --leading-body: 1.47;
+  --leading-tight: 1.1;
+  --tracking-display: -0.02em;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -54,19 +50,24 @@
   --section-y-desktop: 80px;
   --section-y-tablet: 48px;
   --section-y-phone: 32px;
-  --radius-sm: 4px;
+  --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
-  --radius-pill: 9999px;
-  --elev-raised: rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2px 7.85px, rgba(0,0,0,0.02) 0px 0.8px 2.93px, rgba(0,0,0,0.01) 0px 0.175px 1.04px;
-  --elev-card: var(--elev-raised);
-  --focus-ring: 0 0 0 3px rgba(9,127,232,0.22);
+  --radius-pill: 980px;
+  --elev-raised: 0 12px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+  --elev-card: 0 0.5px 1px rgba(0, 0, 0, 0.08);
+  --focus-ring: 0 0 0 3px rgba(0, 122, 255, 0.28);
   --motion-fast: 150ms;
-  --motion-base: 200ms;
-  --ease-standard: cubic-bezier(0.2,0,0,1);
+  --motion-base: 220ms;
+  --ease-standard: cubic-bezier(0.28, 0, 0.22, 1);
   --container-max: 1200px;
-  --sidebar-left: 300px;
-  --sidebar-right: 360px;
+  --sidebar-left: 240px;
+  --sidebar-right: 300px;
   --container-gutter-desktop: 24px;
-  --header-height: 56px;
+  --header-height: 52px;
+  --mac-row: 28px;
+  --mac-radius: 7px;
+  --mac-toolbar: rgba(251, 251, 253, 0.92);
+  --mac-sep: #d2d2d7;
+  --desktop-bg: #c9ccd3;
 }

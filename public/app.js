@@ -189,31 +189,30 @@ document.addEventListener("DOMContentLoaded", () => {
       healthPill.classList.toggle("live", !mock);
 
       const agentCount = Array.isArray(config.agents) ? config.agents.length : 4;
-      document.getElementById("kpi-agents").textContent = String(agentCount);
-      document.getElementById("kpi-iters").textContent = String(
-        config.goal?.max_iterations ?? 5,
-      );
-      document.getElementById("max-iter-val").textContent = String(
-        config.goal?.max_iterations ?? 5,
-      );
+      const setText = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value;
+      };
+      setText("kpi-agents", String(agentCount));
+      setText("kpi-iters", String(config.goal?.max_iterations ?? 5));
+      setText("max-iter-val", String(config.goal?.max_iterations ?? 5));
 
       const thresholds = (config.goal?.criteria || []).map((c) => c.threshold);
       if (thresholds.length) {
         criterionThreshold = Math.min(...thresholds);
-        document.getElementById("kpi-threshold").textContent =
-          criterionThreshold.toFixed(2);
-        document.getElementById("threshold-val").textContent =
-          `${criterionThreshold}+`;
+        setText("kpi-threshold", criterionThreshold.toFixed(2));
+        setText("threshold-val", `${criterionThreshold}+`);
       }
 
-      document.getElementById("kpi-runtime").textContent = mock
-        ? "mock"
-        : config.defaults?.runtime || "api";
-      document.getElementById("kpi-runtime-delta").textContent = dataApiBase
-        ? `Data → ${dataApiBase.replace(/^https?:\/\//, "")}`
-        : mock
-          ? "Local mock runner active"
-          : "Cursor Cloud Agents API";
+      setText("kpi-runtime", mock ? "mock" : config.defaults?.runtime || "api");
+      setText(
+        "kpi-runtime-delta",
+        dataApiBase
+          ? `Data → ${dataApiBase.replace(/^https?:\/\//, "")}`
+          : mock
+            ? "Local mock runner active"
+            : "Cursor Cloud Agents API",
+      );
     } catch (err) {
       healthPill.textContent = "Offline";
       modeBadge.textContent = "STATUS: ERROR";
@@ -264,21 +263,30 @@ document.addEventListener("DOMContentLoaded", () => {
     newMenuBtn.setAttribute("aria-expanded", "false");
   }
 
+  function isMacStudio() {
+    return Boolean(document.querySelector(".mac-app, .mac-window"));
+  }
+
   function setActivity(name) {
     document.querySelectorAll(".rail-btn[data-activity]").forEach((btn) => {
       const on = btn.dataset.activity === name;
       btn.classList.toggle("active", on);
       btn.setAttribute("aria-pressed", on ? "true" : "false");
     });
-    document.querySelectorAll(".drawer-panel").forEach((panel) => {
-      panel.hidden = panel.dataset.panel !== name;
-    });
+    // macOS shell keeps the library source list always visible
+    if (!isMacStudio()) {
+      document.querySelectorAll(".drawer-panel").forEach((panel) => {
+        panel.hidden = panel.dataset.panel !== name;
+      });
+    }
     if (name === "compose") {
+      window.setQuillCenterTab?.("brief");
       wizardSection?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
     if (name === "run") {
-      workspaceSection.hidden = false;
-      workspaceSection.scrollIntoView({ behavior: "smooth", block: "start" });
+      window.setQuillCenterTab?.("pipeline");
+      if (workspaceSection) workspaceSection.hidden = false;
+      workspaceSection?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }
 
@@ -289,15 +297,23 @@ document.addEventListener("DOMContentLoaded", () => {
       btn.setAttribute("aria-selected", on ? "true" : "false");
     });
     document.querySelectorAll(".library-pane").forEach((pane) => {
-      pane.hidden = pane.dataset.libPane !== tab;
+      const on = pane.dataset.libPane === tab;
+      pane.hidden = !on;
+      pane.style.display = on ? "" : "none";
     });
+    // Book chapter rail is retired in macOS outline sidebar
+    if (bookRail) bookRail.hidden = true;
+    if (tab === "articles") void refreshArticlesList();
   }
 
   function toggleConsole() {
+    if (!consolePanel) return;
     consolePanel.hidden = !consolePanel.hidden;
-    workspaceGrid.style.gridTemplateColumns = consolePanel.hidden
-      ? "1fr"
-      : "420px 1fr";
+    if (workspaceGrid) {
+      workspaceGrid.style.gridTemplateColumns = consolePanel.hidden
+        ? "1fr"
+        : "420px 1fr";
+    }
   }
 
   menuNewPiece?.addEventListener("click", () => {
@@ -494,17 +510,17 @@ document.addEventListener("DOMContentLoaded", () => {
       const data = await res.json();
       const books = data.books || [];
       if (!books.length) {
-        booksList.innerHTML = `<div class="empty-books"><p class="side-hint">No books yet</p><button type="button" class="btn btn-primary sm" id="empty-new-book">+ Create your first book</button></div>`;
+        booksList.innerHTML = `<div class="empty-books"><p class="side-hint">No books yet</p><button type="button" class="btn btn-primary sm" id="empty-new-book">New Book</button></div>`;
         document.getElementById("empty-new-book")?.addEventListener("click", createBookFlow);
         return;
       }
       booksList.innerHTML = "";
       for (const b of books) {
         const wrap = document.createElement("div");
-        wrap.className = `book-simple-item${b.id === currentBookId ? " active" : ""}`;
+        const selected = b.id === currentBookId;
+        wrap.className = `book-simple-item${selected ? " active" : ""}${selected ? " expanded" : ""}`;
         wrap.dataset.bookId = b.id;
 
-        // If this book is being edited, show inline form
         if (editingBookId === b.id) {
           const editContainer = document.createElement("div");
           editContainer.className = "book-simple-row editing";
@@ -515,7 +531,25 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         const row = document.createElement("div");
-        row.className = `book-simple-row${b.id === currentBookId ? " active" : ""}`;
+        row.className = `book-simple-row${selected ? " active" : ""}`;
+
+        const disc = document.createElement("button");
+        disc.type = "button";
+        disc.className = `book-disc${selected ? " open" : ""}`;
+        disc.setAttribute("aria-label", selected ? "Collapse chapters" : "Expand chapters");
+        disc.innerHTML = `<svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" aria-hidden="true"><path d="M3.2 1.5l4 3.5-4 3.5z"/></svg>`;
+        disc.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (selected) {
+            // collapse: deselect book context but keep list
+            wrap.classList.toggle("expanded");
+            disc.classList.toggle("open");
+            const ch = wrap.querySelector(".book-simple-chapters");
+            if (ch) ch.hidden = !wrap.classList.contains("expanded");
+          } else {
+            loadBook(b.id).catch((err) => window.alert(err.message));
+          }
+        });
 
         const main = document.createElement("button");
         main.type = "button";
@@ -523,9 +557,11 @@ document.addEventListener("DOMContentLoaded", () => {
         main.title = b.synopsis || b.title;
         main.innerHTML = `
           <span class="book-simple-title">${escapeHtml(b.title)}</span>
-          <span class="book-simple-meta">${b.chapterCount || 0} chapter${(b.chapterCount||0)===1?"":"s"} · ${escapeHtml(b.slug)}</span>
+          <span class="book-simple-count">${b.chapterCount || 0}</span>
         `;
-        main.addEventListener("click", () => loadBook(b.id));
+        main.addEventListener("click", () => {
+          loadBook(b.id).catch((err) => window.alert(err.message));
+        });
 
         const actions = document.createElement("div");
         actions.className = "book-simple-actions";
@@ -533,8 +569,8 @@ document.addEventListener("DOMContentLoaded", () => {
         const editBtn = document.createElement("button");
         editBtn.type = "button";
         editBtn.className = "book-action-btn edit";
-        editBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M11.5 2.5l2 2-7 7H4.5v-2l7-7z M10 3.5l2 2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-        editBtn.title = "Edit book";
+        editBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M11.5 2.5l2 2-7 7H4.5v-2l7-7z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+        editBtn.title = "Rename";
         editBtn.addEventListener("click", (e) => {
           e.stopPropagation();
           editingBookId = b.id;
@@ -546,29 +582,46 @@ document.addEventListener("DOMContentLoaded", () => {
         ext.href = b.url || `/books/${b.slug}`;
         ext.target = "_blank";
         ext.rel = "noopener";
-        ext.innerHTML = `↗`;
-        ext.title = "Open public book";
+        ext.innerHTML = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M6 3H3.5A1.5 1.5 0 002 4.5v8A1.5 1.5 0 003.5 14h8a1.5 1.5 0 001.5-1.5V10M9 2h5v5M7 9l7-7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+        ext.title = "Open public page";
 
         actions.appendChild(editBtn);
         actions.appendChild(ext);
-
+        row.appendChild(disc);
         row.appendChild(main);
         row.appendChild(actions);
         wrap.appendChild(row);
 
-        if (b.id === currentBookId && bookChapters.length) {
+        if (selected) {
           const ul = document.createElement("ul");
           ul.className = "book-simple-chapters";
-          bookChapters.forEach((c, i) => {
-            const li = document.createElement("li");
-            li.className = c.id === currentChapterId ? "active" : "";
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.innerHTML = `<span class="ch-num">Ch. ${i+1}</span><span class="ch-title">${escapeHtml(c.title)}</span>`;
-            btn.addEventListener("click", () => loadChapter(c.id));
-            li.appendChild(btn);
-            ul.appendChild(li);
-          });
+          if (bookChapters.length) {
+            bookChapters.forEach((c, i) => {
+              const li = document.createElement("li");
+              li.className = c.id === currentChapterId ? "active" : "";
+              const btn = document.createElement("button");
+              btn.type = "button";
+              btn.innerHTML = `<span class="ch-num">${i + 1}</span><span class="ch-title">${escapeHtml(c.title)}</span>`;
+              btn.addEventListener("click", () => {
+                loadChapter(c.id).catch((err) => window.alert(err.message));
+              });
+              li.appendChild(btn);
+              ul.appendChild(li);
+            });
+          } else {
+            const empty = document.createElement("li");
+            empty.className = "chapter-empty";
+            empty.textContent = "No chapters yet";
+            ul.appendChild(empty);
+          }
+          const addLi = document.createElement("li");
+          addLi.className = "chapter-add";
+          const addBtn = document.createElement("button");
+          addBtn.type = "button";
+          addBtn.innerHTML = `<span class="ch-num">+</span><span class="ch-title">New Chapter</span>`;
+          addBtn.addEventListener("click", () => startNewChapter());
+          addLi.appendChild(addBtn);
+          ul.appendChild(addLi);
           wrap.appendChild(ul);
         }
         booksList.appendChild(wrap);
@@ -589,21 +642,26 @@ document.addEventListener("DOMContentLoaded", () => {
     currentBookSynopsis = book.synopsis || "";
     bookChapters = book.chapters || [];
     if (menuNewChapter) menuNewChapter.hidden = false;
-    if (bookRail) bookRail.hidden = false;
+    // macOS sidebar uses outline chapters under the book row — keep legacy rail hidden
+    if (bookRail) bookRail.hidden = true;
     if (bookRailTitle) bookRailTitle.textContent = book.title;
     if (bookRailMeta) {
-      bookRailMeta.textContent = `${bookChapters.length} chapter${bookChapters.length === 1 ? "" : "s"} · expand in Library rail`;
+      bookRailMeta.textContent = `${bookChapters.length} chapter${bookChapters.length === 1 ? "" : "s"}`;
     }
     setActivity("library");
     setLibraryTab("books");
     if (bookPublicLink) {
       bookPublicLink.href = `/books/${book.slug}`;
-      bookPublicLink.textContent = `/books/${book.slug}`;
+      bookPublicLink.textContent = "Open";
     }
     renderBookChapterList();
     if (book.theme) currentTheme = book.theme;
     if (book.goal) currentGoal = book.goal;
     await refreshBooksList();
+    const crumbBook = document.getElementById("crumb-book");
+    const crumbChapter = document.getElementById("crumb-chapter");
+    if (crumbBook) crumbBook.textContent = book.title;
+    if (crumbChapter) crumbChapter.textContent = "Select a chapter";
     addLog("BOOK", `Opened “${book.title}”`, "system");
     scheduleBriefSuggestions({ reason: "book" });
   }
@@ -673,6 +731,11 @@ document.addEventListener("DOMContentLoaded", () => {
     renderBookChapterList();
     await refreshBooksList();
     setActivity("library");
+    const crumbBook = document.getElementById("crumb-book");
+    const crumbChapter = document.getElementById("crumb-chapter");
+    if (crumbBook) crumbBook.textContent = currentBookTitle || "Library";
+    if (crumbChapter) crumbChapter.textContent = chapter.title || "Chapter";
+    window.setQuillCenterTab?.("brief");
     addLog("BOOK", `Loaded chapter “${chapter.title}”`, "system");
     // Don't overwrite a saved chapter brief — only suggest when empty/placeholder
     if (!chapter.brief || isPlaceholderBrief(chapter.brief)) {
@@ -851,11 +914,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const brief = briefInput.value.trim();
     if (!brief) {
       briefInput.focus();
+      window.setQuillCenterTab?.("brief");
       return;
     }
 
-    workspaceSection.hidden = false;
-    workspaceSection.scrollIntoView({ behavior: "smooth" });
+    window.setQuillCenterTab?.("pipeline");
+    if (workspaceSection) workspaceSection.hidden = false;
+    workspaceSection?.scrollIntoView({ behavior: "smooth" });
 
     if (currentBookId) ensureComposingChapter();
 
