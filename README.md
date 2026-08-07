@@ -31,6 +31,11 @@ Templates support `{{var}}`, `{% if var %}…{% endif %}`, and `{% for c in crit
 
 Env interpolation: `${VAR}` and `${VAR:-default}`.
 
+Suggestion tuning (fast brief generation):
+- `api.suggest_model` (default `composer-2.5-fast`)
+- `api.suggest_timeout_ms` (default `30000`)
+- env overrides: `CURSOR_SUGGEST_MODEL`, `QUILL_SUGGEST_TIMEOUT_MS`
+
 ## API
 
 - `GET /api/health` — liveness + mode (+ sqlite stats)

@@ -37,6 +37,9 @@
     <div class="toolbar-cluster end">
       <span class="kbd" title="Command palette">⌘K</span>
       <div class="toolbar-sep"></div>
+      <button type="button" class="btn-mac ghost" id="resume-run-btn" hidden disabled>
+        <span>Resume run</span>
+      </button>
       <button type="submit" form="agent-form" class="btn-mac primary" id="fire-btn">
         <span>Fire agents</span>
       </button>
@@ -87,19 +90,29 @@
           </div>
 
           <div class="sidebar-footer">
-            <div class="new-menu" id="new-menu">
-              <button type="button" class="btn-mac ghost" id="new-menu-btn" aria-haspopup="menu" aria-expanded="false">
-                <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg>
-                New
-              </button>
-              <div class="new-menu-pop" id="new-menu-pop" role="menu" hidden>
-                <button type="button" role="menuitem" id="menu-new-book">Book</button>
-                <button type="button" role="menuitem" id="menu-new-chapter" hidden>Chapter</button>
-                <button type="button" role="menuitem" id="menu-new-piece">Article</button>
+            <a
+              class="drawer-quiet-link sidebar-open-book-link"
+              id="sidebar-open-book-link"
+              href="/books"
+              target="_blank"
+              rel="noopener"
+              hidden
+            >Open published book ↗</a>
+            <div class="sidebar-footer-row">
+              <div class="new-menu" id="new-menu">
+                <button type="button" class="btn-mac ghost" id="new-menu-btn" aria-haspopup="menu" aria-expanded="false">
+                  <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg>
+                  New
+                </button>
+                <div class="new-menu-pop" id="new-menu-pop" role="menu" hidden>
+                  <button type="button" role="menuitem" id="menu-new-book">Book</button>
+                  <button type="button" role="menuitem" id="menu-new-chapter" hidden>Chapter</button>
+                  <button type="button" role="menuitem" id="menu-new-piece">Article</button>
+                </div>
               </div>
+              <span class="mono-stamp" id="mode-badge">READY</span>
+              <span class="mono-stamp muted" id="model-badge">—</span>
             </div>
-            <span class="mono-stamp" id="mode-badge">READY</span>
-            <span class="mono-stamp muted" id="model-badge">—</span>
           </div>
         </section>
 
@@ -247,7 +260,7 @@
                       <p class="suggest-status" id="suggest-status" hidden>Generating…</p>
                     </div>
                     <div class="suggest-banner-actions">
-                      <button type="button" class="btn btn-primary sm" id="suggest-accept-btn">Accept</button>
+                      <button type="button" class="btn btn-primary sm" id="suggest-accept-btn">Accept suggestion</button>
                       <button type="button" class="btn btn-ghost sm" id="suggest-dismiss-btn">Dismiss</button>
                     </div>
                   </aside>

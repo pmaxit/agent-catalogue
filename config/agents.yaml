@@ -13,6 +13,9 @@ api:
   poll_interval_ms: 2000
   request_timeout_ms: 120000
   run_timeout_ms: 600000
+  # Fast LLM used specifically for /api/suggest-brief.
+  suggest_model: ${CURSOR_SUGGEST_MODEL:-composer-2.5-fast}
+  suggest_timeout_ms: ${QUILL_SUGGEST_TIMEOUT_MS:-30000}
 
 defaults:
   model:

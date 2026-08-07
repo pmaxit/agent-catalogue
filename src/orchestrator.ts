@@ -17,6 +17,11 @@ export interface RunOptions {
   brief: BriefInput;
   onEvent?: EventHandler;
   signal?: AbortSignal;
+  resume?: {
+    state?: Record<string, string>;
+    iteration?: number;
+    nodeId?: string;
+  };
 }
 
 const RESEARCH_FOCUS: Record<string, string> = {
@@ -157,8 +162,20 @@ export class WritingOrchestrator {
           : "",
     };
 
-    let iteration = 0;
-    let nodeId = this.config.workflow.entry;
+    if (options.resume?.state && typeof options.resume.state === "object") {
+      Object.assign(state, options.resume.state);
+    }
+
+    let iteration =
+      typeof options.resume?.iteration === "number" &&
+      Number.isFinite(options.resume.iteration) &&
+      options.resume.iteration >= 0
+        ? Math.floor(options.resume.iteration)
+        : 0;
+    let nodeId =
+      options.resume?.nodeId && this.config.workflow.nodes[options.resume.nodeId]
+        ? options.resume.nodeId
+        : this.config.workflow.entry;
     let sharedAgentId: string | undefined;
     let lastEvaluation: ManagerEvaluation | undefined;
 

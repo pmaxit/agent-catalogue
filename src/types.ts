@@ -11,8 +11,8 @@ const CriterionSchema = z.object({
   id: z.string().min(1),
   label: z.string().min(1),
   description: z.string().min(1),
-  weight: z.number().positive().default(1),
-  threshold: z.number().min(0).max(1),
+  weight: z.coerce.number().positive().default(1),
+  threshold: z.coerce.number().min(0).max(1),
 });
 
 const AgentDefSchema = z.object({
@@ -41,9 +41,11 @@ export const PipelineConfigSchema = z.object({
     key_env: z.string().min(1),
     auth: z.enum(["basic", "bearer"]).default("basic"),
     mock: z.union([z.boolean(), z.string()]).optional(),
-    poll_interval_ms: z.number().int().positive().default(2000),
-    request_timeout_ms: z.number().int().positive().default(120000),
-    run_timeout_ms: z.number().int().positive().default(600000),
+    poll_interval_ms: z.coerce.number().int().positive().default(2000),
+    request_timeout_ms: z.coerce.number().int().positive().default(120000),
+    run_timeout_ms: z.coerce.number().int().positive().default(600000),
+    suggest_model: z.string().min(1).default("composer-2.5-fast"),
+    suggest_timeout_ms: z.coerce.number().int().positive().default(30000),
   }),
   defaults: z.object({
     model: ModelSchema,
@@ -59,7 +61,7 @@ export const PipelineConfigSchema = z.object({
   }),
   goal: z.object({
     name: z.string(),
-    max_iterations: z.number().int().positive().default(5),
+    max_iterations: z.coerce.number().int().positive().default(5),
     require_all_criteria: z.boolean().default(true),
     criteria: z.array(CriterionSchema).min(1),
   }),
@@ -97,8 +99,15 @@ export interface BriefInput {
   selectedBlocks?: BriefBlock[];
   reviseInstruction?: string;
   bookTitle?: string;
+  chapterId?: string;
   chapterTitle?: string;
   chapterNumber?: number;
+  /** Continuation metadata for resume-from-checkpoint flows. */
+  resumeFromRunId?: string;
+  resumeFromNodeId?: string;
+  resumeIteration?: number;
+  /** Execution mode for UI/session orchestration only. */
+  runMode?: "interactive" | "background_chapter";
 }
 
 export interface ManagerEvaluation {
@@ -191,3 +200,8 @@ export type PipelineEvent =
       state: Record<string, string>;
       error?: string;
     };
+
+export type PipelineEventEnvelope = PipelineEvent & {
+  runId?: string;
+  eventId?: number;
+};

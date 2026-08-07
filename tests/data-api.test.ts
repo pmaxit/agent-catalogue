@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { resolve } from "node:path";
 import {
   DEFAULT_RAILWAY_DATA_API_BASE,
   isRailwayRuntime,
@@ -13,7 +14,7 @@ test("local runtime uses Railway data API by default", () => {
   assert.equal(isRailwayRuntime(env), false);
   assert.equal(resolveDataApiBase(env), DEFAULT_RAILWAY_DATA_API_BASE);
   assert.equal(usesRemoteDataApi(env), true);
-  assert.equal(resolveDbPath(env), ":memory:");
+  assert.equal(resolveDbPath(env), resolve(process.cwd(), "data", "quill-local.db"));
 });
 
 test("Railway runtime uses same-origin durable SQLite", () => {
@@ -30,4 +31,9 @@ test("Railway runtime uses same-origin durable SQLite", () => {
 test("QUILL_DATA_API_BASE overrides remote target", () => {
   const env = { QUILL_DATA_API_BASE: "https://example.up.railway.app/" };
   assert.equal(resolveDataApiBase(env), "https://example.up.railway.app");
+});
+
+test("QUILL_DB_PATH overrides local sqlite path", () => {
+  const env = { QUILL_DB_PATH: "/tmp/quill-test.db" };
+  assert.equal(resolveDbPath(env), "/tmp/quill-test.db");
 });

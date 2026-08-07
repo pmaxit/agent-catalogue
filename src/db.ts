@@ -4,6 +4,11 @@ import { randomUUID } from "node:crypto";
 import Database from "better-sqlite3";
 import { isRailwayRuntime } from "./data-api.js";
 import { buildFlowMxfile, hasDrawioDiagram } from "./diagrams.js";
+import type {
+  BriefInput,
+  ManagerEvaluation,
+  PipelineEvent,
+} from "./types.js";
 
 export type Block = {
   id: string | number;
@@ -145,6 +150,40 @@ export type ChapterInput = {
   meta?: ArticleMeta;
   changeSummary?: string;
   status?: "draft" | "published";
+};
+
+export type PipelineRunStatus =
+  | "running"
+  | "completed"
+  | "max_iterations"
+  | "error";
+
+export type PipelineRunRecord = {
+  id: string;
+  status: PipelineRunStatus;
+  brief_json: string;
+  draft: string | null;
+  evaluation_json: string | null;
+  state_json: string | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+  finished_at: string | null;
+};
+
+export type PipelineRunEventRecord = {
+  id: number;
+  run_id: string;
+  event_type: string;
+  payload_json: string;
+  created_at: string;
+};
+
+export type PersistedPipelineRunEvent = {
+  id: number;
+  runId: string;
+  event: PipelineEvent;
+  createdAt: string;
 };
 
 function nowIso(): string {
@@ -404,10 +443,15 @@ function titleFromMarkdown(md: string): string {
 
 /**
  * Resolve SQLite path.
- * Railway: durable volume file. Local: never ./data/quill.db — in-memory only
- * (studio books/chapters/articles persist via the Railway data API).
+ * Railway: durable volume file.
+ * Local: durable file so run/event checkpoints survive restarts.
  */
 export function resolveDbPath(env: NodeJS.ProcessEnv = process.env): string {
+  const override = env.QUILL_DB_PATH?.trim();
+  if (override) {
+    if (override === ":memory:") return ":memory:";
+    return resolve(override);
+  }
   if (isRailwayRuntime(env)) {
     if (env.SQLITE_PATH?.trim()) return env.SQLITE_PATH.trim();
     if (env.RAILWAY_VOLUME_MOUNT_PATH?.trim()) {
@@ -415,7 +459,7 @@ export function resolveDbPath(env: NodeJS.ProcessEnv = process.env): string {
     }
     return "/data/quill.db";
   }
-  return ":memory:";
+  return resolve(process.cwd(), "data", "quill-local.db");
 }
 
 export class ArticleStore {
@@ -532,6 +576,32 @@ export class ArticleStore {
       CREATE INDEX IF NOT EXISTS idx_books_updated ON books(updated_at DESC);
       CREATE INDEX IF NOT EXISTS idx_chapters_book ON chapters(book_id, sort_order ASC);
       CREATE INDEX IF NOT EXISTS idx_chapter_revisions ON chapter_revisions(chapter_id, revision DESC);
+
+      CREATE TABLE IF NOT EXISTS pipeline_runs (
+        id TEXT PRIMARY KEY,
+        status TEXT NOT NULL DEFAULT 'running',
+        brief_json TEXT NOT NULL,
+        draft TEXT,
+        evaluation_json TEXT,
+        state_json TEXT,
+        error TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        finished_at TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS pipeline_run_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_id TEXT NOT NULL REFERENCES pipeline_runs(id) ON DELETE CASCADE,
+        event_type TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_pipeline_runs_status_updated
+        ON pipeline_runs(status, updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_pipeline_run_events_run
+        ON pipeline_run_events(run_id, id ASC);
     `);
   }
 
@@ -1095,6 +1165,167 @@ export class ArticleStore {
         goal: chapter.goal ?? undefined,
       },
     });
+  }
+
+  createPipelineRun(brief: BriefInput): PipelineRunRecord {
+    const ts = nowIso();
+    const id = randomUUID();
+    this.db
+      .prepare(
+        `INSERT INTO pipeline_runs (
+          id, status, brief_json, draft, evaluation_json, state_json, error,
+          created_at, updated_at, finished_at
+        ) VALUES (?, 'running', ?, NULL, NULL, NULL, NULL, ?, ?, NULL)`,
+      )
+      .run(id, JSON.stringify(brief), ts, ts);
+    return this.getPipelineRun(id)!;
+  }
+
+  getPipelineRun(id: string): PipelineRunRecord | undefined {
+    return this.db
+      .prepare(`SELECT * FROM pipeline_runs WHERE id = ?`)
+      .get(id) as PipelineRunRecord | undefined;
+  }
+
+  latestActivePipelineRun(): PipelineRunRecord | undefined {
+    return this.db
+      .prepare(
+        `SELECT * FROM pipeline_runs WHERE status = 'running' ORDER BY updated_at DESC LIMIT 1`,
+      )
+      .get() as PipelineRunRecord | undefined;
+  }
+
+  listActivePipelineRuns(limit = 10): PipelineRunRecord[] {
+    return this.db
+      .prepare(
+        `SELECT * FROM pipeline_runs WHERE status = 'running' ORDER BY updated_at DESC LIMIT ?`,
+      )
+      .all(limit) as PipelineRunRecord[];
+  }
+
+  appendPipelineRunEvent(
+    runId: string,
+    event: PipelineEvent,
+  ): PersistedPipelineRunEvent {
+    const ts = nowIso();
+    const payload = JSON.stringify(event);
+    const result = this.db
+      .prepare(
+        `INSERT INTO pipeline_run_events (run_id, event_type, payload_json, created_at)
+         VALUES (?, ?, ?, ?)`,
+      )
+      .run(runId, event.type, payload, ts);
+    this.db
+      .prepare(`UPDATE pipeline_runs SET updated_at = ? WHERE id = ?`)
+      .run(ts, runId);
+    const id = Number(result.lastInsertRowid);
+    return { id, runId, event, createdAt: ts };
+  }
+
+  updatePipelineRunProgress(args: {
+    runId: string;
+    draft?: string;
+    evaluation?: ManagerEvaluation;
+    state?: Record<string, string>;
+    error?: string;
+  }): void {
+    const existing = this.getPipelineRun(args.runId);
+    if (!existing) return;
+    const ts = nowIso();
+    this.db
+      .prepare(
+        `UPDATE pipeline_runs SET
+          draft = ?,
+          evaluation_json = ?,
+          state_json = ?,
+          error = ?,
+          updated_at = ?
+         WHERE id = ?`,
+      )
+      .run(
+        args.draft ?? existing.draft ?? null,
+        args.evaluation
+          ? JSON.stringify(args.evaluation)
+          : existing.evaluation_json ?? null,
+        args.state
+          ? JSON.stringify(args.state)
+          : existing.state_json ?? JSON.stringify({}),
+        args.error ?? existing.error ?? null,
+        ts,
+        args.runId,
+      );
+  }
+
+  listPipelineRunEvents(
+    runId: string,
+    afterEventId = 0,
+    limit = 500,
+  ): PersistedPipelineRunEvent[] {
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM pipeline_run_events
+         WHERE run_id = ? AND id > ?
+         ORDER BY id ASC
+         LIMIT ?`,
+      )
+      .all(runId, afterEventId, limit) as PipelineRunEventRecord[];
+    const events: PersistedPipelineRunEvent[] = [];
+    for (const row of rows) {
+      try {
+        const event = JSON.parse(row.payload_json) as PipelineEvent;
+        events.push({
+          id: row.id,
+          runId: row.run_id,
+          event,
+          createdAt: row.created_at,
+        });
+      } catch {
+        // Ignore malformed legacy events.
+      }
+    }
+    return events;
+  }
+
+  getPipelineRunLastEventId(runId: string): number {
+    const row = this.db
+      .prepare(
+        `SELECT COALESCE(MAX(id), 0) AS max_id FROM pipeline_run_events WHERE run_id = ?`,
+      )
+      .get(runId) as { max_id: number };
+    return row.max_id || 0;
+  }
+
+  finishPipelineRun(args: {
+    runId: string;
+    status: Exclude<PipelineRunStatus, "running">;
+    draft?: string;
+    evaluation?: ManagerEvaluation;
+    state: Record<string, string>;
+    error?: string;
+  }): void {
+    const ts = nowIso();
+    this.db
+      .prepare(
+        `UPDATE pipeline_runs SET
+          status = ?,
+          draft = ?,
+          evaluation_json = ?,
+          state_json = ?,
+          error = ?,
+          updated_at = ?,
+          finished_at = ?
+         WHERE id = ?`,
+      )
+      .run(
+        args.status,
+        args.draft ?? null,
+        args.evaluation ? JSON.stringify(args.evaluation) : null,
+        JSON.stringify(args.state || {}),
+        args.error ?? null,
+        ts,
+        ts,
+        args.runId,
+      );
   }
 
   close(): void {

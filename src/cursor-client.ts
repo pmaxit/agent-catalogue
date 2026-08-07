@@ -3,6 +3,24 @@ export interface CursorModel {
   params?: Array<{ id: string; value: string }>;
 }
 
+export interface CursorModelCatalogItem {
+  id: string;
+  aliases?: string[];
+  parameters?: Array<{
+    id: string;
+    values?: Array<{ value: string; displayName?: string }>;
+  }>;
+  variants?: Array<{
+    params?: Array<{ id: string; value: string }>;
+    displayName?: string;
+    isDefault?: boolean;
+  }>;
+}
+
+export interface CursorModelCatalogResponse {
+  items: CursorModelCatalogItem[];
+}
+
 export interface CreateAgentRequest {
   prompt: { text: string };
   model?: CursorModel;
@@ -107,6 +125,10 @@ export class CursorClient {
 
   createAgent(payload: CreateAgentRequest): Promise<CreateAgentResponse> {
     return this.request<CreateAgentResponse>("POST", "/v1/agents", payload);
+  }
+
+  listModels(): Promise<CursorModelCatalogResponse> {
+    return this.request<CursorModelCatalogResponse>("GET", "/v1/models");
   }
 
   createRun(

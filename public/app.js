@@ -18,6 +18,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const bookChapterList = document.getElementById("book-chapter-list");
   const bookPublicLink = document.getElementById("book-public-link");
   const bookAddChapterBtn = document.getElementById("book-add-chapter-btn");
+  const sidebarOpenBookLink = document.getElementById("sidebar-open-book-link");
   const blockReviseBar = document.getElementById("block-revise-bar");
   const selectAllBlocks = document.getElementById("select-all-blocks");
   const selectedBlocksCount = document.getElementById("selected-blocks-count");
@@ -41,6 +42,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const formatInput = document.getElementById("format-input");
   const lengthInput = document.getElementById("length-input");
   const fireBtn = document.getElementById("fire-btn");
+  const resumeRunBtn = document.getElementById("resume-run-btn");
   const resetBtn = document.getElementById("reset-btn");
 
   const wizardSection = document.getElementById("wizard-section");
@@ -71,6 +73,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const modelBadge = document.getElementById("model-badge");
   const healthPill = document.getElementById("health-pill");
   const studioSearch = document.getElementById("studio-search");
+  const sidebarFilter = document.getElementById("sidebar-filter");
   const agentRosterGrid = document.getElementById("agent-roster-grid");
   const agentRosterMeta = document.getElementById("agent-roster-meta");
   const suggestBanner = document.getElementById("suggest-banner");
@@ -123,6 +126,14 @@ document.addEventListener("DOMContentLoaded", () => {
   let suggestMode = "idle"; // idle | loading | ready | applied
   let chapterDirty = false;
   let lastAutosaveAt = 0;
+  let currentPipelineRunId = null;
+  let lastPipelineEventId = 0;
+  let pipelinePollTimer = null;
+  let pipelineFinishedSeen = false;
+  let resumeRunBusy = false;
+  const BACKGROUND_RUN_STALL_MS = 45000;
+  const chapterRunWatchers = new Map();
+  const chapterActiveRuns = new Map();
   /** Railway data API origin when local studio must not use in-memory/local SQLite. */
   let dataApiBase =
     location.hostname === "localhost" || location.hostname === "127.0.0.1"
@@ -146,6 +157,20 @@ document.addEventListener("DOMContentLoaded", () => {
   function dataUrl(path) {
     const p = path.startsWith("/") ? path : `/${path}`;
     return `${dataApiBase}${p}`;
+  }
+
+  function updateSidebarPublishedBookLink() {
+    if (!sidebarOpenBookLink) return;
+    if (!currentBookSlug) {
+      sidebarOpenBookLink.hidden = true;
+      sidebarOpenBookLink.href = "/books";
+      return;
+    }
+    sidebarOpenBookLink.hidden = false;
+    sidebarOpenBookLink.href = `/books/${currentBookSlug}`;
+    sidebarOpenBookLink.textContent = currentBookTitle
+      ? `Open published “${currentBookTitle}” ↗`
+      : "Open published book ↗";
   }
 
   const newId = () =>
@@ -257,6 +282,37 @@ document.addEventListener("DOMContentLoaded", () => {
     updateDocumentActions();
   }
 
+  async function flushOrConfirmPendingChapterChanges() {
+    if (!chapterDirty || !isBookChapterContext()) return true;
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    if (saving) return false;
+    const saved = await autosaveChapterDraft("Autosave before navigation");
+    if (saved) return true;
+    if (!chapterDirty) return true;
+    return window.confirm(
+      "Unsaved chapter changes could not be saved automatically. Leave this chapter anyway?",
+    );
+  }
+
+  async function startNewArticleWithSaveGuard() {
+    const ok = await flushOrConfirmPendingChapterChanges();
+    if (!ok) return;
+    startNewArticle();
+  }
+
+  async function createBookFlowWithSaveGuard() {
+    const ok = await flushOrConfirmPendingChapterChanges();
+    if (!ok) return;
+    await createBookFlow();
+  }
+
+  async function startNewChapterWithSaveGuard() {
+    const ok = await flushOrConfirmPendingChapterChanges();
+    if (!ok) return;
+    startNewChapter();
+  }
+
   function closeNewMenu() {
     if (!newMenuPop || !newMenuBtn) return;
     newMenuPop.hidden = true;
@@ -306,6 +362,24 @@ document.addEventListener("DOMContentLoaded", () => {
     if (tab === "articles") void refreshArticlesList();
   }
 
+  function getLibraryFilterQuery() {
+    const sidebarQuery = sidebarFilter?.value?.trim() || "";
+    if (sidebarQuery) return sidebarQuery;
+    return studioSearch?.value?.trim() || "";
+  }
+
+  function applyLibraryListFilter(rawQuery = "") {
+    const q = String(rawQuery).trim().toLowerCase();
+    booksList?.querySelectorAll(".book-simple-item").forEach((item) => {
+      const hay = item.textContent.toLowerCase();
+      item.hidden = Boolean(q) && !hay.includes(q);
+    });
+    articlesList?.querySelectorAll(".article-link-row").forEach((row) => {
+      const hay = row.textContent.toLowerCase();
+      row.hidden = Boolean(q) && !hay.includes(q);
+    });
+  }
+
   function toggleConsole() {
     if (!consolePanel) return;
     consolePanel.hidden = !consolePanel.hidden;
@@ -318,18 +392,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
   menuNewPiece?.addEventListener("click", () => {
     closeNewMenu();
-    startNewArticle();
+    void startNewArticleWithSaveGuard();
   });
-  menuNewPieceCompose?.addEventListener("click", startNewArticle);
+  menuNewPieceCompose?.addEventListener("click", () => {
+    void startNewArticleWithSaveGuard();
+  });
   menuNewBook?.addEventListener("click", () => {
     closeNewMenu();
-    createBookFlow();
+    void createBookFlowWithSaveGuard();
   });
   menuNewChapter?.addEventListener("click", () => {
     closeNewMenu();
-    startNewChapter();
+    void startNewChapterWithSaveGuard();
   });
-  bookAddChapterBtn?.addEventListener("click", () => startNewChapter());
+  bookAddChapterBtn?.addEventListener("click", () => {
+    void startNewChapterWithSaveGuard();
+  });
 
   newMenuBtn?.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -427,18 +505,32 @@ document.addEventListener("DOMContentLoaded", () => {
     const n = bookChapters.length + 1;
     composingChapterNumber = n;
     currentChapterTitle = `Chapter ${n}`;
-    briefInput.value = `Write chapter ${n} of “${currentBookTitle}”. Cover the next practical topic a reader needs after the previous chapters.`;
+    briefInput.value = "";
     lengthInput.value = "4000–5500 words (full book chapter)";
     userEditedBriefAfterSuggest = false;
+    setActivity("compose");
+    window.setQuillCenterTab?.("brief");
     resetEditorCanvas(`Chapter ${n} draft`);
     if (articleMeta) {
       articleMeta.textContent = `New chapter · ${currentBookTitle}`;
     }
+    const crumbBook = document.getElementById("crumb-book");
+    const crumbChapter = document.getElementById("crumb-chapter");
+    if (crumbBook) crumbBook.textContent = currentBookTitle || "Library";
+    if (crumbChapter) crumbChapter.textContent = `Chapter ${n} (new)`;
+    void refreshBooksList();
     wizardSection.scrollIntoView({ behavior: "smooth" });
     briefInput.focus();
     addLog("BOOK", `Composing chapter ${n} for “${currentBookTitle}”`, "system");
     updateDocumentActions();
     scheduleBriefSuggestions({ reason: "new-chapter" });
+  }
+
+  function composingChapterListEntry() {
+    if (!currentBookId || !composingChapter || currentChapterId) return null;
+    const number = composingChapterNumber || bookChapters.length + 1;
+    const title = currentChapterTitle || `Chapter ${number}`;
+    return { number, title };
   }
 
   // ——— Simplified sidepanel with edit capability ———
@@ -468,6 +560,7 @@ document.addEventListener("DOMContentLoaded", () => {
         currentBookTitle = data.book.title;
         currentBookSynopsis = data.book.synopsis || "";
         if (bookRailTitle) bookRailTitle.textContent = data.book.title;
+        updateSidebarPublishedBookLink();
       }
       addLog("BOOK", `Updated “${data.book.title}”`, "finish");
       await refreshBooksList();
@@ -536,19 +629,12 @@ document.addEventListener("DOMContentLoaded", () => {
         const disc = document.createElement("button");
         disc.type = "button";
         disc.className = `book-disc${selected ? " open" : ""}`;
-        disc.setAttribute("aria-label", selected ? "Collapse chapters" : "Expand chapters");
+        disc.setAttribute("aria-label", selected ? "Book selected" : "Expand chapters");
         disc.innerHTML = `<svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" aria-hidden="true"><path d="M3.2 1.5l4 3.5-4 3.5z"/></svg>`;
         disc.addEventListener("click", (e) => {
           e.stopPropagation();
-          if (selected) {
-            // collapse: deselect book context but keep list
-            wrap.classList.toggle("expanded");
-            disc.classList.toggle("open");
-            const ch = wrap.querySelector(".book-simple-chapters");
-            if (ch) ch.hidden = !wrap.classList.contains("expanded");
-          } else {
-            loadBook(b.id).catch((err) => window.alert(err.message));
-          }
+          if (selected) return;
+          loadBookWithSaveGuard(b.id).catch((err) => window.alert(err.message));
         });
 
         const main = document.createElement("button");
@@ -560,7 +646,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <span class="book-simple-count">${b.chapterCount || 0}</span>
         `;
         main.addEventListener("click", () => {
-          loadBook(b.id).catch((err) => window.alert(err.message));
+          loadBookWithSaveGuard(b.id).catch((err) => window.alert(err.message));
         });
 
         const actions = document.createElement("div");
@@ -595,6 +681,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (selected) {
           const ul = document.createElement("ul");
           ul.className = "book-simple-chapters";
+          const composingDraft = composingChapterListEntry();
           if (bookChapters.length) {
             bookChapters.forEach((c, i) => {
               const li = document.createElement("li");
@@ -603,32 +690,70 @@ document.addEventListener("DOMContentLoaded", () => {
               btn.type = "button";
               btn.innerHTML = `<span class="ch-num">${i + 1}</span><span class="ch-title">${escapeHtml(c.title)}</span>`;
               btn.addEventListener("click", () => {
-                loadChapter(c.id).catch((err) => window.alert(err.message));
+                loadChapterWithSaveGuard(c.id).catch((err) => window.alert(err.message));
               });
               li.appendChild(btn);
               ul.appendChild(li);
             });
-          } else {
+          } else if (!composingDraft) {
             const empty = document.createElement("li");
             empty.className = "chapter-empty";
             empty.textContent = "No chapters yet";
             ul.appendChild(empty);
+          }
+          if (composingDraft) {
+            const li = document.createElement("li");
+            li.className = "active chapter-draft";
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.innerHTML = `<span class="ch-num">${composingDraft.number}</span><span class="ch-title">${escapeHtml(composingDraft.title)}</span>`;
+            btn.title = "Unsaved draft chapter";
+            btn.addEventListener("click", () => {
+              setActivity("compose");
+              window.setQuillCenterTab?.("brief");
+              wizardSection?.scrollIntoView({ behavior: "smooth", block: "start" });
+              briefInput?.focus();
+            });
+            li.appendChild(btn);
+            ul.appendChild(li);
           }
           const addLi = document.createElement("li");
           addLi.className = "chapter-add";
           const addBtn = document.createElement("button");
           addBtn.type = "button";
           addBtn.innerHTML = `<span class="ch-num">+</span><span class="ch-title">New Chapter</span>`;
-          addBtn.addEventListener("click", () => startNewChapter());
+          addBtn.addEventListener("click", () => {
+            void startNewChapterWithSaveGuard();
+          });
           addLi.appendChild(addBtn);
           ul.appendChild(addLi);
           wrap.appendChild(ul);
         }
         booksList.appendChild(wrap);
       }
+      applyLibraryListFilter(getLibraryFilterQuery());
     } catch (err) {
       booksList.innerHTML = `<p class="side-hint">${escapeHtml(err.message)}</p>`;
     }
+  }
+
+  async function loadBookWithSaveGuard(id) {
+    const ok = await flushOrConfirmPendingChapterChanges();
+    if (!ok) return;
+    await loadBook(id);
+  }
+
+  async function loadChapterWithSaveGuard(id) {
+    if (id && currentChapterId && String(id) === String(currentChapterId)) return;
+    const ok = await flushOrConfirmPendingChapterChanges();
+    if (!ok) return;
+    await loadChapter(id);
+  }
+
+  async function loadArticleWithSaveGuard(id) {
+    const ok = await flushOrConfirmPendingChapterChanges();
+    if (!ok) return;
+    await loadArticle(id);
   }
 
   async function loadBook(id) {
@@ -654,6 +779,7 @@ document.addEventListener("DOMContentLoaded", () => {
       bookPublicLink.href = `/books/${book.slug}`;
       bookPublicLink.textContent = "Open";
     }
+    updateSidebarPublishedBookLink();
     renderBookChapterList();
     if (book.theme) currentTheme = book.theme;
     if (book.goal) currentGoal = book.goal;
@@ -680,7 +806,9 @@ document.addEventListener("DOMContentLoaded", () => {
       btn.type = "button";
       btn.className = "chapter-pick";
       btn.innerHTML = `<span>Ch. ${i + 1}</span><strong>${escapeHtml(c.title)}</strong>`;
-      btn.addEventListener("click", () => loadChapter(c.id));
+      btn.addEventListener("click", () =>
+        loadChapterWithSaveGuard(c.id).catch((err) => window.alert(err.message)),
+      );
       li.appendChild(btn);
       bookChapterList.appendChild(li);
     });
@@ -735,7 +863,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const crumbChapter = document.getElementById("crumb-chapter");
     if (crumbBook) crumbBook.textContent = currentBookTitle || "Library";
     if (crumbChapter) crumbChapter.textContent = chapter.title || "Chapter";
-    window.setQuillCenterTab?.("brief");
+    // Jump straight into chapter editing context.
+    window.setQuillCenterTab?.("draft");
     addLog("BOOK", `Loaded chapter “${chapter.title}”`, "system");
     // Don't overwrite a saved chapter brief — only suggest when empty/placeholder
     if (!chapter.brief || isPlaceholderBrief(chapter.brief)) {
@@ -743,7 +872,9 @@ document.addEventListener("DOMContentLoaded", () => {
     } else {
       hideSuggestBanner();
     }
-    workspaceSection.scrollIntoView({ behavior: "smooth" });
+    document
+      .getElementById("draft-panel")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   menuPublishToggle?.addEventListener("click", () => {
@@ -807,16 +938,13 @@ document.addEventListener("DOMContentLoaded", () => {
         const hay = `${card.dataset.theme} ${card.textContent}`.toLowerCase();
         card.hidden = Boolean(q) && !hay.includes(q);
       });
-      booksList?.querySelectorAll(".book-tree-item").forEach((item) => {
-        const hay = item.textContent.toLowerCase();
-        item.hidden = Boolean(q) && !hay.includes(q);
-      });
-      articlesList?.querySelectorAll(".article-link-row").forEach((row) => {
-        const hay = row.textContent.toLowerCase();
-        row.hidden = Boolean(q) && !hay.includes(q);
-      });
+      applyLibraryListFilter(q);
     });
   }
+
+  sidebarFilter?.addEventListener("input", () => {
+    applyLibraryListFilter(sidebarFilter.value);
+  });
 
   resetBtn.addEventListener("click", () => {
     briefInput.value = "";
@@ -909,6 +1037,349 @@ document.addEventListener("DOMContentLoaded", () => {
     updateAgentRosterMeta();
   }
 
+  function stopPipelinePolling() {
+    if (pipelinePollTimer) {
+      clearInterval(pipelinePollTimer);
+      pipelinePollTimer = null;
+    }
+  }
+
+  function setResumeRunButton(runId, opts = {}) {
+    if (!resumeRunBtn) return;
+    const visible = Boolean(runId);
+    resumeRunBtn.hidden = !visible;
+    const label = resumeRunBtn.querySelector("span");
+    if (label) label.textContent = opts.label || "Resume run";
+    if (!visible) {
+      resumeRunBtn.disabled = true;
+      return;
+    }
+    resumeRunBtn.dataset.runId = runId;
+    resumeRunBtn.disabled = Boolean(opts.disabled);
+  }
+
+  function capturePipelineCursor(event) {
+    if (!event || typeof event !== "object") return;
+    if (event.runId) currentPipelineRunId = event.runId;
+    if (
+      typeof event.eventId === "number" &&
+      Number.isFinite(event.eventId) &&
+      event.eventId > lastPipelineEventId
+    ) {
+      lastPipelineEventId = event.eventId;
+    }
+  }
+
+  function handleIncomingPipelineEvent(event) {
+    capturePipelineCursor(event);
+    handlePipelineEvent(event);
+  }
+
+  async function pollPipelineRunEvents(runId) {
+    if (!runId) return;
+    try {
+      const res = await fetch(
+        `/api/runs/${encodeURIComponent(runId)}/events?after=${lastPipelineEventId}&limit=500`,
+      );
+      if (!res.ok) throw new Error(`Run poll failed (${res.status})`);
+      const data = await res.json();
+      for (const row of data.events || []) {
+        if (row?.event) handleIncomingPipelineEvent(row.event);
+      }
+      if (data.run?.status === "running" || data.run?.status === "error") {
+        setResumeRunButton(runId, { disabled: resumeRunBusy });
+      } else {
+        setResumeRunButton(null);
+      }
+      if (data.run?.status && data.run.status !== "running") {
+        stopPipelinePolling();
+        fireBtn.disabled = false;
+        const label = fireBtn.querySelector("span");
+        if (label) label.textContent = "Fire agents";
+      }
+    } catch (err) {
+      console.error("run poll failed", err);
+    }
+  }
+
+  function startPipelinePolling(runId) {
+    if (!runId) return;
+    stopPipelinePolling();
+    currentPipelineRunId = runId;
+    setResumeRunButton(runId, { disabled: resumeRunBusy });
+    pipelinePollTimer = setInterval(() => {
+      void pollPipelineRunEvents(runId);
+    }, 1500);
+  }
+
+  resumeRunBtn?.addEventListener("click", async () => {
+    if (resumeRunBusy) return;
+    const sourceRunId = resumeRunBtn.dataset.runId || currentPipelineRunId;
+    if (!sourceRunId) {
+      window.alert("No run available to resume.");
+      return;
+    }
+    resumeRunBusy = true;
+    setResumeRunButton(sourceRunId, { disabled: true, label: "Resuming…" });
+    fireBtn.disabled = true;
+    const fireLabel = fireBtn.querySelector("span");
+    if (fireLabel) fireLabel.textContent = "Agents running…";
+    streamStatus.textContent = "Resuming from checkpoint";
+    liveDot.classList.add("pulsating");
+    liveDot.style.backgroundColor = "";
+    addLog(
+      "PIPELINE",
+      `Resuming run r${String(sourceRunId).slice(0, 8)} from persisted checkpoint…`,
+      "system",
+    );
+    try {
+      stopPipelinePolling();
+      const res = await fetch(`/api/runs/${encodeURIComponent(sourceRunId)}/resume`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force: true }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || `Resume failed (${res.status})`);
+      }
+      currentPipelineRunId = data.runId;
+      lastPipelineEventId = 0;
+      pipelineFinishedSeen = false;
+      addLog(
+        "PIPELINE",
+        `Resume started at ${data.startNodeId || "checkpoint"} (loop ${Number(data.iteration || 0) + 1}) · new run r${String(data.runId).slice(0, 8)}`,
+        "system",
+      );
+      setResumeRunButton(data.runId, { disabled: false });
+      startPipelinePolling(data.runId);
+      await pollPipelineRunEvents(data.runId);
+    } catch (err) {
+      addLog("ERROR", err.message || "Could not resume run", "eval");
+      streamStatus.textContent = "Resume failed";
+      fireBtn.disabled = false;
+      if (fireLabel) fireLabel.textContent = "Fire agents";
+      setResumeRunButton(sourceRunId, { disabled: false });
+    } finally {
+      resumeRunBusy = false;
+      if (currentPipelineRunId) {
+        setResumeRunButton(currentPipelineRunId, { disabled: false });
+      }
+    }
+  });
+
+  function stopChapterRunWatcher(runId) {
+    const watcher = chapterRunWatchers.get(runId);
+    if (!watcher) return;
+    clearInterval(watcher.timer);
+    if (
+      watcher.chapterId &&
+      chapterActiveRuns.get(watcher.chapterId) === runId
+    ) {
+      chapterActiveRuns.delete(watcher.chapterId);
+    }
+    chapterRunWatchers.delete(runId);
+  }
+
+  async function resumeBackgroundChapterRun(runId, watcher) {
+    if (!watcher || watcher.resuming) return;
+    watcher.resuming = true;
+    watcher.resumeAttempts = (watcher.resumeAttempts || 0) + 1;
+    addLog(
+      "PIPELINE",
+      `Background run r${String(runId).slice(0, 8)} looks stalled — resuming from last checkpoint…`,
+      "system",
+    );
+    try {
+      const res = await fetch(`/api/runs/${encodeURIComponent(runId)}/resume`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force: true }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || `Resume failed (${res.status})`);
+      }
+      addLog(
+        "BOOK",
+        `Background run resumed for “${watcher.chapterTitle}” · ${String(data.runId).slice(0, 8)}`,
+        "system",
+      );
+      setSaveStatus(`Background run resumed · ${String(data.runId).slice(0, 8)}`);
+      stopChapterRunWatcher(runId);
+      watchChapterRun(data.runId, watcher.chapterTitle, watcher.chapterId, {
+        resumeAttempts: watcher.resumeAttempts,
+      });
+    } catch (err) {
+      watcher.resuming = false;
+      addLog(
+        "ERROR",
+        `Could not resume stalled background run for “${watcher.chapterTitle}”: ${err.message || err}`,
+        "eval",
+      );
+    }
+  }
+
+  async function pollChapterRunWatcher(runId) {
+    const watcher = chapterRunWatchers.get(runId);
+    if (!watcher) return;
+    try {
+      const res = await fetch(
+        `/api/runs/${encodeURIComponent(runId)}/events?after=${watcher.lastEventId}&limit=250`,
+      );
+      if (!res.ok) throw new Error(`Background run poll failed (${res.status})`);
+      const data = await res.json();
+      let sawEvent = false;
+      for (const row of data.events || []) {
+        const event = row?.event;
+        if (!event) continue;
+        sawEvent = true;
+        if (typeof event.eventId === "number") {
+          watcher.lastEventId = Math.max(watcher.lastEventId, event.eventId);
+        } else if (typeof row.id === "number") {
+          watcher.lastEventId = Math.max(watcher.lastEventId, row.id);
+        }
+        watcher.lastEventAt = Date.now();
+        if (event.type === "node_started") {
+          addLog(
+            "NODE",
+            `Background “${watcher.chapterTitle}”: started ${event.nodeId}`,
+            "node",
+          );
+        }
+        if (event.type === "pipeline_finished") {
+          if (event.status === "completed" || event.status === "max_iterations") {
+            addLog(
+              "BOOK",
+              `Background chapter ready: “${watcher.chapterTitle}” · r${String(runId).slice(0, 8)}`,
+              "finish",
+            );
+          } else {
+            addLog(
+              "ERROR",
+              `Background chapter run failed for “${watcher.chapterTitle}”`,
+              "eval",
+            );
+          }
+          void refreshBooksList();
+          stopChapterRunWatcher(runId);
+        }
+      }
+      if (
+        data.run?.status === "running" &&
+        !sawEvent &&
+        Date.now() - watcher.lastEventAt > BACKGROUND_RUN_STALL_MS
+      ) {
+        await resumeBackgroundChapterRun(runId, watcher);
+        return;
+      }
+      if (data.run?.status && data.run.status !== "running") {
+        stopChapterRunWatcher(runId);
+      }
+    } catch (err) {
+      console.error("chapter run watcher poll failed", err);
+    }
+  }
+
+  function watchChapterRun(runId, chapterTitle, chapterId, opts = {}) {
+    if (!runId || chapterRunWatchers.has(runId)) return;
+    const entry = {
+      chapterTitle: chapterTitle || "Chapter",
+      chapterId: chapterId || null,
+      lastEventId: 0,
+      lastEventAt: Date.now(),
+      resumeAttempts: opts.resumeAttempts || 0,
+      resuming: false,
+      timer: null,
+    };
+    if (entry.chapterId) {
+      chapterActiveRuns.set(entry.chapterId, runId);
+    }
+    entry.timer = setInterval(() => {
+      void pollChapterRunWatcher(runId);
+    }, 2000);
+    chapterRunWatchers.set(runId, entry);
+    void pollChapterRunWatcher(runId);
+  }
+
+  async function startBackgroundChapterRun(brief) {
+    if (!currentChapterId) return false;
+    const existingRunId = chapterActiveRuns.get(currentChapterId);
+    if (existingRunId) {
+      addLog(
+        "BOOK",
+        `A background run is already active for this chapter · ${String(existingRunId).slice(0, 8)}`,
+        "system",
+      );
+      setSaveStatus(`Background run active · ${String(existingRunId).slice(0, 8)}`);
+      return true;
+    }
+    const chapterTitle =
+      currentChapterTitle ||
+      bookChapters.find((c) => c.id === currentChapterId)?.title ||
+      "Chapter";
+    const payload = {
+      brief,
+      audience: audienceInput.value,
+      tone: toneInput.value,
+      format: formatInput.value,
+      length: lengthInput.value,
+      theme: currentTheme,
+      goal: currentGoal,
+      bookTitle: currentBookTitle || undefined,
+      chapterTitle,
+      chapterNumber:
+        bookChapters.findIndex((c) => c.id === currentChapterId) >= 0
+          ? bookChapters.findIndex((c) => c.id === currentChapterId) + 1
+          : undefined,
+    };
+    const res = await fetch(`/api/chapters/${currentChapterId}/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Could not start chapter run");
+    addLog(
+      "BOOK",
+      `Background run started for “${chapterTitle}” · ${String(data.runId).slice(0, 8)}`,
+      "system",
+    );
+    setSaveStatus(`Background run started · ${String(data.runId).slice(0, 8)}`);
+    watchChapterRun(data.runId, chapterTitle, currentChapterId);
+    return true;
+  }
+
+  async function restoreActivePipelineRun() {
+    try {
+      const res = await fetch("/api/runs/active");
+      if (!res.ok) return;
+      const data = await res.json();
+      const run = (data.runs || [])[0];
+      if (!run?.id) return;
+      currentPipelineRunId = run.id;
+      lastPipelineEventId = 0;
+      fireBtn.disabled = true;
+      const label = fireBtn.querySelector("span");
+      if (label) label.textContent = "Agents running…";
+      streamStatus.textContent = "Pipeline active";
+      liveDot.classList.add("pulsating");
+      liveDot.style.backgroundColor = "";
+      addLog("PIPELINE", "Recovered active run after refresh", "system");
+      setResumeRunButton(run.id, { disabled: false });
+      await pollPipelineRunEvents(run.id);
+      if (run.status === "running") {
+        startPipelinePolling(run.id);
+      } else {
+        fireBtn.disabled = false;
+        if (label) label.textContent = "Fire agents";
+        setResumeRunButton(null);
+      }
+    } catch {
+      // ignore recovery errors on first paint
+    }
+  }
+
   agentForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const brief = briefInput.value.trim();
@@ -923,7 +1394,28 @@ document.addEventListener("DOMContentLoaded", () => {
     workspaceSection?.scrollIntoView({ behavior: "smooth" });
 
     if (currentBookId) ensureComposingChapter();
+    if (currentChapterId) {
+      setResumeRunButton(null);
+      fireBtn.disabled = true;
+      const chapterLabel = fireBtn.querySelector("span");
+      if (chapterLabel) chapterLabel.textContent = "Queueing chapter…";
+      try {
+        await startBackgroundChapterRun(brief);
+      } catch (err) {
+        addLog("ERROR", err.message || "Failed to queue chapter run", "eval");
+        window.alert(err.message || "Failed to queue chapter run");
+      } finally {
+        fireBtn.disabled = false;
+        if (chapterLabel) chapterLabel.textContent = "Fire agents";
+      }
+      return;
+    }
 
+    stopPipelinePolling();
+    currentPipelineRunId = null;
+    lastPipelineEventId = 0;
+    pipelineFinishedSeen = false;
+    setResumeRunButton(null);
     fireBtn.disabled = true;
     const label = fireBtn.querySelector("span");
     if (label) label.textContent = "Agents running…";
@@ -979,6 +1471,7 @@ document.addEventListener("DOMContentLoaded", () => {
           goal: currentGoal,
           judgingCriteria: selectedCriteria(),
           bookTitle: currentBookTitle || undefined,
+          chapterId: currentChapterId || undefined,
           chapterTitle:
             currentChapterTitle ||
             bookChapters.find((c) => c.id === currentChapterId)?.title ||
@@ -993,6 +1486,11 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
       if (!response.ok) throw new Error(`Server returned ${response.status}`);
+      const runIdHeader = response.headers.get("x-run-id");
+      if (runIdHeader) {
+        currentPipelineRunId = runIdHeader;
+        setResumeRunButton(currentPipelineRunId, { disabled: false });
+      }
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -1010,21 +1508,42 @@ document.addEventListener("DOMContentLoaded", () => {
           if (!match) continue;
           const [, , eventData] = match;
           try {
-            handlePipelineEvent(JSON.parse(eventData));
+            handleIncomingPipelineEvent(JSON.parse(eventData));
           } catch (err) {
             console.error("SSE JSON parse error", err);
           }
         }
       }
+      if (!pipelineFinishedSeen && currentPipelineRunId) {
+        addLog(
+          "PIPELINE",
+          "Live stream ended early — recovering from persisted run events.",
+          "system",
+        );
+        streamStatus.textContent = "Pipeline reconnecting";
+        startPipelinePolling(currentPipelineRunId);
+      }
     } catch (err) {
-      addLog("ERROR", err.message, "eval");
-      streamStatus.textContent = "Pipeline failed";
-      liveDot.classList.remove("pulsating");
-      liveDot.style.backgroundColor = "var(--danger)";
-      articleCanvas.innerHTML = `<div class="placeholder-notice empty-state"><h3>Run failed</h3><p>${escapeHtml(err.message)}. Check the console stream and retry.</p></div>`;
+      if (currentPipelineRunId) {
+        addLog(
+          "PIPELINE",
+          "Live stream interrupted — restoring updates from persisted run state.",
+          "system",
+        );
+        streamStatus.textContent = "Pipeline reconnecting";
+        startPipelinePolling(currentPipelineRunId);
+      } else {
+        setResumeRunButton(null);
+        addLog("ERROR", err.message, "eval");
+        streamStatus.textContent = "Pipeline failed";
+        liveDot.classList.remove("pulsating");
+        liveDot.style.backgroundColor = "var(--danger)";
+        articleCanvas.innerHTML = `<div class="placeholder-notice empty-state"><h3>Run failed</h3><p>${escapeHtml(err.message)}. Check the console stream and retry.</p></div>`;
+      }
     } finally {
-      fireBtn.disabled = false;
-      if (label) label.textContent = "Fire agents";
+      const recovering = Boolean(currentPipelineRunId && pipelinePollTimer);
+      fireBtn.disabled = recovering;
+      if (label) label.textContent = recovering ? "Agents running…" : "Fire agents";
       updateDocumentActions();
     }
   });
@@ -1033,6 +1552,13 @@ document.addEventListener("DOMContentLoaded", () => {
     switch (event.type) {
       case "pipeline_started":
         addLog("PIPELINE", `Workflow "${event.workflow}" started`, "system");
+        if (event.brief?.resumeFromRunId) {
+          addLog(
+            "PIPELINE",
+            `Loaded context from r${String(event.brief.resumeFromRunId).slice(0, 8)} and resumed at ${event.brief.resumeFromNodeId || "checkpoint"}.`,
+            "system",
+          );
+        }
         break;
       case "agents_roster":
         renderAgentRoster(event.agents);
@@ -1080,6 +1606,8 @@ document.addEventListener("DOMContentLoaded", () => {
         );
         break;
       case "pipeline_finished":
+        pipelineFinishedSeen = true;
+        stopPipelinePolling();
         if (event.status === "completed") {
           addLog("SUCCESS", "Quality thresholds met. Pipeline completed.", "finish");
           streamStatus.textContent = "Completed";
@@ -1088,11 +1616,15 @@ document.addEventListener("DOMContentLoaded", () => {
         } else if (event.status === "max_iterations") {
           addLog("WARN", "Reached max iteration limit.", "node");
           streamStatus.textContent = "Max loops";
+          setResumeRunButton(null);
         } else if (event.status === "error") {
           addLog("ERROR", event.error || "Pipeline error", "eval");
           streamStatus.textContent = "Error";
           liveDot.classList.remove("pulsating");
           liveDot.style.backgroundColor = "var(--danger)";
+          setResumeRunButton(currentPipelineRunId, { disabled: false });
+        } else {
+          setResumeRunButton(null);
         }
         if (event.draft) {
           currentDraftText = event.draft;
@@ -1125,6 +1657,10 @@ document.addEventListener("DOMContentLoaded", () => {
             }
           });
         }
+        fireBtn.disabled = false;
+        const fireLabel = fireBtn.querySelector("span");
+        if (fireLabel) fireLabel.textContent = "Fire agents";
+        if (event.status === "completed") setResumeRunButton(null);
         break;
       default:
         break;
@@ -1575,12 +2111,15 @@ document.addEventListener("DOMContentLoaded", () => {
         edit.className = "article-edit-btn";
         edit.textContent = "Edit";
         edit.title = "Load in studio editor";
-        edit.addEventListener("click", () => loadArticle(a.id));
+        edit.addEventListener("click", () =>
+          loadArticleWithSaveGuard(a.id).catch((err) => window.alert(err.message)),
+        );
 
         row.appendChild(open);
         row.appendChild(edit);
         articlesList.appendChild(row);
       }
+      applyLibraryListFilter(getLibraryFilterQuery());
     } catch (err) {
       articlesList.innerHTML = `<p class="side-hint">${escapeHtml(err.message)}</p>`;
     }
@@ -2213,6 +2752,11 @@ document.addEventListener("DOMContentLoaded", () => {
       "system",
     );
     try {
+      stopPipelinePolling();
+      currentPipelineRunId = null;
+      lastPipelineEventId = 0;
+      pipelineFinishedSeen = false;
+      setResumeRunButton(null);
       const response = await fetch("/api/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2233,12 +2777,18 @@ document.addEventListener("DOMContentLoaded", () => {
           theme: currentTheme,
           goal: currentGoal,
           bookTitle: currentBookTitle || undefined,
+          chapterId: currentChapterId || undefined,
           chapterTitle:
             currentChapterTitle ||
             bookChapters.find((c) => c.id === currentChapterId)?.title,
         }),
       });
       if (!response.ok) throw new Error(`Server returned ${response.status}`);
+      const runIdHeader = response.headers.get("x-run-id");
+      if (runIdHeader) {
+        currentPipelineRunId = runIdHeader;
+        setResumeRunButton(currentPipelineRunId, { disabled: false });
+      }
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
@@ -2253,19 +2803,39 @@ document.addEventListener("DOMContentLoaded", () => {
           const match = line.match(/^event:\s*(.+)\ndata:\s*(.+)$/s);
           if (!match) continue;
           try {
-            handlePipelineEvent(JSON.parse(match[2]));
+            handleIncomingPipelineEvent(JSON.parse(match[2]));
           } catch (err) {
             console.error(err);
           }
         }
       }
+      if (!pipelineFinishedSeen && currentPipelineRunId) {
+        addLog(
+          "PIPELINE",
+          "Live stream ended early — recovering from persisted run events.",
+          "system",
+        );
+        streamStatus.textContent = "Pipeline reconnecting";
+        startPipelinePolling(currentPipelineRunId);
+      }
     } catch (err) {
-      awaitingBlockApply = false;
-      addLog("ERROR", err.message, "eval");
-      window.alert(err.message);
+      if (currentPipelineRunId) {
+        addLog(
+          "PIPELINE",
+          "Live stream interrupted — restoring updates from persisted run state.",
+          "system",
+        );
+        startPipelinePolling(currentPipelineRunId);
+      } else {
+        awaitingBlockApply = false;
+        setResumeRunButton(null);
+        addLog("ERROR", err.message, "eval");
+        window.alert(err.message);
+      }
     } finally {
-      fireBtn.disabled = false;
-      if (label) label.textContent = "Fire agents";
+      const recovering = Boolean(currentPipelineRunId && pipelinePollTimer);
+      fireBtn.disabled = recovering;
+      if (label) label.textContent = recovering ? "Agents running…" : "Fire agents";
     }
   }
 
@@ -2390,9 +2960,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return [
       currentBookId || "",
       currentBookTitle || "",
-      currentChapterId || "",
       currentChapterTitle || "",
-      composingChapterNumber || "",
     ].join("|");
   }
 
@@ -2438,7 +3006,10 @@ document.addEventListener("DOMContentLoaded", () => {
     pendingSuggestion = null;
     suggestUndoSnapshot = null;
     suggestMode = "idle";
-    if (suggestAcceptBtn) suggestAcceptBtn.textContent = "Accept";
+    if (suggestAcceptBtn) {
+      suggestAcceptBtn.textContent = "Accept suggestion";
+      suggestAcceptBtn.disabled = false;
+    }
   }
 
   function flashSuggestedFields(suggestion) {
@@ -2516,9 +3087,13 @@ document.addEventListener("DOMContentLoaded", () => {
     if (suggestStatus) suggestStatus.hidden = true;
     if (suggestAcceptBtn) {
       suggestAcceptBtn.hidden = false;
-      suggestAcceptBtn.textContent = applied ? "Undo" : "Accept";
+      suggestAcceptBtn.disabled = false;
+      suggestAcceptBtn.textContent = applied ? "Undo suggestion" : "Accept suggestion";
     }
-    if (suggestDismissBtn) suggestDismissBtn.hidden = false;
+    if (suggestDismissBtn) {
+      suggestDismissBtn.hidden = false;
+      suggestDismissBtn.disabled = false;
+    }
     const labelBits = [currentBookTitle, currentChapterTitle].filter(Boolean);
     if (suggestBannerLabel) {
       const prefix = applied ? "AI suggestions applied" : "AI suggestions ready";
@@ -2527,11 +3102,20 @@ document.addEventListener("DOMContentLoaded", () => {
         : prefix;
     }
     if (suggestRationale) {
-      suggestRationale.textContent =
+      const rationale =
         suggestion.rationale ||
         (applied
           ? "Brief, audience, tone, format, length, theme, and goal were filled from book/chapter context."
           : "Suggested brief and parameters based on book and chapter titles.");
+      if (!applied && suggestion?.brief) {
+        const preview = String(suggestion.brief).replace(/\s+/g, " ").trim();
+        suggestRationale.textContent =
+          preview.length > 220
+            ? `${rationale} Preview: ${preview.slice(0, 220)}…`
+            : `${rationale} Preview: ${preview}`;
+      } else {
+        suggestRationale.textContent = rationale;
+      }
     }
     suggestBanner.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
@@ -2567,7 +3151,10 @@ document.addEventListener("DOMContentLoaded", () => {
       suggestBanner.hidden = true;
     }
     suggestMode = "idle";
-    if (suggestAcceptBtn) suggestAcceptBtn.textContent = "Accept";
+    if (suggestAcceptBtn) {
+      suggestAcceptBtn.textContent = "Accept suggestion";
+      suggestAcceptBtn.disabled = false;
+    }
     addLog("SUGGEST", "Undid AI brief suggestions", "system");
   }
 
@@ -2608,10 +3195,14 @@ document.addEventListener("DOMContentLoaded", () => {
           : "Generating AI suggestions";
       }
       if (suggestAcceptBtn) {
-        suggestAcceptBtn.hidden = true;
-        suggestAcceptBtn.textContent = "Accept";
+        suggestAcceptBtn.hidden = false;
+        suggestAcceptBtn.disabled = true;
+        suggestAcceptBtn.textContent = "Generating…";
       }
-      if (suggestDismissBtn) suggestDismissBtn.hidden = true;
+      if (suggestDismissBtn) {
+        suggestDismissBtn.hidden = false;
+        suggestDismissBtn.disabled = true;
+      }
       suggestBanner.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
 
@@ -2621,30 +3212,41 @@ document.addEventListener("DOMContentLoaded", () => {
         headers: { "Content-Type": "application/json" },
         signal: suggestAbort.signal,
         body: JSON.stringify({
+          bookId: currentBookId || undefined,
+          chapterId: currentChapterId || undefined,
           bookTitle: currentBookTitle || undefined,
           bookSynopsis: currentBookSynopsis || undefined,
           chapterTitle: currentChapterTitle || undefined,
           chapterNumber: composingChapterNumber || undefined,
           existingTheme: currentTheme,
           existingGoal: currentGoal,
+          existingChapterBriefs: (bookChapters || []).map((c, i) => ({
+            chapterId: c.id,
+            chapterNumber: Number.isFinite(c.sort_order) ? c.sort_order + 1 : i + 1,
+            title: c.title || `Chapter ${i + 1}`,
+            brief: c.brief || c.body_markdown || "",
+          })),
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Suggest failed");
-      if (suggestContextKey() !== key) return;
-      const suggestion = data.suggestion;
-      // Apply by default unless the user already edited the brief while waiting
-      if (userEditedBriefAfterSuggest) {
-        pendingSuggestion = suggestion;
-        showSuggestBanner(suggestion, { applied: false });
-        addLog(
-          "SUGGEST",
-          "Ready — Accept or Dismiss AI brief suggestions",
-          "system",
-        );
-      } else {
-        applySuggestion(suggestion, { auto: true });
+      if (suggestContextKey() !== key) {
+        addLog("SUGGEST", "Ignored stale suggestion response (context changed)", "system");
+        return;
       }
+      const suggestion = data.suggestion;
+      pendingSuggestion = suggestion;
+      showSuggestBanner(suggestion, { applied: false });
+      if (suggestStatus) {
+        suggestStatus.hidden = false;
+        suggestStatus.textContent = "Review and accept to apply these suggestions.";
+      }
+      if (suggestDismissBtn) suggestDismissBtn.disabled = false;
+      addLog(
+        "SUGGEST",
+        "Ready — Accept or Dismiss AI brief suggestions",
+        "system",
+      );
     } catch (err) {
       if (err.name === "AbortError") return;
       hideSuggestBanner();
@@ -2737,8 +3339,8 @@ document.addEventListener("DOMContentLoaded", () => {
   downloadBtn.addEventListener("click", () => {
     void triggerDownload();
   });
-  void hydrateConfig().then(() => {
-    refreshArticlesList();
-    refreshBooksList();
+  void hydrateConfig().then(async () => {
+    await Promise.all([refreshArticlesList(), refreshBooksList()]);
+    await restoreActivePipelineRun();
   });
 });

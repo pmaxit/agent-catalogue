@@ -5,6 +5,7 @@ import {
   mockSuggestBrief,
   normalizeSuggestResult,
   suggestBrief,
+  suggestModelCandidates,
 } from "../src/suggest-brief.js";
 import type { PipelineConfig } from "../src/types.js";
 
@@ -51,6 +52,30 @@ test("buildSuggestPrompt requires explicit book/chapter specificity", () => {
   assert.match(prompt, /Return ONLY valid JSON/);
 });
 
+test("buildSuggestPrompt includes prior chapter context", () => {
+  const prompt = buildSuggestPrompt({
+    bookTitle: "Reinforcement Learning",
+    chapterTitle: "Chapter 4",
+    existingChapterBriefs: [
+      {
+        chapterId: "abc123",
+        chapterNumber: 1,
+        title: "Chapter 1",
+        brief: "MDPs and Bellman equations",
+      },
+      {
+        chapterId: "def456",
+        chapterNumber: 2,
+        title: "Chapter 2",
+        brief: "Policy iteration and value iteration",
+      },
+    ],
+  });
+  assert.match(prompt, /Prior chapter briefs in this same book/i);
+  assert.match(prompt, /MDPs and Bellman equations/);
+  assert.match(prompt, /avoid overlap/i);
+});
+
 test("suggestBrief uses mock path when mock=true", async () => {
   const suggestion = await suggestBrief({
     input: {
@@ -62,4 +87,34 @@ test("suggestBrief uses mock path when mock=true", async () => {
     config: { defaults: { model: { id: "x" } }, api: {} } as PipelineConfig,
   });
   assert.equal(suggestion.theme, "O'Reilly Book Chapter");
+});
+
+test("suggestModelCandidates includes fallback models without duplicates", () => {
+  const candidates = suggestModelCandidates({
+    api: {
+      suggest_model: "composer-2.5-fast",
+    },
+    defaults: {
+      model: { id: "composer-2.5-fast" },
+    },
+  } as PipelineConfig);
+  assert.deepEqual(candidates, [
+    { id: "composer-2.5", params: [{ id: "fast", value: "true" }] },
+    { id: "composer-2.5" },
+  ]);
+});
+
+test("suggestModelCandidates parses bracket syntax for params", () => {
+  const candidates = suggestModelCandidates({
+    api: {
+      suggest_model: "composer-2.5[fast=false]",
+    },
+    defaults: {
+      model: { id: "composer-2.5" },
+    },
+  } as PipelineConfig);
+  assert.deepEqual(candidates[0], {
+    id: "composer-2.5",
+    params: [{ id: "fast", value: "false" }],
+  });
 });
