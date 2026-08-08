@@ -27,6 +27,28 @@ Append-only log for agent work in this repository.
 
 ---
 
+## 2026-08-08 14:08 UTC - Wire Option C Library Dashboard into live Studio
+- Summary:
+  - Replaced macOS Studio chrome with Option C (Library Dashboard): mint tokens, dashboard-first home, book write workspace with chapter nav + Brief/Draft tabs, and a bottom agent dock for pipeline/roster/stream/scores.
+  - Preserved `app.js` integration IDs (`fire-btn`, form inputs, `stream-box`, node IDs, `criteria-card-grid`, menus, stubs).
+  - Restyled `.book-simple-*` and `.chapter-pick` via CSS; dock opens on Fire/resume/active stream and clears `running` on `pipeline_finished`.
+- Files:
+  - `public/tokens.css`
+  - `public/studio.html`
+  - `public/styles.css`
+  - `public/app.js`
+  - `design/README.md`
+  - `agents/changelog.md`
+- Validation:
+  - `npm run typecheck` -> pass
+  - `npm test` -> pass (29/29)
+  - Manual smoke (`/studio.html`): dashboard with Railway books → open book/chapter write workspace → Fire expands agent dock (pipeline/stream) → Library back returns home
+  - Screenshots: `/opt/cursor/artifacts/screenshots/studio-dashboard-books.png`, `studio-write-workspace.png`, `studio-agent-dock.png`
+- Deployment:
+  - not deployed (await UI confirm per plan)
+
+---
+
 ## 2026-08-08 06:56 UTC-7 - Push rewritten Chapters 1–7 to Railway production DB
 - Summary:
   - Imported local Sutton & Barto style rewrites from `data/chapter-*.qmd` into the production SQLite book via `PUT /api/chapters/:id` (strip YAML frontmatter, prepend `# title`, preserve slug/sortOrder).
