@@ -1,0 +1,885 @@
+<!doctype html>
+<html lang="en" data-variant="A">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Quill — writing studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ─── Mintlify tokens ─── */
+:root {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-warm: #fafafa;
+  --fg: #0d0d0d;
+  --fg-2: #333333;
+  --muted: #666666;
+  --meta: #888888;
+  --border: rgba(0, 0, 0, 0.05);
+  --border-strong: rgba(0,0,0,0.08);
+  --accent: #18E299;
+  --accent-on: #0d0d0d;
+  --accent-hover: #0fa76e;
+  --accent-active: color-mix(in oklab, var(--accent-hover), black 12%);
+  --accent-wash: #d4fae8;
+  --success: #16a34a;
+  --warn: #c37d0d;
+  --danger: #d45656;
+  --font-display: "Inter", "Inter Fallback", system-ui, -apple-system, sans-serif;
+  --font-body: "Inter", "Inter Fallback", system-ui, -apple-system, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
+  --text-xs: 12px; --text-sm: 14px; --text-base: 16px; --text-lg: 18px; --text-xl: 20px; --text-2xl: 24px; --text-3xl: 40px; --text-4xl: 64px;
+  --leading-body: 1.5; --leading-tight: 1.15; --tracking-display: -0.02em;
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-12: 48px;
+  --section-y-desktop: 96px; --section-y-phone: 48px;
+  --radius-sm: 8px; --radius-md: 16px; --radius-lg: 24px; --radius-pill: 9999px;
+  --elev-flat: none; --elev-ring: 0 0 0 1px var(--border); --elev-raised: 0 2px 4px rgba(0,0,0,0.03);
+  --focus-ring: 0 0 0 2px var(--accent);
+  --motion-fast: 150ms; --motion-base: 200ms; --ease-standard: cubic-bezier(0.2,0,0,1);
+  --container-max: 1200px;
+}
+
+/* variant B — Notion Warm */
+html[data-variant="B"] {
+  --bg: #f6f5f4;
+  --surface: #ffffff;
+  --surface-warm: #efeeec;
+  --fg: #11100f;
+  --fg-2: #37352f;
+  --muted: #78716c;
+  --meta: #a8a29e;
+  --border: rgba(17,16,15,0.06);
+  --border-strong: rgba(17,16,15,0.10);
+  --accent: #e07a5f;
+  --accent-on: #ffffff;
+  --accent-hover: #c8664e;
+  --accent-wash: #fde5dc;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-pill: 6px;
+  --font-display: ui-serif, "Source Serif 4", Georgia, serif;
+  --font-body: "Inter", system-ui, sans-serif;
+}
+/* variant C — Shadcn Command Dense */
+html[data-variant="C"] {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-warm: #f5f5f5;
+  --fg: #09090b;
+  --fg-2: #27272a;
+  --muted: #71717a;
+  --meta: #a1a1aa;
+  --border: rgba(0,0,0,0.08);
+  --border-strong: rgba(0,0,0,0.14);
+  --accent: #09090b;
+  --accent-on: #ffffff;
+  --accent-hover: #27272a;
+  --accent-wash: #e4e4e7;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-pill: 6px;
+  --text-3xl: 30px;
+  --space-6: 16px; --space-8: 20px; --space-12: 24px;
+  --font-display: "Geist Mono", ui-monospace, monospace;
+  --font-body: "Geist Mono", ui-monospace, monospace;
+  --font-mono: "Geist Mono", monospace;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;overflow:hidden}
+button,input,textarea,select{font:inherit}
+a{color:inherit;text-decoration:none}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:999px}
+
+/* ─── Top variant bar ─── */
+.variant-bar{
+  height:56px;display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid var(--border);background:var(--surface);
+  padding:0 16px;gap:16px;position:sticky;top:0;z-index:20;
+}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand-mark{width:28px;height:28px;border-radius:8px;background:var(--fg);color:var(--bg);display:grid;place-items:center;font-family:var(--font-mono);font-weight:600;font-size:12px;letter-spacing:0.06em}
+.brand-name{font-weight:600;font-size:15px;letter-spacing:-0.01em}
+.brand-sub{font-size:13px;color:var(--muted);font-weight:400;margin-left:6px}
+.variant-tabs{display:flex;align-items:center;gap:6px;padding:4px;background:var(--surface-warm);border:1px solid var(--border);border-radius:var(--radius-pill)}
+.v-tab{position:relative;display:flex;align-items:center;gap:8px;padding:7px 14px;border-radius:var(--radius-pill);border:1px solid transparent;font-size:13px;font-weight:500;line-height:1;cursor:pointer;transition:all var(--motion-fast) var(--ease-standard);white-space:nowrap;color:var(--muted)}
+.v-tab svg{width:14px;height:14px;opacity:0.9}
+.v-tab.active{background:var(--fg);color:var(--bg);border-color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,0.06)}
+.v-tab.active .rec-badge{background:var(--accent);color:var(--accent-on)}
+html[data-variant="A"] .v-tab.active{box-shadow:var(--elev-raised)}
+.rec-badge{font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;padding:2px 6px;border-radius:999px;background:var(--surface-warm);border:1px solid var(--border);line-height:1}
+.v-tab:not(.active):hover{background:var(--surface);color:var(--fg-2);border-color:var(--border-strong)}
+.variant-right{display:flex;align-items:center;gap:8px}
+.icon-btn{width:32px;height:32px;display:grid;place-items:center;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface);cursor:pointer;transition:all 150ms}
+.icon-btn:hover{border-color:var(--border-strong)}
+
+/* ─── App grid ─── */
+.app{ display:grid; grid-template-columns:280px minmax(0,1fr) 340px; height:calc(100vh - 56px); }
+.sidebar-left{
+  border-right:1px solid var(--border); background:var(--surface);
+  display:flex; flex-direction:column; overflow:hidden;
+}
+.sidebar-right{
+  border-left:1px solid var(--border); background:var(--surface-warm);
+  overflow:auto; display:flex; flex-direction:column;
+}
+.center{overflow:auto;background:var(--bg);position:relative}
+
+/* left */
+.left-top{padding:14px 14px 10px;border-bottom:1px solid var(--border)}
+.search-wrap{position:relative}
+.search-wrap input{
+  width:100%; height:36px; padding:0 12px 0 34px; border-radius:var(--radius-pill);
+  border:1px solid var(--border-strong); background:var(--surface); color:var(--fg);
+  font-size:13px; outline:none; transition:border 150ms, box-shadow 150ms;
+}
+.search-wrap input::placeholder{color:var(--meta)}
+.search-wrap input:focus{border-color:var(--accent); box-shadow:var(--focus-ring)}
+.search-wrap .s-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted)}
+.search-kbd{position:absolute;right:8px;top:50%;transform:translateY(-50%);display:flex;gap:2px}
+.kbd{font-family:var(--font-mono);font-size:10px;font-weight:500;padding:2px 5px;border-radius:4px;border:1px solid var(--border);background:var(--surface-warm);color:var(--muted);line-height:1}
+
+.left-tabs{display:flex;gap:4px;padding:10px 12px 0}
+.seg{flex:1;height:30px;border-radius:var(--radius-pill);border:1px solid var(--border);background:var(--surface-warm);display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:500;letter-spacing:-0.01em;color:var(--muted);cursor:pointer;transition:all 150ms}
+.seg.active{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.left-scroll{flex:1;overflow:auto;padding:10px 8px 12px}
+.book-group{margin-bottom:18px}
+.book-head{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:var(--radius-sm);cursor:pointer;font-weight:600;font-size:13px;letter-spacing:-0.01em}
+.book-head:hover{background:var(--surface-warm)}
+.book-head .chev{transition:transform 150ms}
+.book-head.collapsed .chev{transform:rotate(-90deg)}
+.chapters{margin-top:2px;padding-left:4px}
+.ch-row{display:flex;align-items:center;gap:8px;padding:6px 8px 6px 26px;border-radius:8px;font-size:13px;color:var(--fg-2);cursor:pointer;position:relative;transition:all 120ms}
+.ch-row .num{font-family:var(--font-mono);font-size:11px;color:var(--meta);letter-spacing:0.04em}
+.ch-row.active{background:var(--accent-wash);color:var(--fg);font-weight:500;border:1px solid color-mix(in oklab, var(--accent), black 8%)}
+.ch-row.active .num{color:var(--accent-hover)}
+.ch-row:hover:not(.active){background:var(--surface-warm)}
+
+.new-actions{padding:10px 8px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:6px}
+.btn{height:36px;padding:0 14px;border-radius:var(--radius-pill);border:1px solid var(--border-strong);background:var(--surface);color:var(--fg);font-size:13.5px;font-weight:500;display:inline-flex;align-items:center;gap:8px;cursor:pointer;transition:all 150ms;white-space:nowrap}
+.btn:hover{border-color:var(--fg);transform:translateY(-0.5px)}
+.btn-primary{background:var(--fg);color:var(--bg);border-color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,0.06)}
+.btn-primary:hover{background:var(--fg);opacity:0.9}
+.btn-accent{background:var(--accent);color:var(--accent-on);border-color:var(--accent)}
+.btn-accent:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
+.btn-ghost{background:transparent;border-color:transparent;color:var(--muted)}
+.btn-ghost:hover{background:var(--surface-warm);color:var(--fg)}
+.btn svg{width:14px;height:14px}
+.left-foot{padding:10px 12px;border-top:1px solid var(--border);display:flex;gap:6px;flex-wrap:wrap}
+.mode-badge{font-family:var(--font-mono);font-size:10px;letter-spacing:0.06em;text-transform:uppercase;padding:3px 8px;border-radius:var(--radius-pill);border:1px solid var(--border);background:var(--surface-warm);color:var(--muted);display:inline-flex;align-items:center;gap:4px}
+.mode-badge.live{color:var(--fg);border-color:var(--accent);background:var(--accent-wash)}
+.mode-badge.live .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px var(--accent-wash)}
+
+/* center */
+.center-inner{max-width:840px;margin:0 auto;padding:28px 28px 120px}
+.breadcrumb{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);font-weight:400;margin-bottom:14px;flex-wrap:wrap}
+.breadcrumb span.sep{opacity:0.5}
+.breadcrumb b{color:var(--fg-2);font-weight:500}
+.page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px}
+.h-title{font-size:var(--text-3xl);font-weight:600;line-height:1.1;letter-spacing:-0.8px;margin:0 0 8px}
+.h-sub{color:var(--muted);font-size:14px;line-height:1.6;max-width:58ch}
+.head-actions{display:flex;gap:8px}
+.tag{font-family:var(--font-mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;padding:4px 9px;border-radius:var(--radius-pill);border:1px solid var(--border);background:var(--surface-warm);color:var(--muted)}
+
+.builder-section{margin-top:28px;padding-top:24px;border-top:1px solid var(--border)}
+.section-meta{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.sec-num{width:28px;height:28px;border-radius:999px;display:grid;place-items:center;background:var(--fg);color:var(--bg);font-family:var(--font-mono);font-size:11px;font-weight:600}
+.sec-label{font-family:var(--font-mono);font-size:12px;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);font-weight:500}
+.sec-title{font-size:18px;font-weight:600;letter-spacing:-0.2px;line-height:1.2;margin:0 0 2px}
+.sec-desc{font-size:13px;color:var(--muted);margin:0}
+
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.chip{height:32px;padding:0 14px;border-radius:var(--radius-pill);border:1px solid var(--border-strong);background:var(--surface);color:var(--fg-2);font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all 150ms;user-select:none}
+.chip:hover{border-color:var(--fg);color:var(--fg);transform:translateY(-0.5px)}
+.chip.active{background:var(--accent);color:var(--accent-on);border-color:var(--accent);box-shadow:0 1px 2px rgba(0,0,0,0.06)}
+.chip.active.balck-active{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+html[data-variant="A"] .chip.active{background:#0d0d0d;color:#fff;border-color:#0d0d0d}
+html[data-variant="A"] .chip.active.accented{background:var(--accent);color:var(--accent-on);border-color:var(--accent)}
+html[data-variant="C"] .chip{font-family:var(--font-mono);font-size:12px}
+
+.voice-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+.voice-card{border:1px solid var(--border);background:var(--surface);border-radius:var(--radius-md);padding:16px;cursor:pointer;transition:all 150ms;position:relative;overflow:hidden}
+.voice-card:hover{border-color:var(--border-strong);box-shadow:var(--elev-raised);transform:translateY(-1px)}
+.voice-card.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent), var(--elev-raised);background:color-mix(in srgb, var(--accent-wash) 60%, var(--surface))}
+.voice-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.swatch{display:flex;align-items:center;gap:8px}
+.dot-swatch{width:10px;height:10px;border-radius:50%;}
+.voice-name{font-weight:600;font-size:13.5px;letter-spacing:-0.01em}
+.voice-desc{font-size:12.5px;color:var(--muted);line-height:1.5}
+.voice-meta{margin-top:10px;display:flex;gap:6px;flex-wrap:wrap}
+.mini{font-family:var(--font-mono);font-size:10px;letter-spacing:0.04em;padding:2px 6px;border-radius:4px;border:1px solid var(--border);background:var(--surface-warm);color:var(--muted)}
+
+/* Brief */
+.brief-card{margin-top:14px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--surface);box-shadow:var(--elev-raised);overflow:hidden}
+.brief-top{padding:16px 16px 0}
+.brief-textarea{width:100%;min-height:128px;resize:vertical;padding:14px 14px;border-radius:12px;border:1px solid var(--border-strong);background:var(--bg);outline:none;font-size:14px;line-height:1.6;color:var(--fg);transition:border 150ms, box-shadow 150ms}
+.brief-textarea::placeholder{color:var(--meta)}
+.brief-textarea:focus{border-color:var(--accent);box-shadow:var(--focus-ring)}
+.readiness{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:1px solid var(--border);border-bottom:1px solid var(--border);background:var(--surface-warm)}
+.readiness-left{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--fg-2);font-weight:500}
+.readiness-bar{width:96px;height:6px;border-radius:999px;background:var(--border-strong);overflow:hidden}
+.readiness-fill{height:100%;background:var(--accent);border-radius:999px}
+.input-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:16px}
+.pill-field{position:relative}
+.pill-field label{font-family:var(--font-mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);font-weight:500;margin:0 0 6px 2px;display:block}
+.pill-field input{width:100%;height:40px;padding:0 14px;border-radius:var(--radius-pill);border:1px solid var(--border-strong);background:var(--bg);font-size:13.5px;color:var(--fg);outline:none;transition:all 150ms}
+.pill-field input:focus{border-color:var(--accent);box-shadow:var(--focus-ring)}
+.controls-row{display:flex;align-items:center;gap:16px;padding:0 16px 16px;flex-wrap:wrap}
+.range-wrap{display:flex;align-items:center;gap:12px;flex:1;min-width:220px}
+.range-wrap input[type="range"]{flex:1;accent-color:var(--fg)}
+.threshold{flex:1;display:flex;align-items:center;gap:10px;min-width:200px}
+.thresh-track{flex:1;height:8px;border-radius:999px;background:var(--surface-warm);border:1px solid var(--border);position:relative;overflow:hidden;display:flex}
+.thresh-seg{flex:1;border-right:1px solid var(--border)}
+.thresh-seg.filled{background:var(--accent)}
+.brief-actions{padding:16px;display:flex;gap:10px;border-top:1px solid var(--border);background:var(--surface)}
+
+/* Judging */
+.judge-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+.judge-card{border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface);padding:14px;transition:all 150ms}
+.judge-card:hover{border-color:var(--border-strong);box-shadow:var(--elev-raised)}
+.judge-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px}
+.judge-title{font-size:13.5px;font-weight:600;letter-spacing:-0.01em;display:flex;align-items:center;gap:8px}
+.judge-title input[type="checkbox"]{width:16px;height:16px;accent-color:var(--accent);border-radius:4px}
+.judge-desc{font-size:12px;color:var(--muted);line-height:1.5;margin:0}
+.judge-foot{margin-top:10px;display:flex;align-items:center;gap:8px}
+.thresh-label{font-family:var(--font-mono);font-size:11px;color:var(--muted)}
+.judge-slider{flex:1;height:4px;background:var(--surface-warm);border:1px solid var(--border);border-radius:999px;position:relative}
+.judge-fill{position:absolute;left:0;top:0;bottom:0;background:var(--fg);border-radius:999px}
+.judge-card.pass{border-color:color-mix(in oklab, var(--success), white 60%)}
+.judge-card.fail{border-color:color-mix(in oklab, var(--danger), white 60%)}
+
+/* Right sidebar */
+.right-inner{padding:14px 14px 32px;display:flex;flex-direction:column;gap:22px}
+.right-head{display:flex;align-items:center;justify-content:space-between}
+.right-title{font-size:12px;font-family:var(--font-mono);letter-spacing:0.06em;text-transform:uppercase;font-weight:600;color:var(--muted)}
+.loop-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:var(--radius-pill);background:var(--fg);color:var(--bg);font-family:var(--font-mono);font-size:11px;font-weight:500;letter-spacing:0.02em}
+.loop-badge .pulse{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse 1.2s infinite}
+
+.stepper{position:relative;padding-left:20px}
+.stepper:before{content:"";position:absolute;left:7px;top:6px;bottom:6px;width:1px;background:var(--border-strong)}
+.step{display:flex;gap:12px;padding:10px 0;position:relative}
+.step-dot{position:absolute;left:-20px;top:14px;width:14px;height:14px;border-radius:50%;border:2px solid var(--border-strong);background:var(--surface);display:grid;place-items:center;z-index:1}
+.step.done .step-dot{background:var(--fg);border-color:var(--fg);color:var(--bg)}
+.step.active .step-dot{border-color:var(--accent);background:var(--surface);box-shadow:0 0 0 3px var(--accent-wash)}
+.step-dot svg{width:8px;height:8px}
+.step-content{flex:1;min-width:0}
+.step-label{font-family:var(--font-mono);font-size:11px;letter-spacing:0.04em;color:var(--muted);display:flex;align-items:center;gap:6px}
+.step-label b{color:var(--fg);font-size:12px;letter-spacing:-0.01em}
+.step-sub{margin-top:4px;display:flex;flex-direction:column;gap:4px}
+.sub-item{font-size:12.5px;color:var(--fg-2);display:flex;align-items:center;gap:6px;padding:3px 6px;border-radius:6px;background:var(--surface);border:1px solid var(--border)}
+.sub-item.active{border-color:var(--accent);background:var(--accent-wash)}
+
+.agent-roster{display:flex;flex-direction:column;gap:8px}
+.agent-card{display:flex;gap:10px;padding:10px;border-radius:12px;border:1px solid var(--border);background:var(--surface);transition:all 150ms}
+.agent-card:hover{border-color:var(--border-strong)}
+.agent-avatar{width:28px;height:28px;border-radius:50%;background:var(--surface-warm);border:1px solid var(--border);display:grid;place-items:center;font-family:var(--font-mono);font-size:10px;font-weight:600;color:var(--muted);position:relative;flex-shrink:0}
+.agent-avatar .live-dot{position:absolute;right:-2px;bottom:-1px;width:8px;height:8px;border-radius:50%;background:var(--accent);border:2px solid var(--surface);animation:pulse 1.6s infinite}
+.agent-meta{flex:1;min-width:0}
+.agent-name{font-size:12.5px;font-weight:600;letter-spacing:-0.01em;display:flex;align-items:center;gap:6px}
+.agent-role{font-size:11.5px;color:var(--muted);margin-top:1px}
+.agent-msg{margin-top:6px;font-family:var(--font-mono);font-size:11px;color:var(--fg-2);background:var(--surface-warm);border:1px solid var(--border);border-radius:6px;padding:4px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.console{border-radius:var(--radius-md);border:1px solid var(--border);background:#0d0d0d;color:#e5e7eb;overflow:hidden;box-shadow:var(--elev-raised)}
+html[data-variant="B"] .console{background:#1c1917;color:#e7e5e4;border-color:#292524}
+html[data-variant="C"] .console{background:#09090b;color:#fafafa}
+.console-head{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.02)}
+.console-title{font-family:var(--font-mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#a1a1aa;display:flex;align-items:center;gap:6px}
+.console-dots{display:flex;gap:4px}
+.c-dot{width:8px;height:8px;border-radius:50%}
+#stream-box{height:220px;overflow:auto;padding:8px 10px;font-family:var(--font-mono);font-size:12px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
+.log-line{opacity:0;animation:logIn 200ms ease forwards}
+.log-line .ts{color:#71717a}
+.log-line .tag{font-weight:600;padding:0 6px;border-radius:4px;margin:0 4px; border:none}
+.tag-PLAN{background:rgba(24,226,153,0.15);color:#18E299}
+.tag-RES{background:rgba(96,165,250,0.15);color:#60a5fa}
+.tag-WRITE{background:rgba(251,191,36,0.15);color:#fbbf24}
+.tag-JUDGE{background:rgba(244,114,182,0.15);color:#f472b6}
+.tag-SYS{color:#a1a1aa}
+
+.score-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.score-card{border-radius:12px;border:1px solid var(--border);background:var(--surface);padding:10px}
+.score-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.score-name{font-size:12px;font-weight:600}
+.score-val{font-family:var(--font-mono);font-size:11px;padding:2px 6px;border-radius:999px;border:1px solid var(--border)}
+.score-val.pass{background:var(--accent-wash);color:var(--accent-hover);border-color:color-mix(in oklab, var(--accent), black 10%)}
+.score-val.fail{background:#fee2e2;color:#b91c1c;border-color:#fecaca}
+.score-track{height:4px;background:var(--surface-warm);border-radius:999px;overflow:hidden;border:1px solid var(--border)}
+.score-fill{height:100%;background:var(--fg);border-radius:999px}
+.score-fill.pass{background:var(--accent)}
+.score-fill.fail{background:var(--danger)}
+
+.article-canvas{border:1px solid var(--border);background:var(--surface);border-radius:var(--radius-lg);box-shadow:var(--elev-raised);overflow:hidden}
+.canvas-head{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface-warm)}
+.canvas-title{font-family:var(--font-mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted)}
+.canvas-body{padding:18px 20px}
+.canvas-body h1{font-size:22px;font-weight:600;line-height:1.2;letter-spacing:-0.4px;margin:0 0 12px}
+.canvas-body blockquote{margin:14px 0;padding:10px 14px;border-left:3px solid var(--accent);background:var(--accent-wash);border-radius:0 8px 8px 0;font-size:13.5px;color:var(--fg-2);line-height:1.6}
+.code-block{border:1px solid var(--border);border-radius:12px;overflow:hidden;margin:14px 0;background:var(--surface-warm)}
+.code-label{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border-bottom:1px solid var(--border);font-family:var(--font-mono);font-size:10.5px;letter-spacing:0.05em;text-transform:uppercase;color:var(--muted)}
+.code-pre{margin:0;padding:12px 14px;font-family:var(--font-mono);font-size:12px;line-height:1.6;overflow:auto;background:#0d0d0d;color:#e5e7eb}
+html[data-variant="B"] .code-pre{background:#1c1917}
+.drawio-wrap{border:1px solid var(--border);border-radius:12px;overflow:hidden;margin:16px 0;background:var(--bg)}
+.drawio-toolbar{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--border);background:var(--surface-warm)}
+.drawio-toolbar .tool{width:24px;height:24px;border-radius:6px;border:1px solid var(--border);background:var(--surface);display:grid;place-items:center}
+.drawio-canvas{height:168px;position:relative;background:
+  radial-gradient(circle, var(--border-strong) 1px, transparent 1px) 0 0 / 16px 16px;
+  display:flex;align-items:center;justify-content:center}
+.diagram-node{position:absolute;background:var(--surface);border:1px solid var(--border-strong);border-radius:10px;padding:8px 10px;font-size:11.5px;font-weight:500;box-shadow:var(--elev-raised);display:flex;align-items:center;gap:6px}
+.diagram-node.primary{border-color:var(--accent);background:var(--accent-wash)}
+.diagram-line{position:absolute;height:1px;background:var(--border-strong)}
+.canvas-table{width:100%;border-collapse:collapse;margin-top:14px;font-size:12.5px}
+.canvas-table th{font-family:var(--font-mono);font-size:11px;letter-spacing:0.05em;text-transform:uppercase;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:1px solid var(--border-strong);font-weight:500}
+.canvas-table td{padding:8px 10px;border-bottom:1px solid var(--border);color:var(--fg-2)}
+
+/* Responsive */
+@media (max-width:1180px){
+  .app{grid-template-columns:280px minmax(0,1fr)}
+  .sidebar-right{display:none}
+  .sidebar-right.mobile-open{display:flex;position:fixed;right:0;top:56px;bottom:0;width:360px;z-index:30;box-shadow:-12px 0 32px rgba(0,0,0,0.08)}
+}
+@media (max-width:900px){
+  body{overflow:auto}
+  .app{display:flex;flex-direction:column;height:auto}
+  .sidebar-left{width:100%;border-right:none;border-bottom:1px solid var(--border)}
+  .center-inner{padding:18px 16px 40px}
+  .voice-grid,.input-grid,.judge-grid{grid-template-columns:1fr}
+  .variant-bar{overflow:auto}
+  .variant-tabs{flex-shrink:0}
+}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.2);opacity:0.7}}
+@keyframes logIn{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
+
+/* focus */
+*:focus-visible{outline:none;box-shadow:var(--focus-ring)}
+</style>
+</head>
+<body>
+<header class="variant-bar">
+  <div class="brand">
+    <div class="brand-mark">Q</div>
+    <div style="display:flex;align-items:baseline;gap:2px;flex-wrap:wrap">
+      <span class="brand-name">Quill</span><span class="brand-sub">writing studio</span>
+    </div>
+  </div>
+
+  <div class="variant-tabs" role="tablist" aria-label="design variants">
+    <button class="v-tab active" data-variant="A" role="tab" aria-selected="true">
+      <svg viewBox="0 0 16 16" fill="none"><path d="M8 1.5c-2.5 0-4.5 2-4.5 4.5S6 12 8 12M8 1.5c2.5 0 4.5 2 4.5 4.5S10.5 12 8 12M3.5 6h9M3.5 10h9" stroke="currentColor" stroke-width="1.2"/></svg>
+      Option A GitBook Mint
+      <span class="rec-badge">Recommended</span>
+    </button>
+    <button class="v-tab" data-variant="B" role="tab">
+      <svg viewBox="0 0 16 16" fill="none"><rect x="2.5" y="2.5" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.2"/><path d="M5 8h6" stroke="currentColor" stroke-width="1.2"/></svg>
+      Option B Notion Warm
+    </button>
+    <button class="v-tab" data-variant="C" role="tab">
+      <svg viewBox="0 0 16 16" fill="none"><path d="M2.5 5l3-3M13.5 5l-3-3M2.5 11l3 3M13.5 11l-3-3M5.5 8h5" stroke="currentColor" stroke-width="1.2"/></svg>
+      Option C Shadcn Dense
+    </button>
+  </div>
+
+  <div class="variant-right">
+    <button class="icon-btn" title="Toggle right pane" id="toggle-right">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 2H3.5A1.5 1.5 0 0 0 2 3.5v9A1.5 1.5 0 0 0 3.5 14H6M10 3.5v9M9 5l3-2M9 11l3 2" stroke="currentColor" stroke-width="1.2"/></svg>
+    </button>
+    <button class="icon-btn" title="Publish">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2.5v9M5 8.5l3 3 3-3" stroke="currentColor" stroke-width="1.2"/></svg>
+    </button>
+  </div>
+</header>
+
+<div class="app">
+  <!-- LEFT -->
+  <aside class="sidebar-left">
+    <div class="left-top">
+      <div class="search-wrap">
+        <span class="s-icon">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M7 11A4 4 0 1 0 7 3a4 4 0 0 0 0 8Z M10.5 10.5l2.5 2.5" stroke="currentColor" stroke-width="1.2"/></svg>
+        </span>
+        <input placeholder="Search chapters, notes…" id="search-input"/>
+        <span class="search-kbd"><span class="kbd">⌘</span><span class="kbd">K</span></span>
+      </div>
+      <div class="left-tabs">
+        <button class="seg active">Books</button>
+        <button class="seg">Articles</button>
+      </div>
+    </div>
+
+    <div class="left-scroll">
+      <div id="books-list">
+        <div class="book-group">
+          <div class="book-head">
+            <span class="chev"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.2"/></svg></span>
+            <span>Delegating Without Soft Exits</span>
+            <span style="margin-left:auto" class="mode-badge live"><span class="dot"></span> active</span>
+          </div>
+          <div class="chapters">
+            <div class="ch-row"><span class="num">CH.1</span><span>The Handoff Problem</span></div>
+            <div class="ch-row active"><span class="num">CH.2</span><span>Delegating draft without soft exits</span></div>
+            <div class="ch-row"><span class="num">CH.3</span><span>Trace-first coordination</span></div>
+            <div class="ch-row"><span class="num">CH.4</span><span>Judge prompts that bite</span></div>
+            <div class="ch-row"><span class="num">CH.5</span><span>Quarto as execution surface</span></div>
+          </div>
+        </div>
+
+        <div class="book-group">
+          <div class="book-head collapsed">
+            <span class="chev"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.2"/></svg></span>
+            <span>Agent Standards</span>
+            <span style="margin-left:auto" class="tag" style="font-size:10px">12 ch</span>
+          </div>
+          <div class="chapters" style="display:none">
+            <div class="ch-row"><span class="num">CH.1</span><span>Evaluation harness</span></div>
+            <div class="ch-row"><span class="num">CH.2</span><span>Tooling contracts</span></div>
+          </div>
+        </div>
+
+        <div class="book-group">
+          <div class="book-head collapsed">
+            <span class="chev"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.2"/></svg></span>
+            <span>Field Notes 2024</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="new-actions">
+      <button class="btn btn-primary"><svg viewBox="0 0 16 16" fill="none"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.3"/></svg> New Book</button>
+      <div style="display:flex;gap:6px">
+        <button class="btn" style="flex:1"><svg viewBox="0 0 16 16" fill="none"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.2"/></svg> New Chapter</button>
+        <button class="btn" style="flex:1"><svg viewBox="0 0 16 16" fill="none"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.2"/></svg> Article</button>
+      </div>
+    </div>
+    <div class="left-foot">
+      <span class="mode-badge live"><span class="dot"></span> DRAFT MODE</span>
+      <span class="mode-badge">SYNCED • 2m ago</span>
+      <span class="mode-badge">QUARTO • qmd</span>
+    </div>
+  </aside>
+
+  <!-- CENTER -->
+  <main class="center">
+    <div class="center-inner">
+      <div class="breadcrumb"><span>Books</span><span class="sep">/</span><span>Delegating Without Soft Exits</span><span class="sep">/</span><b>Ch.2 Agent Orchestration</b></div>
+
+      <div class="page-head">
+        <div>
+          <h1 class="h-title">Delegating draft without soft exits</h1>
+          <p class="h-sub">Build a brief that forces agents to produce verifiable output. No “I’ll pass for now.” Every loop must leave a file, a trace, and a score.</p>
+        </div>
+        <div class="head-actions">
+          <span class="tag">Brief builder</span>
+          <span class="tag">v0.8.2</span>
+        </div>
+      </div>
+
+      <!-- I Writing Goal -->
+      <div class="builder-section" data-od-id="goal">
+        <div class="section-meta">
+          <div class="sec-num">I</div><div>
+            <p class="sec-title">Writing Goal</p>
+            <p class="sec-desc">Pick the job this chapter has to do. Goal rewrites the judge weights.</p>
+          </div>
+        </div>
+        <div class="chips" id="goal-chips">
+          <button class="chip active accented">Thought Leadership</button>
+          <button class="chip">Technical Deep Dive</button>
+          <button class="chip">Product Narrative</button>
+          <button class="chip">Executive Brief</button>
+          <button class="chip">Book Chapter</button>
+        </div>
+      </div>
+
+      <!-- II Theme & Voice -->
+      <div class="builder-section" data-od-id="voice">
+        <div class="section-meta">
+          <div class="sec-num">II</div><div>
+            <p class="sec-title">Theme & Voice</p>
+            <p class="sec-desc">6 proven voices calibrated for agent critique. One active, all auditable.</p>
+          </div>
+        </div>
+        <div class="voice-grid" id="voice-grid">
+          <div class="voice-card active" data-voice="agentic">
+            <div class="voice-top">
+              <div class="swatch"><span class="dot-swatch" style="background:#0d0d0d"></span><span class="voice-name">Agentic Command</span></div>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8l3 3 7-7" stroke="var(--accent)" stroke-width="1.6"/></svg>
+            </div>
+            <p class="voice-desc">Direct, imperative, operator-to-operator. Short sentences. No hedge.</p>
+            <div class="voice-meta"><span class="mini">— COORDINATION</span><span class="mini">CLI FIRST</span></div>
+          </div>
+
+          <div class="voice-card" data-voice="trace">
+            <div class="voice-top"><div class="swatch"><span class="dot-swatch" style="background:#18E299"></span><span class="voice-name">Technical Trace</span></div></div>
+            <p class="voice-desc">Every claim leaves a file path, log line, or screenshot. Verification > eloquence.</p>
+            <div class="voice-meta"><span class="mini">EVAL HEAVY</span><span class="mini">0.85+ THRESH</span></div>
+          </div>
+
+          <div class="voice-card" data-voice="editorial">
+            <div class="voice-top"><div class="swatch"><span class="dot-swatch" style="background:#6b7280"></span><span class="voice-name">Editorial Signal</span></div></div>
+            <p class="voice-desc">Magazine pacing, tightlede sections. Pull quotes as anchors.</p>
+            <div class="voice-meta"><span class="mini">LONGFORM</span><span class="mini">HUMAN READ</span></div>
+          </div>
+
+          <div class="voice-card" data-voice="narrative">
+            <div class="voice-top"><div class="swatch"><span class="dot-swatch" style="background:#a855f7"></span><span class="voice-name">Narrative Pulse</span></div></div>
+            <p class="voice-desc">War stories from night loops. Sensory detail, then mechanism.</p>
+            <div class="voice-meta"><span class="mini">STORY</span><span class="mini">BEFORE/AFTER</span></div>
+          </div>
+
+          <div class="voice-card" data-voice="exec">
+            <div class="voice-top"><div class="swatch"><span class="dot-swatch" style="background:#111"></span><span class="voice-name">Executive Crisp</span></div></div>
+            <p class="voice-desc">One insight per paragraph. Numbers first. Decision frame at end.</p>
+            <div class="voice-meta"><span class="mini">BRIEF</span><span class="mini">400 WORDS</span></div>
+          </div>
+
+          <div class="voice-card" data-voice="oreilly">
+            <div class="voice-top"><div class="swatch"><span class="dot-swatch" style="background:#c37d0d"></span><span class="voice-name">O'Reilly Book Chapter</span></div></div>
+            <p class="voice-desc">Teaching voice with callouts, diagrams, and “try it now” exercises.</p>
+            <div class="voice-meta"><span class="mini">DIDACTIC</span><span class="mini">DIAGRAMS</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- III Brief -->
+      <div class="builder-section" data-od-id="brief">
+        <div class="section-meta">
+          <div class="sec-num">III</div><div>
+            <p class="sec-title">Brief</p>
+            <p class="sec-desc">The only free-text agents may not ignore. Must name subject, angle, and non-negotiables.</p>
+          </div>
+        </div>
+
+        <form id="agent-form" class="brief-card">
+          <div class="brief-top">
+            <textarea id="brief-input" class="brief-textarea" placeholder="Describe subject, angle, constraints… e.g. Delegating chapter drafts to sub-agents without allowing soft exits. Angle: treat draft as trace artifact, not prose. Constraints: every loop writes to /drafts, judge checks file existence, 0.85 correctness minimum.">Delegating chapter drafts to sub-agents without allowing soft exits. Angle: treat draft as trace artifact, not prose. Every loop must write to /drafts, expose tool calls, and emit a judge-readable score. Non-negotiables: no hedge language, no empty commits, Quarto render must pass.</textarea>
+          </div>
+
+          <div class="readiness">
+            <div class="readiness-left"><span>Readiness</span><b>2 of 3 ready</b><span style="color:var(--muted);font-weight:400">Goal + Voice locked</span></div>
+            <div style="display:flex;align-items:center;gap:8px"><div class="readiness-bar"><div class="readiness-fill" style="width:66%"></div></div><span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">66%</span></div>
+          </div>
+
+          <div class="input-grid">
+            <div class="pill-field"><label>Audience</label><input id="audience-input" placeholder="Staff engineers, TM leads" value="Staff engineers, writing tool builders"/></div>
+            <div class="pill-field"><label>Tone</label><input id="tone-input" placeholder="Imperative, trace-first" value="Imperative, trace-first, no hedge"/></div>
+            <div class="pill-field"><label>Format</label><input id="format-input" placeholder="Quarto qmd + draw.io" value="Quarto qmd + draw.io + table"/></div>
+            <div class="pill-field"><label>Length</label><input id="length-input" placeholder="900–1200 words" value="900–1200 words, 1 diagram"/></div>
+          </div>
+
+          <div class="controls-row">
+            <div class="range-wrap">
+              <label class="sec-label" style="white-space:nowrap">Max loops</label>
+              <input type="range" min="1" max="8" value="5" id="loops-range"/>
+              <span class="tag" id="loops-val" style="min-width:36px;text-align:center">5</span>
+            </div>
+            <div class="threshold">
+              <label class="sec-label">Threshold</label>
+              <div class="thresh-track" id="thresh-track">
+                <div class="thresh-seg filled" style="flex:2"></div><div class="thresh-seg filled"></div><div class="thresh-seg"></div><div class="thresh-seg"></div>
+              </div>
+              <span class="tag">0.85</span>
+            </div>
+          </div>
+
+          <div class="brief-actions">
+            <button type="button" id="fire-btn" class="btn btn-accent" style="height:42px;padding:0 22px;font-weight:600;font-size:14px;gap:8px">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3l2.8 2.8L8 8.6 5.2 5.8 8 3ZM8 8.6V13M3 13h10" stroke="currentColor" stroke-width="1.3"/></svg>
+              Fire agents
+              <span style="font-family:var(--font-mono);font-size:11px;opacity:0.7;margin-left:4px">⌘↵</span>
+            </button>
+            <button type="reset" class="btn" style="height:42px">Reset</button>
+            <span style="margin-left:auto;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px"><span style="width:6px;height:6px;background:var(--accent);border-radius:50%;display:inline-block"></span> autosaved 12s ago</span>
+          </div>
+        </form>
+      </div>
+
+      <!-- IV Judging Criteria -->
+      <div class="builder-section" data-od-id="judge">
+        <div class="section-meta">
+          <div class="sec-num">IV</div><div>
+            <p class="sec-title">Judging Criteria</p>
+            <p class="sec-desc">Checked cards become blocking gates. Unchecked = advisory. Judge fails loop if any blocking < threshold.</p>
+          </div>
+        </div>
+        <div class="judge-grid" id="judge-grid">
+          <div class="judge-card pass">
+            <div class="judge-head"><div class="judge-title"><input type="checkbox" checked/> Correctness 0.85+</div><span class="tag" style="font-size:10px">BLOCKING</span></div>
+            <p class="judge-desc">All file refs exist, code runs, no hallucinated APIs. Verifier script must exit 0.</p>
+            <div class="judge-foot"><span class="thresh-label">0.85</span><div class="judge-slider"><div class="judge-fill" style="width:85%"></div></div><span class="tag" style="font-size:10px">85%</span></div>
+          </div>
+          <div class="judge-card">
+            <div class="judge-head"><div class="judge-title"><input type="checkbox" checked/> Clarity</div><span class="tag" style="font-size:10px">ADVISORY</span></div>
+            <p class="judge-desc">One idea per para, no hedge bank, active verbs. Flesch ≥ 55, avg sentence < 22w.</p>
+            <div class="judge-foot"><span class="thresh-label">0.78</span><div class="judge-slider"><div class="judge-fill" style="width:78%"></div></div></div>
+          </div>
+          <div class="judge-card">
+            <div class="judge-head"><div class="judge-title"><input type="checkbox" checked/> Helpfulness</div></div>
+            <p class="judge-desc">Reader can implement loop tomorrow. Includes paths, commands, failure modes.</p>
+            <div class="judge-foot"><span class="thresh-label">0.80</span><div class="judge-slider"><div class="judge-fill" style="width:80%"></div></div></div>
+          </div>
+          <div class="judge-card pass">
+            <div class="judge-head"><div class="judge-title"><input type="checkbox" checked/> Code + output</div><span class="tag" style="font-size:10px">BLOCKING</span></div>
+            <p class="judge-desc">At least one runnable snippet + captured output. No placeholder diffs.</p>
+            <div class="judge-foot"><span class="thresh-label">0.90</span><div class="judge-slider"><div class="judge-fill" style="width:90%"></div></div></div>
+          </div>
+          <div class="judge-card">
+            <div class="judge-head"><div class="judge-title"><input type="checkbox"/> Visual feedback</div></div>
+            <p class="judge-desc">Diagram renders, table parses, no overflow at 360px. Playwright trace exists.</p>
+            <div class="judge-foot"><span class="thresh-label">0.75</span><div class="judge-slider"><div class="judge-fill" style="width:28%;background:var(--border-strong)"></div></div></div>
+          </div>
+          <div class="judge-card">
+            <div class="judge-head"><div class="judge-title"><input type="checkbox" checked/> Reader pull</div></div>
+            <p class="judge-desc">First para makes engineer stay. No generic cold open. Specificity score via LLM.</p>
+            <div class="judge-foot"><span class="thresh-label">0.70</span><div class="judge-slider"><div class="judge-fill" style="width:70%"></div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- RIGHT -->
+  <aside class="sidebar-right" id="right-pane">
+    <div class="right-inner">
+      <div>
+        <div class="right-head"><span class="right-title">Execution Trace</span><span class="loop-badge"><span class="pulse"></span> Loop 2/5</span></div>
+        <div class="stepper">
+          <div class="step done"><div class="step-dot"><svg viewBox="0 0 16 16" fill="none"><path d="M3 8l3 3 7-7" stroke="white" stroke-width="1.4"/></svg></div><div class="step-content"><div class="step-label"><b>01 Planner</b> — done • 12s</div></div></div>
+          <div class="step active"><div class="step-dot"></div><div class="step-content"><div class="step-label"><b>02 Research</b> — active</div><div class="step-sub"><div class="sub-item active"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" fill="var(--accent)"/></svg> Trace evidence</div><div class="sub-item">Judge harness refs</div><div class="sub-item">Quarto patterns</div></div></div></div>
+          <div class="step"><div class="step-dot"></div><div class="step-content"><div class="step-label"><b>03 Writer</b> — queued</div></div></div>
+          <div class="step"><div class="step-dot"></div><div class="step-content"><div class="step-label"><b>04 Judge</b> — waiting</div></div></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="right-head" style="margin-bottom:8px"><span class="right-title">Agent Roster</span><span class="tag" style="font-size:10px">5 agents</span></div>
+        <div class="agent-roster">
+          <div class="agent-card"><div class="agent-avatar">PL<div class="live-dot"></div></div><div class="agent-meta"><div class="agent-name">Planner <span style="font-weight:400;color:var(--muted)">• done</span></div><div class="agent-role">Structure + anti-soft-exit gates</div><div class="agent-msg">drafts/plan.json written • 3 gates defined</div></div></div>
+          <div class="agent-card"><div class="agent-avatar">R1<div class="live-dot"></div></div><div class="agent-meta"><div class="agent-name">Researcher — Trace</div><div class="agent-role">Evidence harvester</div><div class="agent-msg">found: 2 repos, 1 eval log, 1 quarto theme</div></div></div>
+          <div class="agent-card"><div class="agent-avatar">R2</div><div class="agent-meta"><div class="agent-name">Researcher — Judge</div><div class="agent-role">Criteria → prompts</div><div class="agent-msg">queued • will compile judge-v2.md</div></div></div>
+          <div class="agent-card"><div class="agent-avatar">WR</div><div class="agent-meta"><div class="agent-name">Writer</div><div class="agent-role">Agentic Command voice</div><div class="agent-msg">waiting for research bundle</div></div></div>
+          <div class="agent-card"><div class="agent-avatar">JD</div><div class="agent-meta"><div class="agent-name">Judge</div><div class="agent-role">Blocking eval</div><div class="agent-msg">idle • threshold 0.85</div></div></div>
+        </div>
+      </div>
+
+      <div class="console">
+        <div class="console-head"><span class="console-title"><span style="width:6px;height:6px;background:#22c55e;border-radius:50%;display:inline-block;box-shadow:0 0 8px #22c55e"></span> live stream</span><div class="console-dots"><div class="c-dot" style="background:#ff5f57"></div><div class="c-dot" style="background:#febc2e"></div><div class="c-dot" style="background:#28c840"></div></div></div>
+        <div id="stream-box"></div>
+      </div>
+
+      <div>
+        <div class="right-head" style="margin-bottom:8px"><span class="right-title">Criteria Scores</span><span class="tag" style="font-size:10px">loop 1 • 0.79</span></div>
+        <div class="score-grid">
+          <div class="score-card"><div class="score-top"><span class="score-name">Correctness</span><span class="score-val fail">0.68 FAIL</span></div><div class="score-track"><div class="score-fill fail" style="width:68%"></div></div></div>
+          <div class="score-card"><div class="score-top"><span class="score-name">Clarity</span><span class="score-val pass">0.82 PASS</span></div><div class="score-track"><div class="score-fill pass" style="width:82%"></div></div></div>
+          <div class="score-card"><div class="score-top"><span class="score-name">Helpfulness</span><span class="score-val pass">0.88 PASS</span></div><div class="score-track"><div class="score-fill pass" style="width:88%"></div></div></div>
+          <div class="score-card"><div class="score-top"><span class="score-name">Code+output</span><span class="score-val fail">0.40 FAIL</span></div><div class="score-track"><div class="score-fill fail" style="width:40%"></div></div></div>
+          <div class="score-card"><div class="score-top"><span class="score-name">Visual</span><span class="score-val pass">0.76 PASS</span></div><div class="score-track"><div class="score-fill pass" style="width:76%"></div></div></div>
+          <div class="score-card"><div class="score-top"><span class="score-name">Reader pull</span><span class="score-val pass">0.81 PASS</span></div><div class="score-track"><div class="score-fill pass" style="width:81%"></div></div></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="right-head" style="margin-bottom:8px"><span class="right-title">Draft — Quarto Notebook</span><span class="tag" style="font-size:10px">qmd • render: ok</span></div>
+        <article class="article-canvas" id="article-canvas">
+          <div class="canvas-head"><span class="canvas-title">article.qmd • Delegating draft without soft exits</span><span class="tag" style="font-size:10px">WRITING</span></div>
+          <div class="canvas-body">
+            <h1>Delegating draft without soft exits</h1>
+            <p style="font-size:13.5px;line-height:1.6;color:var(--fg-2)">Delegate like you mean it. If an agent can say “I’ll skip for now,” you didn’t build a delegation system — you built a suggestion box.</p>
+            <blockquote>Soft exit: any path where the agent returns without a file, a trace, and a score. Ban it in the prompt, enforce it in the judge.</blockquote>
+
+            <div class="code-block">
+              <div class="code-label"><span>planner → gates.json • file artifact required</span><span style="color:var(--accent)">● PASS</span></div>
+              <pre class="code-pre"><code>{
+  "gates": [
+    {"id": "file_exists", "path": "drafts/ch2.qmd", "blocking": true},
+    {"id": "trace_log", "min_tool_calls": 3, "blocking": true},
+    {"id": "judge_score", "threshold": 0.85, "blocking": true}
+  ],
+  "soft_exit_phrases": ["I'll pass", "skip for now", "as an AI"]
+}</code></pre>
+            </div>
+
+            <div class="drawio-wrap">
+              <div class="drawio-toolbar">
+                <div style="font-family:var(--font-mono);font-size:11px;font-weight:500;display:flex;align-items:center;gap:8px"><span style="width:16px;height:16px;background:var(--accent);border-radius:4px;display:grid;place-items:center;color:var(--accent-on);font-size:10px">↗</span> draw.io — orchestration graph</div>
+                <div style="margin-left:auto;display:flex;gap:6px"><div class="tool">◧</div><div class="tool">⬔</div><div class="tool">☾</div></div>
+                <span class="tag" style="font-size:10px">iframe • editable</span>
+              </div>
+              <div class="drawio-canvas">
+                <svg width="100%" height="100%" viewBox="0 0 320 168" style="position:absolute;left:0;top:0">
+                  <path d="M60 84 Q 100 84 120 64" stroke="rgba(0,0,0,0.15)" stroke-width="1.2" fill="none" stroke-dasharray="4 4"/>
+                  <path d="M140 68 Q 180 68 200 84" stroke="rgba(0,0,0,0.15)" stroke-width="1.2" fill="none"/>
+                  <path d="M220 90 Q 260 100 280 84" stroke="rgba(0,0,0,0.15)" stroke-width="1.2" fill="none" stroke-dasharray="4 4"/>
+                </svg>
+                <div class="diagram-node" style="left:12px;top:52px">Planner</div>
+                <div class="diagram-node primary" style="left:92px;top:24px">Research ×3</div>
+                <div class="diagram-node" style="left:172px;top:52px">Writer</div>
+                <div class="diagram-node" style="left:252px;top:88px">Judge 0.85+</div>
+              </div>
+            </div>
+
+            <table class="canvas-table">
+              <thead><tr><th>Gate</th><th>Check</th><th>Blocking</th></tr></thead>
+              <tbody>
+                <tr><td>file_exists</td><td>drafts/ch2.qmd exists + >400 words</td><td><span class="score-val pass">YES</span></td></tr>
+                <tr><td>trace_log</td><td>≥3 tool calls logged</td><td><span class="score-val pass">YES</span></td></tr>
+                <tr><td>no_soft_exit</td><td>no banned phrases in output</td><td><span class="score-val fail" style="font-size:10px">NO • 1 phrase</span></td></tr>
+              </tbody>
+            </table>
+
+            <p style="margin-top:14px;font-size:12.5px;color:var(--muted);line-height:1.5">Next: rewrite para 2 without “might” / “consider”. Writer must replace hedging with file-linked evidence.</p>
+          </div>
+        </article>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<script>
+const html = document.documentElement;
+// variant switching
+document.querySelectorAll('.v-tab').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const v = btn.dataset.variant;
+    html.setAttribute('data-variant',''+v);
+    document.querySelectorAll('.v-tab').forEach(b=>{b.classList.toggle('active', b===btn); b.setAttribute('aria-selected', b===btn?'true':'false')});
+  })
+});
+// goal chips
+document.querySelectorAll('#goal-chips .chip').forEach(ch=>{
+  ch.addEventListener('click',()=>{
+    document.querySelectorAll('#goal-chips .chip').forEach(c=>c.classList.remove('active','accented'));
+    ch.classList.add('active','accented');
+    updateReadiness();
+  })
+});
+// voice cards
+document.querySelectorAll('.voice-card').forEach(card=>{
+  card.addEventListener('click',()=>{
+    document.querySelectorAll('.voice-card').forEach(c=>c.classList.remove('active'));
+    card.classList.add('active');
+    updateReadiness();
+  })
+});
+function updateReadiness(){
+  const goal = document.querySelector('#goal-chips .chip.active');
+  const voice = document.querySelector('.voice-card.active');
+  const brief = document.getElementById('brief-input').value.trim().length>20;
+  let ready = (goal?1:0)+(voice?1:0)+(brief?1:0);
+  document.querySelector('.readiness-left b').textContent = ready+' of 3 ready';
+  document.querySelector('.readiness-fill').style.width = (ready/3*100)+'%';
+}
+// brief input
+const briefInput = document.getElementById('brief-input');
+briefInput.addEventListener('input', updateReadiness);
+// loops range
+const loopsRange = document.getElementById('loops-range');
+const loopsVal = document.getElementById('loops-val');
+if(loopsRange){ loopsRange.addEventListener('input',()=>{loopsVal.textContent = loopsRange.value})}
+// search filter
+const searchInput = document.getElementById('search-input');
+searchInput.addEventListener('input',()=>{
+  const q = searchInput.value.toLowerCase();
+  document.querySelectorAll('#books-list .ch-row').forEach(row=>{
+    row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+  })
+});
+// book heads collapse
+document.querySelectorAll('.book-head').forEach(head=>{
+  head.addEventListener('click',()=>{
+    head.classList.toggle('collapsed');
+    const next = head.nextElementSibling;
+    if(next && next.classList.contains('chapters')){
+      next.style.display = next.style.display==='none' ? '' : 'none';
+    }
+  })
+});
+// chap rows active
+document.querySelectorAll('.ch-row').forEach(r=>{
+  r.addEventListener('click',()=>{
+    document.querySelectorAll('.ch-row').forEach(x=>x.classList.remove('active'));
+    r.classList.add('active');
+  })
+});
+// left seg tabs
+document.querySelectorAll('.seg').forEach(s=>{
+  s.addEventListener('click',()=>{
+    document.querySelectorAll('.seg').forEach(x=>x.classList.remove('active'));
+    s.classList.add('active');
+  })
+});
+
+// stream simulation
+const streamBox = document.getElementById('stream-box');
+const logs = [
+  {t:'00:00:00', tag:'SYS', msg:'session quill:ch2 • model claude-3.5 • trace_id 9f3a'},
+  {t:'00:00:02', tag:'PLAN', msg:'gates.json: file_exists=true, trace_log>=3, judge>=0.85'},
+  {t:'00:00:04', tag:'RES', msg:'R1 facets: 2 repos (quill-core, eval-harness) • 127 files'},
+  {t:'00:00:06', tag:'RES', msg:'found anti-pattern: "I will skip writing if uncertain" in prompt-v1.md'},
+  {t:'00:00:09', tag:'RES', msg:'extracted Quarto callout pattern • .callout-important{border-left:3px solid var(--accent)}'},
+  {t:'00:00:12', tag:'WRITE', msg:'drafting para 1 • goal=Thought Leadership • voice=Agentic Command'},
+  {t:'00:00:15', tag:'WRITE', msg:'writing drafts/ch2.qmd • 412 words • trace: write_file called'},
+  {t:'00:00:18', tag:'JUDGE', msg:' Correctness 0.68 < 0.85 • missing verification script'},
+  {t:'00:00:19', tag:'JUDGE', msg:' Code+output 0.40 < 0.90 • code block has no captured stdout'},
+  {t:'00:00:20', tag:'SYS', msg:'loop 1 failed • feedback → Writer: "add run log, remove hedge in para 2"'},
+  {t:'00:00:22', tag:'PLAN', msg:'loop 2 queued • max_loops 5 • threshold 0.85'},
+];
+let logIdx=0;
+function pushLog(entry){
+  const div=document.createElement('div');
+  div.className='log-line';
+  div.innerHTML=`<span class="ts">[${entry.t}]</span><span class="tag tag-${entry.tag}"> ${entry.tag}</span> ${entry.msg}`;
+  streamBox.appendChild(div);
+  streamBox.scrollTop = streamBox.scrollHeight;
+}
+function playLogs(start=0){
+  streamBox.innerHTML='';
+  logIdx=0;
+  let i=start;
+  function next(){
+    if(i<logs.length){
+      pushLog(logs[i]); i++; setTimeout(next, 260);
+    }
+  }
+  next();
+}
+playLogs(0);
+
+// fire btn
+const fireBtn = document.getElementById('fire-btn');
+fireBtn.addEventListener('click',()=>{
+  fireBtn.disabled=true;
+  const orig = fireBtn.innerHTML;
+  fireBtn.innerHTML = '<span style="width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;display:inline-block;animation:spin 0.6s linear infinite"></span> Firing…';
+  // add spinning keyframes
+  const style=document.createElement('style'); style.textContent='@keyframes spin{to{transform:rotate(360deg)}}'; document.head.appendChild(style);
+  playLogs(0);
+  // simulate loop progression
+  setTimeout(()=>{
+    fireBtn.innerHTML = orig;
+    fireBtn.disabled=false;
+    // append new logs
+    setTimeout(()=>{
+      const extra=[
+        {t:'00:00:24', tag:'WRITE', msg:'R1 → Writer bundle ready • 3 evidence files'},
+        {t:'00:00:26', tag:'WRITE', msg:'rewriting without soft exits • removed "might", "could"'},
+        {t:'00:00:29', tag:'JUDGE', msg:'running verify.sh • exit 0 • file_exists PASS'},
+      ];
+      extra.forEach((e,k)=> setTimeout(()=>pushLog(e), k*320));
+    }, 260*logs.length);
+  }, 1200);
+});
+
+// toggle right pane on smaller screens
+const toggleRight = document.getElementById('toggle-right');
+toggleRight.addEventListener('click',()=>{
+  const pane = document.getElementById('right-pane');
+  pane.classList.toggle('mobile-open');
+});
+</script>
+</body>
+</html>

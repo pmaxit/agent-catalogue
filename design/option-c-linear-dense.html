@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Quill — Option C — Linear/Shadcn Command Dense</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;500;600;650&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#ffffff;
+  --surface:#ffffff;
+  --surface-2:#f9fafb;
+  --surface-3:#f3f4f6;
+  --fg:#111827;
+  --fg-2:#374151;
+  --muted:#6b7280;
+  --meta:#9ca3af;
+  --border:#e5e7eb;
+  --border-soft:#f3f4f6;
+  --accent:#000000;
+  --accent-on:#ffffff;
+  --accent-hover:#111111;
+  --success:#111827;
+  --font-display:"Inter",-apple-system,BlinkMacSystemFont,"SF Pro Display",system-ui,sans-serif;
+  --font-body:"Inter",-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
+  --font-mono:"Fira Code","Geist Mono",ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+  --text-xs:12px;
+  --text-sm:13px;
+  --text-base:14px;
+  --text-md:16px;
+  --text-lg:20px;
+  --text-xl:24px;
+  --text-2xl:32px;
+  --space-1:4px;
+  --space-2:8px;
+  --space-3:12px;
+  --space-4:16px;
+  --space-6:24px;
+  --space-8:32px;
+  --radius-sm:6px;
+  --radius-md:8px;
+  --radius-pill:9999px;
+  --leading-tight:1.05;
+  --leading-body:1.5;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font-family:var(--font-body);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+button,input,textarea{font-family:inherit}
+.mono{font-family:var(--font-mono)!important}
+::selection{background:var(--fg);color:#fff}
+/* command bar */
+.cmd-bar{
+  position:sticky;top:0;z-index:20;
+  height:44px;display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding:0 12px;background:rgba(255,255,255,0.92);backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--border);
+}
+.cmd-bar-left{display:flex;align-items:center;gap:10px;min-width:0}
+.logo{display:flex;align-items:center;gap:8px;font-weight:650;letter-spacing:-0.02em;font-size:14px}
+.logo-mark{width:22px;height:22px;background:#000;color:#fff;display:grid;place-items:center;border-radius:5px;font-family:var(--font-mono);font-size:12px;font-weight:600}
+.version{font-family:var(--font-mono);font-size:11px;color:var(--meta);letter-spacing:0.02em;white-space:nowrap}
+.cmd-bar-center{flex:1;display:flex;justify-content:center;max-width:560px}
+.search-trigger{
+  width:100%;height:30px;display:flex;align-items:center;gap:8px;
+  border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface-2);
+  padding:0 10px;font-size:12.5px;color:var(--muted);cursor:pointer;text-align:left;
+  transition:border-color .15s,background .15s;
+}
+.search-trigger:hover{border-color:#d1d5db;background:#fff}
+.search-trigger kbd{margin-left:auto;border:1px solid var(--border);background:#fff;padding:1px 5px;border-radius:4px;font-family:var(--font-mono);font-size:10px;color:var(--muted)}
+.cmd-bar-right{display:flex;align-items:center;gap:6px}
+.pill{border:1px solid var(--border);background:#fff;border-radius:var(--radius-pill);padding:3px 9px;font-size:11px;font-weight:500;letter-spacing:0.01em;line-height:1;color:var(--fg-2);white-space:nowrap}
+.pill.badge.active{background:#000;color:#fff;border-color:#000}
+.pill.compact{padding:2px 7px;font-size:10px}
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:0;background:var(--border);border-bottom:1px solid var(--border)}
+.kpi-card{background:var(--bg);padding:10px 14px;display:flex;flex-direction:column;gap:4px}
+.kpi-label{font-size:10px;letter-spacing:0.08em;font-weight:600;color:var(--muted);line-height:1}
+.kpi-value{font-size:18px;font-weight:600;letter-spacing:-0.03em;line-height:1.1;display:flex;align-items:baseline;gap:8px}
+.kpi-meta{font-size:11px;font-weight:400;color:var(--meta);font-family:var(--font-mono)}
+.dot{width:6px;height:6px;border-radius:50%;background:#9ca3af;display:inline-block}
+.dot.live{background:#111;box-shadow:0 0 0 3px rgba(0,0,0,0.08);animation:pulse 1.6s infinite}
+.dot.online{background:#111;box-shadow:0 0 0 2px rgba(0,0,0,0.08)}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(0,0,0,0.2)}70%{box-shadow:0 0 0 6px rgba(0,0,0,0)}100%{box-shadow:0 0 0 0 rgba(0,0,0,0)}}
+
+/* layout */
+.layout{display:grid;grid-template-columns:280px 1fr 288px;min-height:calc(100vh - 44px - 57px)}
+.left-pane{border-right:1px solid var(--border);display:flex;flex-direction:column;background:#fff;min-height:0}
+.center-pane{border-right:1px solid var(--border);min-width:0;min-height:0;background:#fff;display:flex;flex-direction:column}
+.right-pane{background:#fff;min-height:0;display:flex;flex-direction:column}
+.pane-header{height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;border-bottom:1px solid var(--border);flex-shrink:0}
+.pane-header h3{font-size:12px;font-weight:600;letter-spacing:-0.01em;margin:0}
+.pane-header.small{height:32px;font-family:var(--font-mono);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em}
+.count{font-family:var(--font-mono);font-size:11px;color:var(--meta);border:1px solid var(--border);border-radius:var(--radius-pill);padding:1px 6px;background:var(--surface-2)}
+.books-search{padding:8px;border-bottom:1px solid var(--border-soft)}
+.books-search input{width:100%;height:28px;border:1px solid var(--border);border-radius:var(--radius-md);padding:0 10px;font-size:12.5px;background:var(--surface-2)}
+.books-search input:focus{outline:none;border-color:#111;background:#fff;box-shadow:0 0 0 2px rgba(0,0,0,0.06)}
+.books-list{padding:6px;overflow:auto;flex:1;display:flex;flex-direction:column;gap:1px}
+.book-item{display:flex;gap:8px;align-items:flex-start;padding:8px 8px;border-radius:var(--radius-sm);cursor:pointer;border:1px solid transparent;transition:all .12s}
+.book-item:hover{background:var(--surface-2);border-color:var(--border-soft)}
+.book-item.active{background:#000;color:#fff;border-color:#000}
+.book-item.active .book-meta,.book-item.active .book-title{color:#fff}
+.book-dot{width:6px;height:6px;border-radius:50%;background:#e5e7eb;margin-top:6px;flex-shrink:0}
+.book-item.active .book-dot{background:#fff}
+.book-title{font-size:12.5px;font-weight:500;line-height:1.3;letter-spacing:-0.01em}
+.book-meta{font-size:11px;color:var(--muted);font-family:var(--font-mono);margin-top:2px;line-height:1.2}
+
+/* agent form */
+.agent-form{padding:14px;display:flex;flex-direction:column;gap:14px;border-bottom:1px solid var(--border)}
+.section-label{font-size:10px;letter-spacing:0.08em;font-weight:650;color:var(--muted);display:flex;align-items:center;gap:6px;line-height:1}
+.section-label .mono{font-weight:400;letter-spacing:0;text-transform:lowercase;font-size:10px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{height:26px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;font-size:12px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:4px;transition:all .12s;line-height:1;white-space:nowrap}
+.chip:hover{border-color:#111}
+.chip.selected{background:#000;color:#fff;border-color:#000}
+.theme-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.theme-card{border:1px solid var(--border);border-radius:var(--radius-md);padding:9px 10px;background:#fff;cursor:pointer;transition:all .12s;text-align:left}
+.theme-card:hover{border-color:#9ca3af}
+.theme-card.selected{background:#000;border-color:#000;color:#fff}
+.theme-card.selected .tc-desc{color:rgba(255,255,255,0.6)}
+.tc-name{font-size:12px;font-weight:600;letter-spacing:-0.01em;line-height:1.2}
+.tc-desc{font-size:10.5px;color:var(--muted);margin-top:3px;line-height:1.3;font-family:var(--font-mono)}
+.dense-2col{display:grid;grid-template-columns:1.15fr 0.85fr;gap:14px}
+#brief-input{width:100%;min-height:112px;max-height:160px;border:1px solid var(--border);border-radius:var(--radius-md);padding:10px 12px;font-size:13.5px;line-height:1.55;background:var(--surface-2);resize:vertical;transition:border-color .12s,background .12s}
+#brief-input:focus{outline:none;background:#fff;border-color:#111;box-shadow:0 0 0 2px rgba(0,0,0,.06)}
+.pill-inputs{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-content:start}
+.pill-inputs label{display:block;font-size:10px;letter-spacing:0.07em;font-weight:600;color:var(--muted);margin-bottom:4px}
+.pill-inputs input{width:100%;height:32px;border:1px solid var(--border);border-radius:var(--radius-md);padding:0 10px;font-size:12.5px;background:#fff}
+.pill-inputs input:focus{outline:none;border-color:#111;box-shadow:0 0 0 2px rgba(0,0,0,.06)}
+.form-actions{display:flex;align-items:center;gap:12px;padding-top:2px}
+.fire-btn{height:36px;padding:0 14px;background:#000;color:#fff;border:1px solid #000;border-radius:var(--radius-md);font-size:13px;font-weight:600;letter-spacing:-0.01em;display:inline-flex;align-items:center;gap:8px;cursor:pointer;transition:all .12s}
+.fire-btn:hover{background:var(--accent-hover);transform:translateY(-1px)}
+.fire-btn:active{transform:translateY(0)}
+.fire-btn .kbd{font-family:var(--font-mono);font-size:10px;opacity:.7;border:1px solid rgba(255,255,255,0.25);padding:1px 4px;border-radius:4px}
+.hint{font-size:11px;color:var(--meta)}
+
+/* workspace split */
+.workspace-split{display:grid;grid-template-columns:380px 1fr;flex:1;min-height:420px}
+.console-pane{display:flex;flex-direction:column;border-right:1px solid var(--border);background:#0a0a0a;min-width:0}
+.stream-box{flex:1;overflow:auto;padding:10px 12px;font-size:11.5px;line-height:1.6;color:#d1d5db;background:#0a0a0a;white-space:pre-wrap;word-break:break-word}
+.stream-line{opacity:0;animation:lineIn .18s forwards}
+@keyframes lineIn{from{opacity:0;transform:translateY(2px)}to{opacity:1;transform:translateY(0)}}
+.tag{color:#9ca3af}
+.tag-planner{color:#fff;font-weight:600}
+.tag-research{color:#60a5fa}
+.tag-writer{color:#34d399}
+.tag-judge{color:#fbbf24}
+.draft-pane{display:flex;flex-direction:column;min-width:0;background:#fff}
+.article-canvas{padding:16px 18px;overflow:auto;flex:1}
+.article-canvas h1{font-size:24px;line-height:1.05;letter-spacing:-0.03em;font-weight:650;margin:0 0 10px}
+.article-canvas h2{font-size:16px;line-height:1.2;letter-spacing:-0.02em;font-weight:600;margin:20px 0 8px}
+.article-canvas h3{font-size:13px;letter-spacing:-0.01em;font-weight:600;margin:16px 0 6px;text-transform:uppercase;color:var(--muted)}
+.article-canvas p{font-size:13.5px;line-height:1.65;color:var(--fg-2);margin:0 0 12px;max-width:68ch}
+.article-canvas code{font-family:var(--font-mono);font-size:12px;background:var(--surface-2);border:1px solid var(--border);padding:1px 4px;border-radius:4px}
+.article-canvas pre{border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface-2);padding:12px;overflow:auto;margin:12px 0}
+.article-canvas pre code{background:none;border:none;padding:0}
+.callout{border:1px solid var(--border);border-left:2px solid #000;border-radius:var(--radius-md);padding:10px 12px;background:var(--surface-2);font-size:12.5px;line-height:1.5;margin:12px 0}
+.diagram-placeholder{border:1px dashed var(--border);border-radius:var(--radius-md);height:104px;display:grid;place-items:center;background:repeating-linear-gradient(45deg,#fff,#fff 8px,#fafafa 8px,#fafafa 16px);color:var(--muted);font-family:var(--font-mono);font-size:11px}
+
+/* right pane pipeline */
+.pipeline{padding:10px 12px;display:flex;flex-direction:column;gap:0;position:relative}
+.step{display:flex;gap:10px;padding:8px 0;position:relative}
+.step:not(:last-child)::after{content:"";position:absolute;left:11px;top:32px;bottom:-4px;width:1px;background:var(--border)}
+.step-dot{width:22px;height:22px;border-radius:50%;border:1px solid var(--border);display:grid;place-items:center;font-size:10px;font-family:var(--font-mono);background:#fff;flex-shrink:0;z-index:1}
+.step.active .step-dot{background:#000;color:#fff;border-color:#000}
+.step.done .step-dot{background:#000;color:#fff;border-color:#000}
+.step-main{flex:1;min-width:0}
+.step-title{font-size:12px;font-weight:600;letter-spacing:-0.01em;line-height:1.2;display:flex;align-items:center;gap:6px}
+.step-desc{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.3}
+.loop-badge{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--border);border-radius:var(--radius-pill);padding:2px 6px;font-family:var(--font-mono);font-size:10px;background:var(--surface-2)}
+.roster{padding:10px 12px;border-top:1px solid var(--border-soft);display:flex;flex-direction:column;gap:8px}
+.roster-item{display:flex;align-items:center;gap:8px}
+.avatar{width:22px;height:22px;border-radius:50%;background:#000;color:#fff;display:grid;place-items:center;font-size:10px;font-weight:600}
+.roster-name{font-size:12px;font-weight:500}
+.roster-meta{font-size:11px;color:var(--muted);font-family:var(--font-mono);margin-left:auto;display:flex;align-items:center;gap:4px}
+.criteria{padding:10px 12px;border-top:1px solid var(--border-soft)}
+.crit-grid{display:grid;grid-template-columns:1fr;gap:6px}
+.crit{border:1px solid var(--border);border-radius:var(--radius-md);padding:8px 9px;display:flex;justify-content:space-between;align-items:center;background:#fff}
+.crit-left{display:flex;flex-direction:column;gap:1px}
+.crit-name{font-size:11.5px;font-weight:600;letter-spacing:-0.01em}
+.crit-desc{font-size:10px;color:var(--muted);font-family:var(--font-mono)}
+.crit-score{font-family:var(--font-mono);font-size:11px;border:1px solid var(--border);border-radius:var(--radius-pill);padding:2px 7px;background:var(--surface-2)}
+.crit-score.high{background:#000;color:#fff;border-color:#000}
+
+/* palette */
+.palette-overlay{position:fixed;inset:0;background:rgba(17,24,39,0.24);backdrop-filter:blur(6px);z-index:50;display:none;place-items:start center;padding-top:16vh}
+.palette-overlay.open{display:grid}
+.palette{width:min(560px,92vw);background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.14)}
+.palette input{width:100%;height:48px;border:none;border-bottom:1px solid var(--border);padding:0 16px;font-size:14px;outline:none}
+.palette-list{max-height:320px;overflow:auto;padding:6px}
+.palette-item{padding:10px 12px;border-radius:8px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-size:13px}
+.palette-item:hover,.palette-item.focused{background:var(--surface-2)}
+.palette-item kbd{font-family:var(--font-mono);font-size:10px;border:1px solid var(--border);padding:1px 5px;border-radius:4px;color:var(--muted);background:#fff}
+
+/* responsive */
+@media(max-width:1180px){
+  .layout{grid-template-columns:280px 1fr}
+  .right-pane{grid-column:1 / -1;border-top:1px solid var(--border);display:grid;grid-template-columns:320px 1fr 1fr}
+  .workspace-split{grid-template-columns:340px 1fr}
+}
+@media(max-width:860px){
+  .theme-grid{grid-template-columns:repeat(2,1fr)}
+  .dense-2col{grid-template-columns:1fr}
+  .kpi-row{grid-template-columns:repeat(2,1fr)}
+  .cmd-bar-center{display:none}
+  .layout{grid-template-columns:1fr}
+  .left-pane{border-right:none;border-bottom:1px solid var(--border)}
+  .books-list{flex-direction:row;overflow:auto;gap:6px}
+  .book-item{white-space:nowrap;flex-shrink:0}
+  .center-pane{border-right:none}
+  .workspace-split{grid-template-columns:1fr}
+  .console-pane{border-right:none;border-bottom:1px solid var(--border);max-height:320px}
+  .right-pane{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<header class="cmd-bar">
+  <div class="cmd-bar-left">
+    <div class="logo"><div class="logo-mark">Q</div> QUILL <span style="font-weight:400;color:var(--muted);margin-left:2px">/ GitBook</span></div>
+    <span class="version">OPT-C • LIN • v0.4.0 • cmd dense</span>
+  </div>
+  <div class="cmd-bar-center">
+    <button id="cmd-trigger" class="search-trigger">
+      <span>⌘</span>
+      <span>cmd+K → Fire agents / Search books / Toggle console</span>
+      <kbd>K</kbd>
+    </button>
+  </div>
+  <div class="cmd-bar-right">
+    <span class="pill badge">⌘↩ Fire</span>
+    <span class="pill badge active">AGENT MODE</span>
+    <span class="pill badge">RAILWAY • LIVE</span>
+  </div>
+</header>
+
+<section class="kpi-row">
+  <div class="kpi-card"><div class="kpi-label">AGENTS</div><div class="kpi-value">4 <span class="kpi-meta">• 3 online • 1 judge</span></div></div>
+  <div class="kpi-card"><div class="kpi-label">LOOPS</div><div class="kpi-value">6 <span class="kpi-meta">max • 2 running</span><span class="pill compact" style="margin-left:6px">LOOP 2/6</span></div></div>
+  <div class="kpi-card"><div class="kpi-label">THRESH</div><div class="kpi-value">0.75 <span class="kpi-meta">judge gate • 0.85 target</span></div></div>
+  <div class="kpi-card"><div class="kpi-label">DB</div><div class="kpi-value">Railway <span class="kpi-meta"><span class="dot online"></span> pg:5432 • synced</span></div></div>
+</section>
+
+<main class="layout">
+  <!-- LEFT: books -->
+  <aside class="left-pane">
+    <div class="pane-header">
+      <h3>Books — Library</h3>
+      <span class="count mono">12</span>
+    </div>
+    <div class="books-search"><input id="book-filter" placeholder="Filter • / to focus"/></div>
+    <div id="books-list" class="books-list">
+      <!-- injected -->
+    </div>
+    <div style="padding:8px 12px;border-top:1px solid var(--border-soft);display:flex;gap:6px">
+      <button class="pill" style="flex:1;height:28px;border-radius:8px">+ New book</button>
+      <button class="pill" style="width:28px;height:28px;border-radius:8px;display:grid;place-items:center">↗</button>
+    </div>
+  </aside>
+
+  <!-- CENTER -->
+  <section class="center-pane">
+    <form id="agent-form" class="agent-form">
+      <div class="form-section">
+        <div class="section-label">WRITING GOAL <span class="mono">• choose 1-2 • fast keyboard: G then 1-5</span></div>
+        <div id="goals-selector" class="chips">
+          <!-- injected -->
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="section-label">THEME & VOICE <span class="mono">• single select • T then 1-6</span></div>
+        <div id="themes-selector" class="theme-grid">
+          <!-- injected -->
+        </div>
+      </div>
+
+      <div class="form-section dense-2col">
+        <div>
+          <div class="section-label" style="margin-bottom:8px">BRIEF — DELEGATING DRAFT WITHOUT SOFT EXITS</div>
+          <textarea id="brief-input" placeholder="Write a dense technical brief on agentic delegation without hedging. Audience: senior eng. Must include failure modes, hard gates, and a real trace. No apologies, no 'it depends' — show the loop, the prompt, the judge score.">Write a dense technical brief on agentic delegation without hedging. Audience: senior eng leaders evaluating autonomy risks. Must include failure modes, hard gates, and a real trace. No apologies, no 'it depends' — show the loop, the prompt, the judge score. Include code + output verification and a draw.io style diagram placeholder.</textarea>
+          <div style="display:flex;justify-content:space-between;margin-top:6px">
+            <span class="mono" style="font-size:10px;color:var(--meta)" id="brief-count">248 chars • 3 clauses • dense</span>
+            <span class="mono" style="font-size:10px;color:var(--muted)">⌘I format • / template</span>
+          </div>
+        </div>
+
+        <div class="pill-inputs">
+          <div><label>AUDIENCE</label><input id="audience-input" value="Senior eng leaders"/></div>
+          <div><label>TONE</label><input id="tone-input" value="Executable, blunt"/></div>
+          <div><label>FORMAT</label><input id="format-input" value="GitBook chapter"/></div>
+          <div><label>LENGTH</label><input id="length-input" value="900-1200 words"/></div>
+          <div><label>MAX LOOPS</label><input value="6" style="font-family:var(--font-mono)"/></div>
+          <div><label>THRESHOLD</label><input value="0.85" style="font-family:var(--font-mono)"/></div>
+          <div style="grid-column:1/-1;display:flex;gap:6px;margin-top:4px;flex-wrap:wrap">
+            <span class="pill" style="font-size:10px">CORRECTNESS 0.85+</span>
+            <span class="pill" style="font-size:10px">CLARITY</span>
+            <span class="pill" style="font-size:10px">HELPFULNESS</span>
+            <span class="pill" style="font-size:10px">CODE+OUTPUT</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button id="fire-btn" type="button" class="fire-btn">Fire agents <span class="mono" style="font-size:12px">↵</span> <span class="kbd">⌘↩</span></button>
+        <span class="hint mono">will stream SSE • writes article-canvas • judge loops until 0.85+ • q: abort</span>
+        <div style="margin-left:auto;display:flex;gap:6px">
+          <button type="button" class="chip" style="height:28px" onclick="document.getElementById('brief-input').focus()">Focus brief /</button>
+          <button type="button" class="chip" style="height:28px">Export .md</button>
+        </div>
+      </div>
+    </form>
+
+    <div class="workspace-split">
+      <div class="console-pane">
+        <div class="pane-header small">
+          <span style="display:flex;gap:6px;align-items:center"><span class="dot live"></span> CONSOLE • SSE 380PX MONO • stream-box</span>
+          <span class="mono">12px • Fira Code</span>
+        </div>
+        <div id="stream-box" class="stream-box mono">[00:00:00] SYSTEM quill v0.4.0 ready • railway db connected
+[00:00:00] SYSTEM type cmd+K for palette • ⌘↩ to fire agents
+[00:00:03] IDLE waiting for brief • books-list #12 loaded
+— select a theme to bind prompt
+</div>
+      </div>
+
+      <div class="draft-pane">
+        <div class="pane-header small">
+          <span>DRAFT • QUARTO • article-canvas • dense reading • 65ch</span>
+          <span style="display:flex;gap:4px"><span class="pill compact">MD</span><span class="pill compact">PREVIEW</span></span>
+        </div>
+        <div id="article-canvas" class="article-canvas">
+          <h1>Delegating Draft Without Soft Exits</h1>
+          <p style="color:var(--muted);font-family:var(--font-mono);font-size:11px;letter-spacing:0.02em">BOOK: Agentic Systems // CHAPTER: Delegation // THEME: Agentic Command • DRAFT v2 • 1,140 words</p>
+          <div class="callout"><strong style="font-weight:600">Hard gate:</strong> If the agent cannot show <code>code + output</code> verification, it must fail, not hedge. No "it depends." Show the loop.</div>
+          <p>Most delegation prompts fail because they allow narrative escape hatches. The agent says "consider" instead of "assert." Quill enforces <strong>hard gates</strong> via judge criteria loaded at loop 0. Threshold <code>0.85</code> is not advice — it is a binary cutoff.</p>
+          <h2>1. The prompt that closes the exit</h2>
+          <pre><code>ROLE: writer
+GOAL: {{brief-input}}
+CONSTRAINT: no apologies, no hedging phrases
+VERIFY: run {{code}} and paste output verbatim
+JUDGE: correctness ≥0.85 else rewrite</code></pre>
+          <h2>2. Loop trace — real</h2>
+          <p>Planner → Research ×3 → Writer → Judge. Each research node returns evidence hash. Writer only sees evidence, not prior draft. Judge scores <code>correctness, clarity, helpfulness, code+output, visual, pull</code>. Loop 2 failed on <code>visual feedback</code> (0.42). Loop 3 added draw.io diagram placeholder and passed.</p>
+          <div class="diagram-placeholder">draw.io diagram placeholder — planner→research→writer→judge loop • 720×400 • replace with real SVG</div>
+          <h3>Failure modes</h3>
+          <p>• Soft exit ("as an AI...") → judge 0.1 • Missing output → auto-fail • Excess adjectives → clarity penalty. Quill punishes verbosity, rewards executable density.</p>
+          <p style="font-family:var(--font-mono);font-size:11px;color:var(--meta)">— End preview • Fire agents to regenerate with selected goals/themes/audience</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RIGHT -->
+  <aside class="right-pane">
+    <div class="pane-header">
+      <h3>Pipeline • compact vertical</h3>
+      <span class="pill compact mono">LOOP 2/6</span>
+    </div>
+    <div class="pipeline" id="pipeline">
+      <div class="step active" data-step="planner"><div class="step-dot">P</div><div class="step-main"><div class="step-title">Planner <span class="loop-badge">active</span></div><div class="step-desc">Parses brief-input → goal chips → theme cards</div></div></div>
+      <div class="step" data-step="r1"><div class="step-dot">R1</div><div class="step-main"><div class="step-title">Research ×3 <span class="mono" style="font-size:10px;color:var(--meta)">trace, judge, loop</span></div><div class="step-desc">3 parallel evidence nodes • hash verify</div></div></div>
+      <div class="step" data-step="r2"><div class="step-dot">R2</div><div class="step-main"><div class="step-title">Research ×2</div><div class="step-desc">Secondary sources • code snippets</div></div></div>
+      <div class="step" data-step="r3"><div class="step-dot">R3</div><div class="step-main"><div class="step-title">Research ×3</div><div class="step-desc">Visual refs • diagram seeds</div></div></div>
+      <div class="step" data-step="writer"><div class="step-dot">W</div><div class="step-main"><div class="step-title">Writer</div><div class="step-desc">Writes to article-canvas • no hedge</div></div></div>
+      <div class="step" data-step="judge"><div class="step-dot">J</div><div class="step-main"><div class="step-title">Judge <span class="loop-badge">0.85 gate</span></div><div class="step-desc">Scores 6 criteria • loop if &lt;0.85</div></div></div>
+    </div>
+
+    <div class="roster">
+      <div class="section-label">AGENT ROSTER • LIVE • pulsing green</div>
+      <div class="roster-item"><div class="avatar">P</div><div class="roster-name">planner-α</div><div class="roster-meta"><span class="dot live"></span> 12ms</div></div>
+      <div class="roster-item"><div class="avatar" style="background:#fff;color:#000;border:1px solid var(--border)">R</div><div class="roster-name">research-β ×3</div><div class="roster-meta"><span class="dot live"></span> streaming</div></div>
+      <div class="roster-item"><div class="avatar" style="background:#fff;color:#000;border:1px solid var(--border)">W</div><div class="roster-name">writer-γ</div><div class="roster-meta">idle • 0.4s</div></div>
+      <div class="roster-item"><div class="avatar" style="background:#e5e7eb;color:#000">J</div><div class="roster-name">judge-δ</div><div class="roster-meta">gate 0.85</div></div>
+    </div>
+
+    <div class="criteria">
+      <div class="section-label" style="margin-bottom:8px">JUDGING CRITERIA • 6 CARDS • dense</div>
+      <div class="crit-grid">
+        <div class="crit"><div class="crit-left"><span class="crit-name">Correctness 0.85+</span><span class="crit-desc">factual + trace verified</span></div><span class="crit-score high">0.91</span></div>
+        <div class="crit"><div class="crit-left"><span class="crit-name">Clarity</span><span class="crit-desc">65ch • no hedge</span></div><span class="crit-score">0.88</span></div>
+        <div class="crit"><div class="crit-left"><span class="crit-name">Helpfulness</span><span class="crit-desc">executable steps</span></div><span class="crit-score">0.84</span></div>
+        <div class="crit"><div class="crit-left"><span class="crit-name">Code+output</span><span class="crit-desc">verbatim run</span></div><span class="crit-score high">0.92</span></div>
+        <div class="crit"><div class="crit-left"><span class="crit-name">Visual feedback</span><span class="crit-desc">draw.io placeholder</span></div><span class="crit-score">0.47</span></div>
+        <div class="crit"><div class="crit-left"><span class="crit-name">Reader pull</span><span class="crit-desc">first 12s hook</span></div><span class="crit-score">0.79</span></div>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:6px">
+        <span class="pill" style="font-size:10px">THEME: Agentic Command</span>
+        <span class="pill" style="font-size:10px;background:#000;color:#fff;border-color:#000">LOOP 2 • RETRY VISUAL</span>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<!-- Command palette -->
+<div id="palette" class="palette-overlay">
+  <div class="palette">
+    <input id="palette-input" placeholder="cmd+K → Fire agents / Search books / Toggle console • type..."/>
+    <div class="palette-list" id="palette-list">
+      <!-- injected -->
+    </div>
+  </div>
+</div>
+
+<script>
+const books=[
+ {title:"Agentic Systems Field Guide",meta:"12 ch • 84% done • updated 2h ago"},
+ {title:"Delegation Patterns",meta:"8 ch • 100% • shipped",active:true},
+ {title:"Model Eval Harness",meta:"5 ch • 42% • research"},
+ {title:"Railway Postgres Notes",meta:"3 ch • planning"},
+ {title:"GitBook Design Spec",meta:"9 ch • 67% • draft"},
+ {title:"Prompt Compression",meta:"6 ch • idea"},
+ {title:"Judge Loop Engineering",meta:"4 ch • writing"},
+ {title:"Quarto Publishing",meta:"7 ch • 91%"},
+ {title:"Thinking in Traces",meta:"10 ch • outline"},
+ {title:"Infra as Text",meta:"2 ch • draft"},
+ {title:"Hiring for Agents",meta:"1 ch • idea"},
+ {title:"Changelog v0.4",meta:"log • continuous"},
+];
+const goals=["Thought Leadership","Technical Deep Dive","Product Launch","Hiring Signal","Changelog"];
+const themes=[
+ {name:"Agentic Command",desc:"blunt, executable, no soft exits"},
+ {name:"Technical Trace",desc:"logs, hashes, verbatim output"},
+ {name:"Editorial Signal",desc:"magazine density, sharp hed"},
+ {name:"Narrative Pulse",desc:"story spine, tension → release"},
+ {name:"Executive Crisp",desc:"6 bullets, 1 decision, 1 ask"},
+ {name:"O'Reilly Book Chapter",desc:"formal, 65ch, callouts, diagrams"},
+];
+
+const booksListEl=document.getElementById('books-list');
+function renderBooks(filter=""){
+  const f=filter.toLowerCase();
+  booksListEl.innerHTML=books.filter(b=>!f||b.title.toLowerCase().includes(f)||b.meta.toLowerCase().includes(f)).map(b=>`
+    <div class="book-item ${b.active?'active':''}" tabindex="0">
+      <div class="book-dot"></div>
+      <div style="min-width:0"><div class="book-title">${b.title}</div><div class="book-meta">${b.meta}</div></div>
+    </div>
+  `).join('');
+}
+renderBooks();
+
+const goalsSel=document.getElementById('goals-selector');
+goalsSel.innerHTML=goals.map((g,i)=>`<button class="chip ${i<2?'selected':''}" data-goal="${g}">${g} ${i===0?'<span class="mono" style="font-size:10px;opacity:.7">1</span>':''}</button>`).join('');
+goalsSel.addEventListener('click',e=>{
+  const b=e.target.closest('.chip'); if(!b) return;
+  b.classList.toggle('selected');
+});
+
+const themesSel=document.getElementById('themes-selector');
+themesSel.innerHTML=themes.map((t,i)=>`<button class="theme-card ${i===0?'selected':''}" data-theme="${t.name}"><div class="tc-name">${t.name}</div><div class="tc-desc">${t.desc}</div></button>`).join('');
+themesSel.addEventListener('click',e=>{
+  const c=e.target.closest('.theme-card'); if(!c) return;
+  document.querySelectorAll('.theme-card').forEach(x=>x.classList.remove('selected'));
+  c.classList.add('selected');
+});
+
+const briefInput=document.getElementById('brief-input');
+const briefCount=document.getElementById('brief-count');
+briefInput.addEventListener('input',()=>{
+  briefCount.textContent=`${briefInput.value.length} chars • ${briefInput.value.split(' ').length} words • dense`;
+});
+
+const streamBox=document.getElementById('stream-box');
+const articleCanvas=document.getElementById('article-canvas');
+const fireBtn=document.getElementById('fire-btn');
+let firing=false;
+const logsBase=[
+ "[{t}] PLANNER parsing brief-input • goals={goals} • theme={theme} • audience={aud}",
+ "[{t}] PLANNER token check • 248 → 1,140 words target • no hedge phrases allowed",
+ "[{t}] RESEARCH R1 fetching trace from books-list:{book} • hash verify",
+ "[{t}] RESEARCH R1 evidence: 3 failure modes found • soft-exit lexicon 42 phrases",
+ "[{t}] RESEARCH R2 code+output pattern • found 2 prior runs in Railway DB pg:5432",
+ "[{t}] RESEARCH R3 visual refs • draw.io loop diagram • 720×400 placeholder generated",
+ "[{t}] WRITER γ drafting • constraint: no apologies • verify: run code and paste output",
+ "[{t}] WRITER γ article-canvas write • 65ch • 12px mono labels • dense reading",
+ "[{t}] JUDGE δ scoring • correctness 0.91 • clarity 0.88 • code+output 0.92",
+ "[{t}] JUDGE δ VISUAL 0.47 < 0.75 → LOOP 3 • injecting diagram + callout",
+ "[{t}] LOOP 3/6 WRITER revised • added callout + hard gate example",
+ "[{t}] JUDGE δ rescoring • all criteria ≥0.85 • PASS • ready to publish",
+ "[{t}] SYSTEM draft persisted • Quarto preview updated • export .md ready"
+];
+
+function fmtTime(s){const m=String(Math.floor(s/60)).padStart(2,'0');const sec=String(s%60).padStart(2,'0');return `${m}:${sec}`;}
+
+function fireAgents(){
+  if(firing) return; firing=true;
+  fireBtn.disabled=true; fireBtn.textContent="Firing… streaming";
+  streamBox.innerHTML="";
+  document.querySelectorAll('.step').forEach((el,i)=>{el.classList.remove('active','done'); if(i===0) el.classList.add('active');});
+  let sec=0, idx=0;
+  const chosenGoals=[...document.querySelectorAll('#goals-selector .chip.selected')].map(x=>x.dataset.goal).join(', ')||goals.slice(0,2).join(',');
+  const chosenTheme=document.querySelector('.theme-card.selected')?.dataset.theme||'Agentic Command';
+  const aud=document.getElementById('audience-input').value;
+  const book=document.querySelector('.book-item.active .book-title')?.textContent||'Delegation Patterns';
+  const interval=setInterval(()=>{
+    if(idx>=logsBase.length){clearInterval(interval); firing=false; fireBtn.disabled=false; fireBtn.innerHTML=`Fire agents <span class="mono" style="font-size:12px">↵</span> <span class="kbd">⌘↩</span>`; return;}
+    let line=logsBase[idx]
+      .replace('{t}',`00:${fmtTime(sec).split(':')[1]}`)
+      .replace('{goals}',chosenGoals)
+      .replace('{theme}',chosenTheme)
+      .replace('{aud}',aud)
+      .replace('{book}',book.toLowerCase().replace(/\s/g,'-'));
+    const div=document.createElement('div'); div.className='stream-line';
+    const tagMatch=line.match(/(PLANNER|RESEARCH|WRITER|JUDGE|SYSTEM|LOOP)/);
+    if(tagMatch){const tag=tagMatch[1]; const cls='tag-'+tag.toLowerCase(); line=line.replace(tag,`<span class="tag ${cls}">${tag}</span>`);}
+    div.innerHTML=line;
+    streamBox.appendChild(div);
+    streamBox.scrollTop=streamBox.scrollHeight;
+    // pipeline progress
+    const steps=document.querySelectorAll('.step');
+    if(idx>1) steps[0].classList.add('done'),steps[0].classList.remove('active'),steps[1].classList.add('active');
+    if(idx>4) steps[1].classList.add('done'),steps[1].classList.remove('active'),steps[2].classList.add('active');
+    if(idx>6) steps[2].classList.add('done'),steps[2].classList.remove('active'),steps[4].classList.add('active');
+    if(idx>8) steps[4].classList.add('done'),steps[4].classList.remove('active'),steps[5].classList.add('active');
+    if(idx>10) {steps[5].classList.add('done');}
+    // update canvas mid-way
+    if(idx===7){
+      articleCanvas.innerHTML=`
+        <h1>${briefInput.value.slice(0,48)}…</h1>
+        <p style="font-family:var(--font-mono);font-size:11px;color:var(--meta)">THEME: ${chosenTheme} • GOALS: ${chosenGoals} • AUD: ${aud} • LOOP 3 • GENERATING</p>
+        <div class="callout"><strong>Hard gate — live:</strong> All claims must have trace hash. No hedging lexicon allowed. Judge threshold 0.85.</div>
+        <h2>Execution trace — partial</h2>
+        <p>Writer is drafting with three research nodes. Each node returns <code>evidence + hash</code>. Only verified evidence reaches draft. This eliminates soft exits.</p>
+        <pre><code>// verification gate
+function assertNoHedge(text){
+  const lex=['it depends','as an AI','consider','might','perhaps'];
+  return lex.every(w=>!text.toLowerCase().includes(w));
+}</code></pre>
+        <div class="diagram-placeholder">REGENERATING diagram — planner→R1/R2/R3→writer→judge → loop • ${chosenTheme}</div>
+        <p class="mono" style="font-size:11px;color:var(--meta)">Streaming… loop 3/6 • judge rescoring visual criterion</p>
+      `;
+    }
+    if(idx===logsBase.length-1){
+      articleCanvas.innerHTML=`
+        <h1>Delegating Draft Without Soft Exits</h1>
+        <p style="color:var(--muted);font-family:var(--font-mono);font-size:11px">FINAL • ${chosenTheme} • ${chosenGoals} • 1,142 words • score 0.89 • PASS</p>
+        <div class="callout"><strong>Shipped:</strong> Loop closed at 2.4s • Judge 0.91/0.88/0.92 • Visual upgraded from 0.47→0.86 with diagram</div>
+        <p>Audited prompt: <code>${briefInput.value.slice(0,120)}…</code> — writer produced dense executable text with zero apology tokens. Verified via <code>assertNoHedge()</code> and Railway DB trace.</p>
+        <h2>Key change vs loop 2</h2>
+        <p>Added hard callout + draw.io loop diagram. Judge previously failed visual feedback (0.47). Added placeholder with explicit dimensions and replace instruction. Score moved to 0.86.</p>
+        <div class="diagram-placeholder">draw.io — SUCCESS — 720×400 • planner→research(×3)•writer→judge loop • FINAL</div>
+        <pre><code>[producer] writer-γ
+[evidence] R1:3 modes, R2:2 runs, R3:diagram
+[judge] 0.91 correctness • 0.88 clarity • 0.92 code+output • PASS</code></pre>
+        <p style="font-size:12px;color:var(--muted)">Next: hit Export .md or fire again with different theme. Cmd+K → Search books.</p>
+      `;
+    }
+    sec+=Math.floor(Math.random()*2)+1; idx++;
+  },420);
+}
+fireBtn.addEventListener('click',fireAgents);
+
+// cmd+k palette
+const palette=document.getElementById('palette');
+const paletteInput=document.getElementById('palette-input');
+const paletteList=document.getElementById('palette-list');
+const actions=[
+ {label:"Fire agents",desc:"Run planner → research ×3 → writer → judge",kbd:"⌘↩",act:fireAgents},
+ {label:"Search books",desc:"Filter books-list by title / meta",kbd:"/",act:()=>{document.getElementById('book-filter').focus(); hidePalette();}},
+ {label:"Toggle console",desc:"Focus stream-box • scroll to bottom",kbd:"C",act:()=>{streamBox.focus(); streamBox.scrollTop=streamBox.scrollHeight; hidePalette();}},
+ {label:"Focus brief",desc:"Focus brief-input textarea",kbd:"B",act:()=>{briefInput.focus(); hidePalette();}},
+ {label:"Clear draft",desc:"Reset article-canvas to placeholder",kbd:"X",act:()=>{location.reload();}},
+ {label:"Export markdown",desc:"Copy article-canvas as md (simulated)",kbd:"E",act:()=>{navigator.clipboard.writeText(articleCanvas.innerText); alert('Copied draft to clipboard'); hidePalette();}},
+];
+function renderPalette(filter=""){
+  const f=filter.toLowerCase();
+  paletteList.innerHTML=actions.filter(a=>!f||a.label.toLowerCase().includes(f)||a.desc.toLowerCase().includes(f)).map(a=>`
+    <div class="palette-item" data-label="${a.label}"><div><div style="font-weight:500">${a.label}</div><div style="font-size:11px;color:var(--muted)">${a.desc}</div></div><kbd>${a.kbd}</kbd></div>
+  `).join('')||`<div style="padding:12px;font-size:12px;color:var(--muted)">No match</div>`;
+  paletteList.querySelectorAll('.palette-item').forEach(el=>el.addEventListener('click',()=>{
+    const act=actions.find(x=>x.label===el.dataset.label); if(act) act.act();
+  }));
+}
+renderPalette();
+function showPalette(){palette.classList.add('open');paletteInput.value="";renderPalette();setTimeout(()=>paletteInput.focus(),30);}
+function hidePalette(){palette.classList.remove('open');}
+document.getElementById('cmd-trigger').addEventListener('click',showPalette);
+palette.addEventListener('click',e=>{if(e.target===palette) hidePalette();});
+paletteInput.addEventListener('input',e=>renderPalette(e.target.value));
+paletteInput.addEventListener('keydown',e=>{
+  if(e.key==='Enter'){const first=paletteList.querySelector('.palette-item'); if(first){const act=actions.find(x=>x.label===first.dataset.label); if(act) act.act();}}
+  if(e.key==='Escape') hidePalette();
+});
+document.addEventListener('keydown',e=>{
+  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault(); if(palette.classList.contains('open')) hidePalette(); else showPalette();}
+  if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault(); fireAgents();}
+  if(e.key==='/' && document.activeElement.tagName!=='INPUT' && document.activeElement.tagName!=='TEXTAREA'){e.preventDefault(); document.getElementById('book-filter').focus();}
+  if(e.key==='Escape'&&palette.classList.contains('open')) hidePalette();
+});
+document.getElementById('book-filter').addEventListener('input',e=>renderBooks(e.target.value));
+booksListEl.addEventListener('click',e=>{
+  const it=e.target.closest('.book-item'); if(!it) return;
+  document.querySelectorAll('.book-item').forEach(x=>x.classList.remove('active')); it.classList.add('active');
+});
+</script>
+</body>
+</html>

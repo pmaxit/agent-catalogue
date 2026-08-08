@@ -1,0 +1,933 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Quill — GitBook Option B / Notion Warm</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* tokens.css contract — Notion */
+:root {
+  --bg:#ffffff;
+  --surface:#f6f5f4;
+  --surface-warm:var(--surface);
+  --fg:rgba(0,0,0,0.95);
+  --fg-2:#31302e;
+  --muted:#615d59;
+  --meta:#a39e98;
+  --border:rgba(0,0,0,0.10);
+  --border-soft:rgba(0,0,0,0.06);
+  --accent:#0075de;
+  --accent-on:#ffffff;
+  --accent-hover:#005bab;
+  --accent-active:color-mix(in oklab, var(--accent), black 14%);
+  --success:#1aae39;
+  --warn:#dd5b00;
+  --danger:#dc2626;
+  --font-display:"Inter",-apple-system,system-ui,"Segoe UI",Helvetica,Arial,sans-serif;
+  --font-body:"Inter",-apple-system,system-ui,"Segoe UI",Helvetica,Arial,sans-serif;
+  --font-mono:ui-monospace,"Geist Mono","SF Mono","JetBrains Mono",Menlo,Monaco,Consolas,monospace;
+  --text-xs:12px;
+  --text-sm:14px;
+  --text-base:16px;
+  --text-lg:20px;
+  --text-xl:26px;
+  --text-2xl:40px;
+  --text-3xl:48px;
+  --text-4xl:64px;
+  --leading-body:1.5;
+  --leading-tight:1.00;
+  --tracking-display:-0.033em;
+  --space-1:4px;
+  --space-2:8px;
+  --space-3:12px;
+  --space-4:16px;
+  --space-5:20px;
+  --space-6:24px;
+  --space-8:32px;
+  --space-12:48px;
+  --section-y-desktop:80px;
+  --section-y-tablet:48px;
+  --section-y-phone:32px;
+  --radius-sm:4px;
+  --radius-md:8px;
+  --radius-lg:12px;
+  --radius-pill:9999px;
+  --elev-raised:rgba(0,0,0,0.04) 0px 4px 18px,rgba(0,0,0,0.027) 0px 2px 7.85px,rgba(0,0,0,0.02) 0px 0.8px 2.93px,rgba(0,0,0,0.01) 0px 0.175px 1.04px;
+  --focus-ring:0 0 0 3px rgba(9,127,232,0.28);
+  --motion-fast:150ms;
+  --motion-base:200ms;
+  --ease-standard:cubic-bezier(0.2,0,0,1);
+  --container-max:1200px;
+  --container-gutter-desktop:24px;
+}
+/* base */
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  font-family:var(--font-body);
+  background:var(--bg);
+  color:var(--fg);
+  line-height:var(--leading-body);
+  -webkit-font-smoothing:antialiased;
+  overflow:hidden;
+}
+button,input,textarea{font-family:inherit}
+button{cursor:pointer}
+.mono{font-family:var(--font-mono)}
+/* layout */
+.app{
+  display:grid;
+  grid-template-columns:280px 1fr 340px;
+  height:100vh;
+  height:100dvh;
+  overflow:hidden;
+}
+@media (max-width:1140px){
+  .app{grid-template-columns:280px 1fr}
+  .sidebar-right{position:fixed;right:0;top:0;bottom:0;width:340px;z-index:40;transform:translateX(100%);transition:transform 240ms var(--ease-standard);box-shadow:-24px 0 64px rgba(0,0,0,.08)}
+  .sidebar-right.open{transform:translateX(0)}
+}
+@media (max-width:820px){
+  .app{grid-template-columns:1fr}
+  .sidebar-left{position:fixed;left:0;top:0;bottom:0;width:300px;z-index:45;transform:translateX(-100%);transition:transform 240ms var(--ease-standard);box-shadow:24px 0 64px rgba(0,0,0,.08)}
+  .sidebar-left.open{transform:translateX(0)}
+}
+/* left */
+.sidebar-left{
+  background:var(--surface);
+  border-right:1px solid var(--border);
+  display:flex;flex-direction:column;
+  overflow:hidden;
+}
+.left-head{
+  padding:18px 16px 14px;
+  border-bottom:1px solid var(--border);
+  background:rgba(246,245,244,0.92);
+  backdrop-filter:saturate(1.1) blur(8px);
+  position:sticky;top:0;z-index:2;
+}
+.brand-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.brand{ 
+  display:flex;align-items:center;gap:10px;
+  font-weight:700;font-size:17px;letter-spacing:-0.02em;color:var(--fg-2)
+}
+.brand-mark{
+  width:28px;height:28px;border-radius:7px;background:var(--fg-2);color:#fff;
+  display:grid;place-items:center;font-size:14px;font-weight:700;letter-spacing:-0.02em
+}
+.icon-btn{
+  width:30px;height:30px;border:1px solid var(--border);background:#fff;border-radius:var(--radius-sm);
+  display:grid;place-items:center;color:var(--muted);transition:all var(--motion-fast) var(--ease-standard)
+}
+.icon-btn:hover{border-color:rgba(0,0,0,0.18);color:var(--fg);transform:translateY(-1px)}
+.btn-primary{
+  background:var(--accent);color:var(--accent-on);
+  border:1px solid transparent;
+  padding:8px 14px;border-radius:var(--radius-sm);
+  font-size:14px;font-weight:600;letter-spacing:-0.01em;
+  transition:all var(--motion-fast) var(--ease-standard);
+  box-shadow:0 1px 0 rgba(0,0,0,0.04)
+}
+.btn-primary:hover{background:var(--accent-hover)}
+.btn-primary:active{transform:scale(.97)}
+.search-wrap{position:relative}
+.search-wrap input{
+  width:100%;height:36px;background:#fff;border:1px solid var(--border);
+  border-radius:var(--radius-md);padding:0 32px 0 34px;
+  font-size:14px;color:var(--fg);outline:none;
+  transition:border-color var(--motion-fast);
+}
+.search-wrap input::placeholder{color:var(--meta)}
+.search-wrap input:focus{border-color:rgba(0,0,0,0.22);box-shadow:var(--focus-ring)}
+.search-wrap .s-icon{
+  position:absolute;left:10px;top:50%;transform:translateY(-50%);
+  color:var(--meta);display:grid;place-items:center;
+}
+.search-wrap .k-badge{
+  position:absolute;right:7px;top:50%;transform:translateY(-50%);
+  font-size:11px;font-family:var(--font-mono);color:var(--meta);
+  background:var(--surface);border:1px solid var(--border);
+  padding:2px 5px;border-radius:4px;letter-spacing:0.04em
+}
+.left-body{flex:1;overflow-y:auto;padding:12px 10px 80px}
+.db-hdr{display:flex;align-items:center;justify-content:space-between;padding:6px 6px 10px}
+.db-hdr h3{margin:0;font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted)}
+.db-hdr span{font-size:12px;color:var(--meta)}
+#books-list{display:flex;flex-direction:column;gap:8px}
+.book-card{
+  background:#fff;border:1px solid var(--border);
+  border-radius:var(--radius-lg);padding:12px 12px 11px;
+  cursor:pointer;transition:all var(--motion-fast) var(--ease-standard);
+  box-shadow:var(--elev-raised);position:relative;overflow:hidden
+}
+.book-card:hover{transform:translateY(-1px);box-shadow:rgba(0,0,0,0.06) 0 8px 28px,rgba(0,0,0,0.04) 0 2px 8px}
+.book-card.active{border-color:var(--fg);box-shadow:0 0 0 1px var(--fg-2),var(--elev-raised)}
+.book-top{display:flex;gap:10px;align-items:flex-start}
+.cover-icon{
+  width:36px;height:36px;border-radius:8px;flex:0 0 36px;
+  display:grid;place-items:center;font-size:16px;
+  background:var(--surface);border:1px solid var(--border);color:var(--fg-2)
+}
+.book-meta{flex:1;min-width:0}
+.book-title{font-size:14px;font-weight:600;letter-spacing:-0.01em;line-height:1.25;margin:0 0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--fg-2)}
+.book-syn{font-size:12.5px;line-height:1.4;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin:0}
+.book-foot{display:flex;align-items:center;gap:6px;margin-top:9px}
+.chip{
+  display:inline-flex;align-items:center;gap:5px;
+  height:22px;padding:0 8px;border-radius:var(--radius-pill);
+  background:#fff;border:1px solid var(--border);
+  font-size:11px;font-weight:500;color:var(--muted);letter-spacing:0.01em
+}
+.chip.blue{background:#f2f9ff;border-color:#d8eaff;color:#097fe8}
+.chip.green{background:#eefaf1;border-color:#cde8d4;color:#157a2e}
+.dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+.book-foot .sep{flex:1}
+.book-foot .count{font-size:11px;color:var(--meta);font-family:var(--font-mono)}
+/* center */
+.center{
+  display:flex;flex-direction:column;overflow:hidden;background:var(--bg);
+  border-right:1px solid var(--border-soft)
+}
+.center-topbar{
+  height:48px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 24px 0 28px;border-bottom:1px solid var(--border);
+  background:rgba(255,255,255,0.92);backdrop-filter:blur(10px);position:sticky;top:0;z-index:3
+}
+.breadcrumb{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.breadcrumb b{color:var(--fg-2);font-weight:600}
+.top-actions{display:flex;align-items:center;gap:8px}
+.top-actions .ghost{
+  border:1px solid var(--border);background:#fff;height:32px;padding:0 12px;border-radius:var(--radius-sm);
+  font-size:13px;font-weight:500;color:var(--fg-2)
+}
+.center-scroll{flex:1;overflow-y:auto;padding:0 0 120px}
+.center-inner{max-width:820px;margin:0 auto;padding:28px 28px 0 32px}
+@media (max-width:740px){.center-inner{padding:22px 18px 0}}
+/* title */
+.chapter-kicker{
+  display:flex;align-items:center;gap:10px;margin-bottom:12px
+}
+.k-pill{
+  height:24px;padding:0 10px;border-radius:var(--radius-pill);
+  background:#f2f9ff;color:#097fe8;border:1px solid #dbeafe;
+  font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase
+}
+.k-meta{font-size:12px;color:var(--meta);font-family:var(--font-mono)}
+.chapter-title{
+  font-size:clamp(32px,4vw,44px);line-height:1.02;letter-spacing:-0.04em;
+  font-weight:700;color:var(--fg);margin:0 0 18px;
+  font-family:var(--font-display);
+}
+.chapter-title span{outline:none}
+.chapter-title [contenteditable]:focus{outline:none;box-shadow:inset 0 -1px 0 var(--border)}
+/* agent-form */
+#agent-form{display:flex;flex-direction:column;gap:22px}
+.props-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:680px){.props-grid{grid-template-columns:1fr}}
+.prop{
+  display:flex;align-items:center;gap:8px;
+  min-height:42px;padding:8px 10px 8px 12px;
+  background:#fff;border:1px solid var(--border);border-radius:var(--radius-md);
+  box-shadow:0 1px 0 rgba(0,0,0,0.02)
+}
+.prop-label{
+  font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;
+  color:var(--muted);width:68px;flex:0 0 68px
+}
+.prop input{
+  flex:1;min-width:0;background:transparent;border:0;outline:none;
+  font-size:13.5px;font-weight:500;color:var(--fg-2);
+  padding:4px 8px;border-radius:var(--radius-pill);
+  background:var(--surface);border:1px solid var(--border-soft);
+}
+.prop input:focus{background:#fff;border-color:rgba(0,0,0,0.18);box-shadow:var(--focus-ring)}
+.section-label{
+  font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;
+  color:var(--muted);margin:0 0 10px;display:flex;align-items:center;gap:10px
+}
+.section-label:after{content:"";flex:1;height:1px;background:var(--border-soft)}
+.pill-row{display:flex;flex-wrap:wrap;gap:8px}
+.goal-pill{
+  height:32px;padding:0 14px;border-radius:var(--radius-pill);
+  background:#fff;border:1px solid var(--border);color:var(--fg-2);
+  font-size:13px;font-weight:500;letter-spacing:-0.01em;
+  display:inline-flex;align-items:center;gap:7px;transition:all 150ms
+}
+.goal-pill .ic{width:16px;height:16px;border-radius:50%;border:1px solid var(--border);display:grid;place-items:center;font-size:10px}
+.goal-pill.active{background:var(--fg-2);border-color:var(--fg-2);color:#fff;box-shadow:0 2px 10px rgba(0,0,0,0.12)}
+.goal-pill.active .ic{background:#fff;color:var(--fg-2);border-color:#fff}
+.themes-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+@media (max-width:900px){.themes-grid{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:520px){.themes-grid{grid-template-columns:1fr}}
+.theme-card{
+  background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);
+  padding:14px 13px 12px;cursor:pointer;position:relative;overflow:hidden;
+  transition:all 160ms var(--ease-standard)
+}
+.theme-card:hover{border-color:rgba(0,0,0,0.22);transform:translateY(-1px);box-shadow:var(--elev-raised)}
+.theme-card.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),var(--elev-raised)}
+.theme-card.active:after{
+  content:"";position:absolute;top:10px;right:10px;width:18px;height:18px;border-radius:50%;
+  background:var(--accent);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='white' d='M6 11.2 3.2 8.4l1-1 1.8 1.8 4-4 1 1z'/%3E%3C/svg%3E");
+}
+.theme-name{font-size:13px;font-weight:600;letter-spacing:-0.01em;color:var(--fg-2);margin:0 0 4px}
+.theme-desc{font-size:12px;line-height:1.45;color:var(--muted);margin:0 0 10px}
+.theme-meta{display:flex;gap:6px;flex-wrap:wrap}
+.theme-meta .chip{height:20px;font-size:10.5px}
+.brief-card{
+  background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);
+  box-shadow:var(--elev-raised);overflow:hidden
+}
+.brief-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--border-soft);background:var(--surface)}
+.brief-head strong{font-size:12px;font-weight:600;letter-spacing:0.04em;color:var(--fg-2)}
+.brief-tools{display:flex;gap:6px}
+.brief-tools button{width:26px;height:26px;border:1px solid var(--border);background:#fff;border-radius:6px;display:grid;place-items:center;color:var(--muted)}
+#brief-input{
+  width:100%;min-height:168px;resize:vertical;
+  border:0;outline:none;padding:16px 18px;
+  font-size:15px;line-height:1.7;color:var(--fg-2);
+  background:#fff
+}
+#brief-input::placeholder{color:var(--meta)}
+.brief-footer{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 14px;border-top:1px solid var(--border-soft);background:#fff;
+  font-size:12px;color:var(--meta)
+}
+.criteria-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+@media (max-width:680px){.criteria-grid{grid-template-columns:1fr 1fr}}
+.crit-card{
+  background:#fff;border:1px solid var(--border);border-radius:var(--radius-md);
+  padding:12px 12px 10px;transition:transform 150ms
+}
+.crit-card:hover{transform:translateY(-1px)}
+.crit-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.crit-name{font-size:12px;font-weight:600;letter-spacing:0.02em;color:var(--fg-2)}
+.crit-thr{font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--meta);background:var(--surface);border:1px solid var(--border-soft);padding:2px 6px;border-radius:var(--radius-pill)}
+.crit-body{font-size:12px;line-height:1.45;color:var(--muted);margin:0 0 10px;min-height:34px}
+.crit-meter{height:4px;border-radius:999px;background:var(--surface);overflow:hidden;border:1px solid var(--border-soft)}
+.crit-fill{height:100%;background:var(--fg-2);border-radius:inherit;transition:width 400ms}
+.crit-card.pass .crit-fill{background:var(--success)}
+.crit-card.warn .crit-fill{background:var(--warn)}
+/* article canvas — Notion blocks */
+.canvas-wrap{
+  margin-top:36px;border:1px solid var(--border);border-radius:14px;overflow:hidden;
+  background:#fff;box-shadow:var(--elev-raised)
+}
+.canvas-head{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 18px;border-bottom:1px solid var(--border);
+  background:var(--surface)
+}
+.canvas-head-left{display:flex;align-items:center;gap:10px}
+.canvas-head-left b{font-size:13px;font-weight:600;letter-spacing:-0.01em;color:var(--fg-2)}
+.canvas-head-left .live-dot{width:6px;height:6px;background:var(--success);border-radius:50%;box-shadow:0 0 0 4px rgba(26,174,57,0.12);animation:pulse 1.8s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(26,174,57,.25)}70%{box-shadow:0 0 0 8px rgba(26,174,57,0)}100%{box-shadow:0 0 0 0 rgba(26,174,57,0)}}
+.canvas-actions{display:flex;gap:8px}
+#article-canvas{padding:8px 0 28px}
+.n-block{
+  position:relative;display:flex;gap:2px;padding:2px 18px 2px 44px;
+  transition:background 120ms
+}
+.n-block:hover{background:rgba(246,245,244,0.8)}
+.n-handle{
+  position:absolute;left:12px;top:10px;width:20px;height:20px;
+  display:grid;place-items:center;color:var(--meta);
+  opacity:0;transition:opacity 120ms;cursor:grab;
+  border-radius:4px;font-size:12px
+}
+.n-block:hover .n-handle{opacity:1}
+.n-handle:hover{background:#fff;border:1px solid var(--border)}
+.n-content{flex:1;min-width:0;padding:6px 0}
+.n-content p{margin:0;font-size:15px;line-height:1.65;color:var(--fg-2)}
+.n-content h2{margin:18px 0 8px;font-size:24px;line-height:1.2;letter-spacing:-0.03em;font-weight:700;color:var(--fg)}
+.n-content h3{margin:14px 0 6px;font-size:18px;line-height:1.3;letter-spacing:-0.02em;font-weight:600;color:var(--fg-2)}
+.n-content .meta{font-size:12px;color:var(--meta);font-family:var(--font-mono);margin-top:4px}
+.n-block.callout .n-content{
+  background:#f2f9ff;border:1px solid #dbeafe;border-radius:10px;padding:12px 14px
+}
+.n-block.callout .n-content p{font-size:13.5px;color:#0f3a66}
+.n-block.toggle{cursor:pointer}
+.toggle-head{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600;color:var(--fg-2)}
+.toggle-arrow{width:18px;height:18px;border-radius:4px;background:var(--surface);border:1px solid var(--border);display:grid;place-items:center;font-size:10px;transition:transform 160ms}
+.toggle-head.open .toggle-arrow{transform:rotate(90deg)}
+.toggle-body{
+  margin-top:10px;padding:12px 12px;background:var(--surface);
+  border:1px solid var(--border-soft);border-radius:8px;
+  font-size:13px;line-height:1.6;color:var(--muted);display:none
+}
+.toggle-head.open + .toggle-body{display:block}
+.code-block{margin:10px 0;background:#0e0e0f;color:#d8d8d8;border-radius:10px;overflow:hidden;border:1px solid #232322}
+.code-top{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid #1e1e1e;font-size:11px;font-family:var(--font-mono);color:#8a8a8a}
+.code-pre{margin:0;padding:14px 14px;font-size:12.5px;line-height:1.7;font-family:var(--font-mono);overflow-x:auto;white-space:pre}
+.diagram-ph{
+  margin:12px 0;height:160px;border:1px dashed var(--border);border-radius:10px;
+  background:repeating-linear-gradient(45deg, var(--surface), var(--surface) 10px, #fff 10px, #fff 20px);
+  display:grid;place-items:center;color:var(--meta);font-size:12px;font-family:var(--font-mono)
+}
+/* right */
+.sidebar-right{padding:0;background:#fff}
+.right-head{
+  padding:16px 16px 12px;border-bottom:1px solid var(--border);
+  position:sticky;top:0;background:rgba(255,255,255,0.92);backdrop-filter:blur(8px);z-index:2
+}
+.right-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.right-h b{font-size:12px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:var(--fg-2)}
+.loop-badge{
+  height:22px;padding:0 9px;border-radius:var(--radius-pill);
+  background:var(--fg-2);color:#fff;font-size:11px;font-weight:600;letter-spacing:0.03em;
+  display:inline-flex;align-items:center;gap:6px
+}
+.loop-badge .pulse{width:6px;height:6px;border-radius:50%;background:var(--success);box-shadow:0 0 0 3px rgba(26,174,57,0.2)}
+.stepper{padding:0 16px 10px;position:relative}
+.step-list{display:flex;flex-direction:column;gap:0;position:relative;margin-left:6px}
+.step-list:before{
+  content:"";position:absolute;left:5px;top:10px;bottom:18px;width:1px;background:linear-gradient(to bottom,var(--border),var(--border-soft));
+}
+.step{
+  display:flex;gap:12px;align-items:flex-start;padding:10px 0 10px 0;position:relative
+}
+.step-dot{
+  width:12px;height:12px;border-radius:50%;background:#fff;border:1.5px solid var(--border);
+  flex:0 0 12px;margin-top:2px;position:relative;z-index:1;transition:all 200ms
+}
+.step.active .step-dot{background:var(--fg-2);border-color:var(--fg-2);box-shadow:0 0 0 4px rgba(0,0,0,0.06)}
+.step.done .step-dot{background:var(--success);border-color:var(--success)}
+.step-meta{flex:1;min-width:0}
+.step-title{font-size:13px;font-weight:600;letter-spacing:-0.01em;color:var(--fg-2);line-height:1.2;margin:0}
+.step-desc{font-size:11.5px;color:var(--meta);margin:2px 0 0;line-height:1.4;font-family:var(--font-mono)}
+.step-time{font-size:11px;color:var(--meta);margin-left:auto;font-family:var(--font-mono)}
+.step.running .step-dot{animation:dotPulse 1.2s infinite alternate}
+@keyframes dotPulse{from{transform:scale(1)}to{transform:scale(1.25)}}
+.roster{padding:10px 12px 8px}
+.roster-title{font-size:11px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;color:var(--muted);margin:0 0 10px;padding:0 4px}
+.agent-card{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 10px;border:1px solid var(--border);border-radius:10px;background:#fff;
+  margin-bottom:8px;transition:all 140ms
+}
+.agent-card:hover{border-color:rgba(0,0,0,0.18);transform:translateY(-1px);box-shadow:var(--elev-raised)}
+.agent-ava{
+  width:28px;height:28px;border-radius:8px;background:var(--surface);border:1px solid var(--border);
+  display:grid;place-items:center;font-size:13px;position:relative
+}
+.agent-ava:after{
+  content:"";position:absolute;right:-3px;bottom:-3px;width:10px;height:10px;border-radius:50%;
+  background:var(--success);border:2px solid #fff
+}
+.agent-card.idle .agent-ava:after{background:var(--meta)}
+.agent-card.running .agent-ava:after{background:var(--success);animation:pulse 1.5s infinite}
+.agent-info{flex:1;min-width:0}
+.agent-name{font-size:12.5px;font-weight:600;color:var(--fg-2);line-height:1.1;margin:0}
+.agent-sub{font-size:11px;color:var(--meta);font-family:var(--font-mono);margin:2px 0 0}
+.agent-state{font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;padding:3px 6px;border-radius:var(--radius-pill);border:1px solid var(--border)}
+.agent-state.running{background:#eefaf1;color:var(--success);border-color:#cfe9d5}
+.agent-state.queued{background:var(--surface);color:var(--muted)}
+.console-wrap{padding:10px 12px}
+.console-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.console-head b{font-size:11px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;color:var(--muted)}
+.console-actions{display:flex;gap:6px}
+#stream-box{
+  height:168px;overflow-y:auto;background:#0f0f0f;border:1px solid #1f1f1f;border-radius:10px;
+  padding:10px 10px;font-size:11.5px;line-height:1.6;font-family:var(--font-mono);color:#b6b6b6;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.04)
+}
+#stream-box .line{white-space:pre-wrap;word-break:break-word}
+#stream-box .line .ts{color:#5c5c5c}
+#stream-box .line .tag{color:#8aa8ff}
+#stream-box .line.ok{color:#9be6a5}
+#stream-box .line.warn{color:#f2c26b}
+#stream-box .line.plain{color:#cfcfcf}
+.scores{padding:12px}
+.score-row{display:flex;align-items:center;justify-content:space-between;padding:8px 6px;border-bottom:1px solid var(--border-soft)}
+.score-row:last-child{border-bottom:0}
+.score-label{font-size:12px;font-weight:500;color:var(--fg-2)}
+.score-val{font-size:12px;font-family:var(--font-mono);font-weight:600;min-width:46px;text-align:right}
+.score-bar{height:4px;background:var(--surface);border-radius:999px;overflow:hidden;border:1px solid var(--border-soft);margin-top:6px}
+.score-fill{height:100%;background:var(--fg-2);border-radius:inherit;transition:width 500ms}
+.footer-fire{
+  padding:14px 12px 16px;border-top:1px solid var(--border);
+  background:linear-gradient(to top,#fff,rgba(255,255,255,0.8));position:sticky;bottom:0
+}
+#fire-btn{
+  width:100%;height:44px;border-radius:10px;background:var(--fg-2);color:#fff;
+  border:1px solid var(--fg-2);font-size:14px;font-weight:600;letter-spacing:-0.01em;
+  display:flex;align-items:center;justify-content:center;gap:10px;transition:all 160ms
+}
+#fire-btn:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(0,0,0,0.14);background:#000}
+#fire-btn:active{transform:translateY(0) scale(.98)}
+#fire-btn.running{background:var(--surface);color:var(--muted);border-color:var(--border);pointer-events:none}
+#fire-btn .spark{width:20px;height:20px;border-radius:6px;background:#fff;color:var(--fg-2);display:grid;place-items:center;font-size:12px}
+.progress-track{height:3px;background:var(--surface);border-radius:999px;overflow:hidden;margin-top:10px;border:1px solid var(--border-soft)}
+.progress-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--fg-2),var(--muted));transition:width 300ms}
+/* mobile nav */
+.mob-bar{
+  display:none;position:fixed;bottom:12px;left:50%;transform:translateX(-50%);
+  background:var(--fg-2);border-radius:999px;padding:6px;gap:6px;z-index:50;
+  box-shadow:0 12px 32px rgba(0,0,0,0.22);border:1px solid rgba(255,255,255,0.1)
+}
+.mob-bar button{
+  height:36px;padding:0 16px;border-radius:999px;border:0;background:transparent;color:#9e9a96;
+  font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px
+}
+.mob-bar button.active{background:#fff;color:var(--fg-2)}
+@media (max-width:820px){
+  .mob-bar{display:flex}
+  .center-topbar{padding:0 14px 0 18px}
+}
+.scrim{display:none;position:fixed;inset:0;background:rgba(15,13,12,0.28);backdrop-filter:blur(2px);z-index:30}
+.scrim.show{display:block}
+/* scrollbar */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.14);border-radius:999px}
+::-webkit-scrollbar-track{background:transparent}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- LEFT -->
+  <aside class="sidebar-left" id="leftPane">
+    <div class="left-head">
+      <div class="brand-row">
+        <div class="brand"><div class="brand-mark">Q</div>Quill</div>
+        <button class="icon-btn" id="newBookBtn" title="New book">＋</button>
+      </div>
+      <div class="search-wrap">
+        <div class="s-icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M11 11L13.5 13.5M11.5 7.5A4 4 0 1 1 3.5 7.5a4 4 0 0 1 8 0Z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        </div>
+        <input placeholder="Search books  " aria-label="Search books" />
+        <div class="k-badge">⌘K</div>
+      </div>
+    </div>
+    <div class="left-body">
+      <div class="db-hdr"><h3>Books database</h3><span id="booksCount">5 books</span></div>
+      <div id="books-list" role="list">
+        <!-- populated by JS -->
+      </div>
+      <div style="margin-top:22px;padding:0 6px">
+        <div class="db-hdr"><h3>Recent chapters</h3></div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;gap:8px;align-items:center;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:#fff">
+            <div style="width:20px;height:20px;border-radius:5px;background:#f2f9ff;border:1px solid #dbeafe;display:grid;place-items:center;font-size:11px">✦</div>
+            <span style="font-size:12.5px;color:var(--fg-2);font-weight:500;flex:1">Delegating without soft exits</span>
+            <span style="font-size:11px;color:var(--meta)" class="mono">2h ago</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:#fff;opacity:.8">
+            <div style="width:20px;height:20px;border-radius:5px;background:var(--surface);border:1px solid var(--border);display:grid;place-items:center;font-size:11px">◑</div>
+            <span style="font-size:12.5px;color:var(--fg-2);flex:1">Agent handshake patterns</span>
+            <span style="font-size:11px;color:var(--meta)" class="mono">Yesterday</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- CENTER -->
+  <main class="center">
+    <div class="center-topbar">
+      <div class="breadcrumb"><span>Books</span><span style="opacity:.35">/</span><b id="crumbBook">Engineering Leadership</b><span style="opacity:.35">/</span><span id="crumbChapter">Delegating without soft exits</span></div>
+      <div class="top-actions">
+        <button class="ghost" id="toggleLeftBtn" title="Books" style="display:none">☰ Books</button>
+        <button class="ghost" id="toggleRightBtn">Pipeline</button>
+        <button class="ghost">Share</button>
+        <button class="btn-primary" style="height:32px;padding:0 12px">Publish</button>
+      </div>
+    </div>
+    <div class="center-scroll">
+      <div class="center-inner">
+        <div class="chapter-kicker">
+          <div class="k-pill">Chapter draft • Loop 2 of 3</div>
+          <div class="k-meta mono">edited 4m ago • autosaved</div>
+        </div>
+        <h1 class="chapter-title"><span contenteditable="true">Delegating draft without soft exits</span></h1>
+
+        <form id="agent-form">
+          <div>
+            <div class="section-label">Properties — inline editable</div>
+            <div class="props-grid">
+              <label class="prop"><span class="prop-label">Audience</span><input id="audience-input" value="Senior ICs → EMs, 5-8y" /></label>
+              <label class="prop"><span class="prop-label">Tone</span><input id="tone-input" value="Executive crisp, direct" /></label>
+              <label class="prop"><span class="prop-label">Format</span><input id="format-input" value="O'Reilly chapter, 2.5k words" /></label>
+              <label class="prop"><span class="prop-label">Length</span><input id="length-input" value="~ 2,400w • 8m read" /></label>
+            </div>
+          </div>
+
+          <div>
+            <div class="section-label">Writing goal • 5 options</div>
+            <div id="goals-selector" class="pill-row">
+              <button type="button" class="goal-pill active" data-goal="thought"><span class="ic">◐</span>Thought Leadership</button>
+              <button type="button" class="goal-pill" data-goal="deep"><span class="ic">≋</span>Technical Deep Dive</button>
+              <button type="button" class="goal-pill" data-goal="handbook"><span class="ic">⧉</span>Team Handbook</button>
+              <button type="button" class="goal-pill" data-goal="essay"><span class="ic">✎</span>Essay / Narrative</button>
+              <button type="button" class="goal-pill" data-goal="brief"><span class="ic">☰</span>Exec Brief</button>
+            </div>
+          </div>
+
+          <div>
+            <div class="section-label">Theme &amp; voice • 6 cards</div>
+            <div id="themes-selector" class="themes-grid">
+              <div class="theme-card active" data-theme="agentic">
+                <div class="theme-name">Agentic Command</div>
+                <div class="theme-desc">Operator voice, imperative, owns room. Best for leadership pushes.</div>
+                <div class="theme-meta"><span class="chip blue">• sharp</span><span class="chip">140w avg</span></div>
+              </div>
+              <div class="theme-card" data-theme="trace">
+                <div class="theme-name">Technical Trace</div>
+                <div class="theme-desc">Show working, logs, decisions. Reader trusts the path.</div>
+                <div class="theme-meta"><span class="chip">code + output</span><span class="chip">low-fluff</span></div>
+              </div>
+              <div class="theme-card" data-theme="signal">
+                <div class="theme-name">Editorial Signal</div>
+                <div class="theme-desc">FT-grade restraint, single argument, high signal.</div>
+                <div class="theme-meta"><span class="chip green">• editor pick</span></div>
+              </div>
+              <div class="theme-card" data-theme="pulse">
+                <div class="theme-name">Narrative Pulse</div>
+                <div class="theme-desc">Story first, point lands late. Emotional cadence.</div>
+                <div class="theme-meta"><span class="chip">story</span><span class="chip">840L</span></div>
+              </div>
+              <div class="theme-card" data-theme="crisp">
+                <div class="theme-name">Executive Crisp</div>
+                <div class="theme-desc">No throat clearing. BLUF, bullets, decision.</div>
+                <div class="theme-meta"><span class="chip">2m read</span><span class="chip">decisive</span></div>
+              </div>
+              <div class="theme-card" data-theme="oreilly">
+                <div class="theme-name">O’Reilly Book Chapter</div>
+                <div class="theme-desc">Long-form explainer, diagrams, callouts, checklist end.</div>
+                <div class="theme-meta"><span class="chip">diagram-heavy</span><span class="chip">authoritative</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="brief-card">
+            <div class="brief-head"><strong>Brief — what good looks like</strong>
+              <div class="brief-tools">
+                <button type="button" title="Attach">⎙</button>
+                <button type="button" title="Template">◫</button>
+              </div>
+            </div>
+            <textarea id="brief-input" placeholder="Describe the hill you will die on. What should reader do differently tomorrow? Include constraints, non-goals, real examples...">Delegating draft without soft exits.
+
+Thesis: Most delegation fails because manager leaves a soft exit — “lmk if stuck” “feel free to push back” — which reads as optional. Good delegation is a closed loop: clear DRI, single metric, explicit irreversible decision stamp.
+
+Include:
+- 2 real stories from eng orgs (5-12p teams) where delegation slipped due to soft exits
+- contrast: open-loop vs closed-loop delegation, with checklist
+- short script: how to stamp decision in standup without sounding harsh
+Non-goals: no theory about empowerment; no feely language.
+Voice: Executive crisp meets Technical Trace — receipts > slogans.</textarea>
+            <div class="brief-footer"><span class="mono">342 words • 18% pasted • 3 sources linked</span><span>⌘+Enter to fire</span></div>
+          </div>
+
+          <div>
+            <div class="section-label">Judging criteria — 6 cards</div>
+            <div class="criteria-grid">
+              <div class="crit-card pass"><div class="crit-top"><span class="crit-name">Correctness</span><span class="crit-thr">0.85+</span></div><div class="crit-body">Facts grounded, no fantasy metrics, cites checked</div><div class="crit-meter"><div class="crit-fill" style="width:92%"></div></div></div>
+              <div class="crit-card"><div class="crit-top"><span class="crit-name">Clarity</span><span class="crit-thr">0.80+</span></div><div class="crit-body">One idea per para, no throat clearing</div><div class="crit-meter"><div class="crit-fill" style="width:78%"></div></div></div>
+              <div class="crit-card"><div class="crit-top"><span class="crit-name">Helpfulness</span><span class="crit-thr">0.82+</span></div><div class="crit-body">Reader can act tomorrow with checklist</div><div class="crit-meter"><div class="crit-fill" style="width:84%"></div></div></div>
+              <div class="crit-card"><div class="crit-top"><span class="crit-name">Code+output</span><span class="crit-thr">0.75+</span></div><div class="crit-body">Real snippets, not pseudo — plus result</div><div class="crit-meter"><div class="crit-fill" style="width:68%"></div></div></div>
+              <div class="crit-card"><div class="crit-top"><span class="crit-name">Visual feedback</span><span class="crit-thr">0.70+</span></div><div class="crit-body">Diagram clarifies decision loop, not decor</div><div class="crit-meter"><div class="crit-fill" style="width:61%"></div></div></div>
+              <div class="crit-card warn"><div class="crit-top"><span class="crit-name">Reader pull</span><span class="crit-thr">0.80+</span></div><div class="crit-body">First 40 words must hook, no summary open</div><div class="crit-meter"><div class="crit-fill" style="width:57%"></div></div></div>
+            </div>
+          </div>
+        </form>
+
+        <div class="canvas-wrap">
+          <div class="canvas-head">
+            <div class="canvas-head-left"><div class="live-dot"></div><b>Article canvas — Quarto notebook + Notion blocks</b><span class="chip blue" style="margin-left:8px">Live</span></div>
+            <div class="canvas-actions"><button class="icon-btn" title="Copy">⎙</button><button class="icon-btn" title="Open in Quarto">↗</button></div>
+          </div>
+          <div id="article-canvas">
+            <div class="n-block">
+              <div class="n-handle">⋮⋮</div>
+              <div class="n-content"><p style="font-size:13px;color:var(--meta);letter-spacing:.04em;text-transform:uppercase;font-weight:600">Chapter 4 — Delegating without soft exits</p></div>
+            </div>
+            <div class="n-block">
+              <div class="n-handle">⋮⋮</div>
+              <div class="n-content"><h2>The soft exit is a gift you shouldn't give</h2><p>We say <em>“let me know if you get stuck”</em> to sound kind. The report hears: this is optional, and you are allowed to wander. Delegation fails not in the brief — it fails in the loop.</p></div>
+            </div>
+            <div class="n-block toggle">
+              <div class="n-handle">⋮⋮</div>
+              <div class="n-content">
+                <div class="toggle-head" data-open="1"><span class="toggle-arrow">▶</span> Research trace — 3 sources, 12m scan</div>
+                <div class="toggle-body">
+                  <div class="mono" style="font-size:11px;color:var(--meta);margin-bottom:8px">[Planner] pulled: eng postmortems, delegation antipatterns</div>
+                  <p style="color:var(--fg-2)">Found 2 first-hand slips: Platform team @ 11p where DRI not named → PR drifted 3 weeks; Mobile release where metric was “best effort latency” → no one blocked launch.</p>
+                  <p style="margin-top:8px">Takeaway: close loop needs <b>named DRI + single metric + timestamped decision stamp</b>. Without stamp, soft exit reopens.</p>
+                </div>
+              </div>
+            </div>
+            <div class="n-block callout">
+              <div class="n-handle">⋮⋮</div>
+              <div class="n-content"><p>💡 <b>Closed-loop delegation:</b> One owner. One outcome metric. One timebox. Decision stamped in public — not DM.</p></div>
+            </div>
+            <div class="n-block">
+              <div class="n-handle">⋮⋮</div>
+              <div class="n-content"><h3>Two real slips</h3><p><b>1. Platform migration, 11 people.</b> “Alex and Priya pairing on cutover” — pairing without DRI means no one owns rollback call. Result: rollback hesitated 42 minutes.</p><p style="margin-top:10px"><b>2. Mobile release.</b> Metric written as “improve launch”. No counter-metric. Team shipped improvement that regressed cold-start 18% — no one felt empowered to block.</p></div>
+            </div>
+            <div class="n-block">
+              <div class="n-handle">⋮⋮</div>
+              <div class="n-content">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:8px 0">
+                  <div style="border:1px solid var(--border);border-radius:10px;padding:12px;background:var(--surface)"><div style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;color:var(--muted);margin-bottom:6px">Open-loop (fails)</div><div style="font-size:12px;line-height:1.5;color:var(--muted)">“Let me know if need help”<br/>No DRI • Metric vague • Decision in DMs • Exit left open</div></div>
+                  <div style="border:1px solid var(--fg-2);border-radius:10px;padding:12px;background:#fff"><div style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;color:var(--fg-2);margin-bottom:6px">Closed-loop (works)</div><div style="font-size:12px;line-height:1.5;color:var(--fg-2)"><b>Priya DRI • p95 < 800ms • Stamp by Fri 4pm</b><br/>Check Wed • Public decision log • No soft exit</div></div>
+                </div>
+              </div>
+            </div>
+            <div class="n-block">
+              <div class="n-handle">⋮⋮</div>
+              <div class="n-content">
+                <div class="code-block">
+                  <div class="code-top"><span>standup_stamp.sh — decision log line</span><span class="mono">bash</span></div>
+                  <pre class="code-pre">#!/bin/bash
+# stamp decision in public
+echo "$(date -Iseconds) [DECISION] DRI=priya METRIC=p95<800ms CUTOVER=2026-08-04T16:00Z" >> decisions.log
+git commit -m "stamp: cutover DRI priya p95<800ms" --allow-empty
+</pre>
+                </div>
+                <div class="diagram-ph">⟡ draw.io diagram placeholder — closed loop flow: Brief → DRI → Metric → Stamp → Check — exports to Quarto</div>
+              </div>
+            </div>
+            <div class="n-block">
+              <div class="n-handle">⋮⋮</div>
+              <div class="n-content"><p>Next: Writer will tighten hook (first 40 words) and add one more edge — how to stamp without sounding harsh. Then Judge scores.</p><div class="meta mono">Loop 2 draft • 1,840 words • 3 todos remain</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- RIGHT -->
+  <aside class="sidebar-right" id="rightPane">
+    <div class="right-head">
+      <div class="right-h"><b>Pipeline</b><span class="loop-badge"><span class="pulse"></span>Loop 2 / 3 active</span></div>
+      <div style="display:flex;gap:8px">
+        <div style="flex:1;height:28px;border:1px solid var(--border);border-radius:999px;display:flex;align-items:center;padding:0 10px;gap:8px;background:#fff"><div style="width:14px;height:14px;border-radius:50%;background:var(--surface);border:1px solid var(--border);display:grid;place-items:center;font-size:9px">↻</div><span style="font-size:12px;color:var(--fg-2);font-weight:500">Max loops 3</span><span style="margin-left:auto;font-size:11px" class="mono">thresh 0.85</span></div>
+        <button class="icon-btn" id="closeRight" title="Close" style="width:28px;height:28px">✕</button>
+      </div>
+    </div>
+
+    <div class="stepper">
+      <div class="step-list" id="stepList">
+        <div class="step done"><div class="step-dot"></div><div class="step-meta"><p class="step-title">Planner</p><p class="step-desc">Scoped angle, pulled sources</p></div><span class="step-time mono">00:01</span></div>
+        <div class="step done"><div class="step-dot"></div><div class="step-meta"><p class="step-title">Research ×3</p><p class="step-desc">postmortems, antipatterns, scripts</p></div><span class="step-time mono">00:12</span></div>
+        <div class="step active running"><div class="step-dot"></div><div class="step-meta"><p class="step-title">Writer</p><p class="step-desc">Drafting v2 — tightening hook</p></div><span class="step-time mono">01:04</span></div>
+        <div class="step"><div class="step-dot"></div><div class="step-meta"><p class="step-title">Judge</p><p class="step-desc">Will score 6 criteria</p></div><span class="step-time mono">—</span></div>
+      </div>
+      <div class="progress-track"><div class="progress-fill" id="progFill" style="width:62%"></div></div>
+    </div>
+
+    <div class="roster">
+      <p class="roster-title">Agent roster • soft cards</p>
+      <div class="agent-card running"><div class="agent-ava">✦</div><div class="agent-info"><p class="agent-name">Planner</p><p class="agent-sub">built brief map • 2m ago</p></div><span class="agent-state running">done</span></div>
+      <div class="agent-card running"><div class="agent-ava">◫</div><div class="agent-info"><p class="agent-name">Research A</p><p class="agent-sub">platform postmortem crawl</p></div><span class="agent-state running">done</span></div>
+      <div class="agent-card running"><div class="agent-ava">◬</div><div class="agent-info"><p class="agent-name">Research B</p><p class="agent-sub">delegation scripts lib</p></div><span class="agent-state running">done</span></div>
+      <div class="agent-card running"><div class="agent-ava">◎</div><div class="agent-info"><p class="agent-name">Research C</p><p class="agent-sub"> closed-loop patterns</p></div><span class="agent-state running">done</span></div>
+      <div class="agent-card running"><div class="agent-ava" style="background:#0f0f0f;color:#fff">✎</div><div class="agent-info"><p class="agent-name">Writer</p><p class="agent-sub">v2 refining • streaming</p></div><span class="agent-state running">live</span></div>
+      <div class="agent-card idle"><div class="agent-ava">◐</div><div class="agent-info"><p class="agent-name">Judge</p><p class="agent-sub">awaiting draft</p></div><span class="agent-state queued">queued</span></div>
+    </div>
+
+    <div class="console-wrap">
+      <div class="console-head"><b>Live console</b><div class="console-actions"><button class="icon-btn" style="width:22px;height:22px;font-size:10px" id="clearLogs">✕</button></div></div>
+      <div id="stream-box" class="mono"></div>
+    </div>
+
+    <div class="scores">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><b style="font-size:11px;letter-spacing:0.07em;text-transform:uppercase;color:var(--muted)">Criteria scores</b><span class="chip blue" style="height:20px">avg 0.74</span></div>
+      <div id="scoresList">
+        <div class="score-row"><span class="score-label">Correctness</span><span class="score-val">0.92</span></div><div class="score-bar"><div class="score-fill" style="width:92%;background:var(--success)"></div></div>
+        <div class="score-row" style="margin-top:8px"><span class="score-label">Clarity</span><span class="score-val">0.78</span></div><div class="score-bar"><div class="score-fill" style="width:78%"></div></div>
+        <div class="score-row" style="margin-top:8px"><span class="score-label">Helpfulness</span><span class="score-val">0.84</span></div><div class="score-bar"><div class="score-fill" style="width:84%"></div></div>
+        <div class="score-row" style="margin-top:8px"><span class="score-label">Reader pull</span><span class="score-val" style="color:var(--warn)">0.57</span></div><div class="score-bar"><div class="score-fill" style="width:57%;background:var(--warn)"></div></div>
+      </div>
+    </div>
+
+    <div class="footer-fire">
+      <button id="fire-btn"><span class="spark">↗</span>Fire agents — run loop 2</button>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="ghost" style="flex:1;height:34px;border:1px solid var(--border);background:#fff;border-radius:8px;font-size:12.5px;font-weight:500">Save as template</button>
+        <button class="ghost" style="flex:1;height:34px;border:1px solid var(--border);background:var(--surface);border-radius:8px;font-size:12.5px;font-weight:500">Judge now</button>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<div class="mob-bar" id="mobBar">
+  <button class="active" data-tab="books">◰ Books</button>
+  <button data-tab="editor">✎ Editor</button>
+  <button data-tab="pipeline">◫ Pipeline</button>
+</div>
+
+<script>
+const books = [
+  {id:'b1', icon:'◐', bg:'#f2f9ff', title:'Engineering Leadership', syn:'Field notes on delegation, trust, and closing loops for 5–12p teams.', chapters:12, status:'active', tag:'writing'},
+  {id:'b2', icon:'✦', bg:'#f6f5f4', title:'Agent Workbench', syn:'How we run Planner → Research x3 → Writer → Judge with real receipts.', chapters:8, status:'draft', tag:'lab'},
+  {id:'b3', icon:'◬', bg:'#eefaf1', title:'Technical Trace', syn:'Code + output over vibes. Patterns for believable technical writing.', chapters:5, status:'draft', tag:'research'},
+  {id:'b4', icon:'⧉', bg:'#fff7ed', title:'O’Reilly Proposal — Agentic Writing', syn:'Book pitch: loops, judges, Quarto. Outline + sample chapter.', chapters:3, status:'queued', tag:'proposal'},
+  {id:'b5', icon:'✎', bg:'#faf5ff', title:'Exec Briefs Library', syn:'One-page decisions, crisp. No throat clearing. BLUF first.', chapters:24, status:'live', tag:'vault'},
+];
+const booksList = document.getElementById('books-list');
+const booksCount = document.getElementById('booksCount');
+function renderBooks(activeId='b1'){
+  booksList.innerHTML = books.map(b=>{
+    const isActive = b.id===activeId;
+    return `<div class="book-card ${isActive?'active':''}" data-id="${b.id}" role="listitem">
+      <div class="book-top">
+        <div class="cover-icon" style="background:${b.bg}">${b.icon}</div>
+        <div class="book-meta">
+          <p class="book-title">${b.title}</p>
+          <p class="book-syn">${b.syn}</p>
+        </div>
+      </div>
+      <div class="book-foot">
+        <span class="chip ${b.status==='active'?'blue':''}"><span class="dot"></span>${b.status}</span>
+        <span class="chip">${b.tag}</span>
+        <span class="sep"></span>
+        <span class="count mono">${b.chapters} ch</span>
+      </div>
+    </div>`;
+  }).join('');
+  booksCount.textContent = `${books.length} books`;
+}
+renderBooks();
+booksList.addEventListener('click', e=>{
+  const card = e.target.closest('.book-card');
+  if(!card) return;
+  renderBooks(card.dataset.id);
+  const b = books.find(x=>x.id===card.dataset.id);
+  document.getElementById('crumbBook').textContent = b.title;
+});
+
+/* goals */
+document.querySelectorAll('.goal-pill').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.goal-pill').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
+/* themes */
+document.querySelectorAll('.theme-card').forEach(card=>{
+  card.addEventListener('click', ()=>{
+    document.querySelectorAll('.theme-card').forEach(c=>c.classList.remove('active'));
+    card.classList.add('active');
+  });
+});
+/* toggle blocks */
+document.querySelectorAll('.toggle-head').forEach(h=>{
+  h.addEventListener('click', ()=>{
+    h.classList.toggle('open');
+  });
+  if(h.dataset.open) h.classList.add('open');
+});
+
+/* stream box mock */
+const streamBox = document.getElementById('stream-box');
+const logs = [
+  {ts:'00:00:00', tag:'PLANNER', msg:'brief parsed → thesis locked: no soft exits'},
+  {ts:'00:00:12', tag:'PLANNER', msg:'sources: 3 postmortems, 2 delegation libraries'},
+  {ts:'00:01:08', tag:'RESEARCH-A', msg:'pulled platform cutover log — 42m rollback hesitation, DRI missing', ok:true},
+  {ts:'00:02:44', tag:'RESEARCH-B', msg:'found slip: “best effort latency” → no block, 18% regression'},
+  {ts:'00:04:11', tag:'RESEARCH-C', msg:'pattern: closed-loop = DRI + metric + stamp', ok:true},
+  {ts:'00:08:20', tag:'WRITER', msg:'draft v1 1,640w — hook weak, reader pull 0.51', warn:true},
+  {ts:'00:09:02', tag:'WRITER', msg:'rewriting hook: start with “let me know if stuck” antipattern'},
+  {ts:'00:10:44', tag:'WRITER', msg:'added open vs closed loop table + standup script'},
+  {ts:'00:11:30', tag:'WRITER', msg:'↻ continuing — will add edge: stamp without harshness'},
+];
+function appendLog(l){
+  const div = document.createElement('div');
+  div.className = 'line ' + (l.ok?'ok':l.warn?'warn':'plain');
+  div.innerHTML = `<span class="ts">[${l.ts}]</span> <span class="tag">${l.tag}</span> ${l.msg}`;
+  streamBox.appendChild(div);
+}
+let logIdx=0;
+function feedLogs(){
+  streamBox.innerHTML='';
+  logIdx=0;
+  const iv = setInterval(()=>{
+    if(logIdx>=logs.length){clearInterval(iv); return}
+    appendLog(logs[logIdx++]);
+    streamBox.scrollTop = streamBox.scrollHeight;
+  }, 220);
+}
+feedLogs();
+document.getElementById('clearLogs').addEventListener('click',()=>streamBox.innerHTML='');
+
+/* fire agents */
+const fireBtn = document.getElementById('fire-btn');
+const progFill = document.getElementById('progFill');
+let firing=false;
+fireBtn.addEventListener('click', ()=>{
+  if(firing) return;
+  firing=true;
+  fireBtn.classList.add('running');
+  fireBtn.innerHTML='<span class="spark">◐</span>Running loop 2… 01:04';
+  progFill.style.width='68%';
+  // simulate progression
+  appendLog({ts:'00:12:01', tag:'WRITER', msg:'loop 2 fired — tightening first 40 words'});
+  streamBox.scrollTop=streamBox.scrollHeight;
+  setTimeout(()=>{progFill.style.width='84%'; appendLog({ts:'00:13:22', tag:'WRITER', msg:'hook v2: starts with soft exit quote, lands closed-loop'});},900);
+  setTimeout(()=>{
+    progFill.style.width='100%';
+    appendLog({ts:'00:14:10', tag:'JUDGE', msg:'scoring v2 — reader pull 0.57 → 0.74, clarity 0.84', ok:true});
+    fireBtn.classList.remove('running');
+    fireBtn.innerHTML='<span class="spark">✓</span>Loop 2 complete — Judge now';
+    firing=false;
+    // move stepper
+    document.querySelectorAll('.step')[2].classList.remove('running','active'); document.querySelectorAll('.step')[2].classList.add('done');
+    document.querySelectorAll('.step')[3].classList.add('active','running');
+  },2100);
+});
+
+/* responsive drawers */
+const leftPane = document.getElementById('leftPane');
+const rightPane = document.getElementById('rightPane');
+const scrim = document.getElementById('scrim');
+const toggleLeftBtn = document.getElementById('toggleLeftBtn');
+const toggleRightBtn = document.getElementById('toggleRightBtn');
+const closeRight = document.getElementById('closeRight');
+function openDrawer(side){
+  if(side==='left'){leftPane.classList.add('open');} else rightPane.classList.add('open');
+  scrim.classList.add('show');
+}
+function closeDrawers(){
+  leftPane.classList.remove('open'); rightPane.classList.remove('open'); scrim.classList.remove('show');
+}
+scrim.addEventListener('click', closeDrawers);
+toggleRightBtn.addEventListener('click', ()=> openDrawer('right'));
+closeRight.addEventListener('click', closeDrawers);
+toggleLeftBtn.addEventListener('click', ()=> openDrawer('left'));
+function checkMobile(){
+  const w = window.innerWidth;
+  toggleLeftBtn.style.display = w<=820?'inline-flex':'none';
+}
+window.addEventListener('resize', checkMobile); checkMobile();
+/* mob bar */
+const mobBar = document.getElementById('mobBar');
+mobBar.addEventListener('click', e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  mobBar.querySelectorAll('button').forEach(x=>x.classList.remove('active')); b.classList.add('active');
+  const tab=b.dataset.tab;
+  if(tab==='books'){openDrawer('left');}
+  else if(tab==='pipeline'){openDrawer('right');}
+  else {closeDrawers(); document.querySelector('.center-scroll').scrollTo({top:0,behavior:'smooth'});}
+});
+/* keyboard: cmd+k focus search */
+document.addEventListener('keydown', e=>{
+  if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==='k'){e.preventDefault(); document.querySelector('.search-wrap input').focus();}
+  if(e.metaKey && e.key==='Enter'){fireBtn.click();}
+});
+
+/* notion block drag affordance — just visual, no real dnd for brevity */
+document.querySelectorAll('.n-handle').forEach(h=>{
+  h.addEventListener('mousedown', ()=>h.style.cursor='grabbing');
+  h.addEventListener('mouseup', ()=>h.style.cursor='grab');
+});
+</script>
+</body>
+</html>

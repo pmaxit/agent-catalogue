@@ -1,0 +1,1065 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Quill — Distributed Systems</title>
+<style>
+/* Apple tokens — verbatim */
+:root{
+  --bg:#ffffff;
+  --surface:#f5f5f7;
+  --surface-warm:#fbfbfd;
+  --fg:#1d1d1f;
+  --fg-2:#424245;
+  --muted:#6e6e73;
+  --meta:#86868b;
+  --border:#d2d2d7;
+  --border-soft:#e8e8ed;
+  --accent:#0071e3;
+  --accent-on:#ffffff;
+  --accent-hover:#0077ed;
+  --accent-active:#0066cc;
+  --success:#16a34a;
+  --warn:#eab308;
+  --danger:#dc2626;
+  --font-display:"SF Pro Display","SF Pro Icons","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --font-body:"SF Pro Text","SF Pro Icons","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --font-mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Monaco,monospace;
+  --text-xs:12px;
+  --text-sm:14px;
+  --text-base:17px;
+  --radius-sm:8px;
+  --radius-md:12px;
+  --radius-lg:18px;
+  --radius-pill:980px;
+  --elev-raised:0 12px 32px rgba(0,0,0,0.08);
+  --focus-ring:0 0 0 4px color-mix(in oklab, var(--accent), transparent 65%);
+  --motion-fast:150ms;
+  --motion-base:220ms;
+  --ease-standard:cubic-bezier(0.28,0,0.22,1);
+  --container-max:1024px;
+}
+/* macOS app overrides */
+:root{
+  --accent:#007AFF; /* macOS system blue */
+  --accent-hover:#248CFF;
+  --accent-active:#006ADC;
+  --mac-sidebar:#f5f5f7;
+  --mac-toolbar:rgba(251,251,253,0.92);
+  --mac-win:#ffffff;
+  --mac-sep:#d2d2d7;
+  --mac-sep-soft:#e8e8ed;
+  --mac-text:#1d1d1f;
+  --mac-text-2:#6e6e73;
+  --mac-text-3:#86868b;
+  --mac-row:28px;
+  --mac-radius:7px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+body{
+  font-family: -apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Helvetica Neue",Helvetica,Arial,sans-serif;
+  background:#c8cad1;
+  background-image:
+    radial-gradient(1200px 700px at 10% -10%, rgba(255,255,255,0.9) 0%, transparent 60%),
+    radial-gradient(900px 600px at 90% 110%, rgba(163,175,195,0.6) 0%, transparent 55%),
+    linear-gradient(180deg, #e7e9ee 0%, #c9ccd3 100%);
+  color:var(--mac-text);
+  -webkit-font-smoothing:antialiased;
+  overscroll-behavior:none;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-height:100vh;
+  padding:32px 24px;
+}
+/* Desktop wallpaper subtle noise */
+body::before{
+  content:"";
+  position:fixed;inset:0;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events:none;opacity:0.5;
+}
+/* Window */
+.window{
+  width:1280px;
+  height:800px;
+  min-width:1280px;
+  min-height:800px;
+  background:var(--mac-win);
+  border-radius:10px;
+  box-shadow:
+    0 0 0 0.5px rgba(0,0,0,0.14),
+    0 22px 70px rgba(0,0,0,0.18),
+    0 8px 22px rgba(0,0,0,0.12);
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  position:relative;
+}
+/* Titlebar */
+.titlebar{
+  height:28px;
+  background:linear-gradient(180deg, #ececef 0%, #e5e5e7 100%);
+  border-bottom:0.5px solid rgba(0,0,0,0.12);
+  display:flex;
+  align-items:center;
+  padding:0 12px;
+  gap:8px;
+  -webkit-app-region:drag;
+  position:relative;
+  z-index:20;
+}
+.traffic-lights{
+  display:flex;gap:8px;align-items:center;
+}
+.dot{
+  width:12px;height:12px;border-radius:50%;
+  box-shadow:inset 0 0.5px 0 rgba(255,255,255,0.6), 0 0.5px 1px rgba(0,0,0,0.2);
+  border:0.5px solid rgba(0,0,0,0.12);
+}
+.dot.red{background:linear-gradient(#ff7f77, #ff5f56)}
+.dot.yellow{background:linear-gradient(#ffdf48, #ffbd2e)}
+.dot.green{background:linear-gradient(#4cd964, #27c93f)}
+.titlebar-center{
+  position:absolute;left:50%;transform:translateX(-50%);
+  display:flex;align-items:center;gap:8px;
+  font-size:13px;font-weight:600;letter-spacing:-0.01em;color:#2c2c2e;
+}
+.titlebar-center .doc-icon{
+  width:16px;height:16px;border-radius:3px;background:var(--accent);display:grid;place-items:center;color:white;font-weight:700;font-size:10px;
+}
+.titlebar-right{margin-left:auto;display:flex;gap:6px}
+
+/* Toolbar */
+.toolbar{
+  height:52px;
+  background:var(--mac-toolbar);
+  -webkit-backdrop-filter:saturate(180%) blur(20px);
+  backdrop-filter:saturate(180%) blur(20px);
+  border-bottom:0.5px solid var(--mac-sep);
+  display:flex;
+  align-items:center;
+  padding:0 12px;
+  gap:12px;
+}
+.btn-mac{
+  appearance:none;border:0;cursor:pointer;
+  height:28px;padding:0 12px;border-radius:var(--mac-radius);
+  font-family:inherit;font-size:13px;font-weight:500;letter-spacing:-0.01em;
+  display:inline-flex;align-items:center;gap:6px;
+  transition:all var(--motion-fast) var(--ease-standard);
+}
+.btn-mac:focus-visible{outline:none;box-shadow:var(--focus-ring)}
+.btn-mac.primary{background:var(--accent);color:white;box-shadow:0 0.5px 0 rgba(0,0,0,0.15) inset, 0 0.5px 1px rgba(0,0,0,0.2)}
+.btn-mac.primary:hover{background:var(--accent-hover)}
+.btn-mac.primary:active{background:var(--accent-active);transform:translateY(0.5px)}
+.btn-mac.ghost{background:rgba(0,0,0,0.06);color:var(--mac-text)}
+.btn-mac.ghost:hover{background:rgba(0,0,0,0.1)}
+.btn-mac.ghost:active{background:rgba(0,0,0,0.14)}
+.btn-mac.icon-only{width:28px;padding:0;justify-content:center}
+.toolbar-sep{width:1px;height:20px;background:var(--mac-sep);margin:0 4px}
+.search-wrap{
+  position:relative;width:200px;height:28px;
+}
+.search-wrap input{
+  width:100%;height:100%;border-radius:var(--mac-radius);
+  border:0.5px solid rgba(0,0,0,0.12);
+  background:rgba(0,0,0,0.06);
+  padding:0 8px 0 26px;
+  font-size:13px;font-family:inherit;
+  outline:none;color:var(--mac-text);
+}
+.search-wrap input:focus{
+  background:white;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in oklab, var(--accent), transparent 78%)
+}
+.search-wrap svg{position:absolute;left:8px;top:50%;transform:translateY(-50%);opacity:0.5}
+.segmented{
+  display:flex;background:#e8e8ed;border-radius:var(--mac-radius);padding:2px;gap:2px;
+  height:28px;
+}
+.segmented button{
+  appearance:none;border:0;border-radius:5px;padding:0 14px;height:24px;
+  font-size:13px;font-weight:500;letter-spacing:-0.01em;
+  background:transparent;color:var(--mac-text-2);cursor:pointer;
+  transition:all var(--motion-fast) var(--ease-standard);
+}
+.segmented button.active{
+  background:white;color:var(--mac-text);box-shadow:0 0.5px 1px rgba(0,0,0,0.18), 0 0 0 0.5px rgba(0,0,0,0.08);
+  font-weight:600;
+}
+.status-pill{
+  display:inline-flex;align-items:center;gap:6px;
+  height:22px;padding:0 8px;border-radius:12px;
+  background:rgba(0,0,0,0.06);font-size:11px;font-weight:600;letter-spacing:0.02em;
+  cursor:pointer;
+  user-select:none;
+  border:0.5px solid rgba(0,0,0,0.08);
+}
+.dot-live{width:7px;height:7px;border-radius:50%;background:#30d158;box-shadow:0 0 0 2px rgba(48,209,88,0.18)}
+.dot-live.mock{background:#a1a1a6;box-shadow:none}
+.kbd{
+  font-family:var(--font-mono);font-size:10px;padding:2px 5px;border-radius:4px;
+  background:rgba(0,0,0,0.07);border:0.5px solid rgba(0,0,0,0.1);color:var(--mac-text-2)
+}
+
+/* Workspace */
+.workspace{flex:1;display:flex;overflow:hidden;min-height:0}
+/* Sidebar */
+.sidebar{
+  width:240px;min-width:240px;
+  background:var(--mac-sidebar);
+  border-right:0.5px solid var(--mac-sep);
+  display:flex;flex-direction:column;
+  overflow:hidden;
+}
+.sidebar-scroll{flex:1;overflow:auto;padding:8px 8px 12px}
+.sidebar-section{margin-bottom:18px}
+.sidebar-search{padding:8px 8px 4px}
+.sidebar-search .search-wrap{width:100%}
+.sidebar-search .search-wrap input{font-size:12.5px}
+.sidebar-label{
+  font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;
+  color:var(--mac-text-3);padding:6px 8px 4px;
+}
+.source-list{list-style:none;margin:0;padding:0}
+.source-row{
+  height:var(--mac-row);display:flex;align-items:center;gap:6px;
+  padding:0 8px;border-radius:6px;cursor:pointer;
+  font-size:13px;color:var(--mac-text);user-select:none;
+}
+.source-row:hover{background:rgba(0,0,0,0.05)}
+.source-row.selected{background:var(--accent);color:white}
+.source-row.selected .muted{color:rgba(255,255,255,0.8)}
+.source-row .disc{
+  width:14px;height:14px;display:grid;place-items:center;flex-shrink:0;
+  transition:transform 120ms var(--ease-standard);
+}
+.source-row .disc.open{transform:rotate(90deg)}
+.source-row .icon{width:16px;height:16px;border-radius:3px;flex-shrink:0;display:grid;place-items:center}
+.icon.book{background:var(--accent);color:white;font-size:10px;font-weight:700}
+.icon.ch{width:16px;height:16px;border-radius:3px;background:#fff;border:0.5px solid var(--mac-sep);font-size:10px;display:grid;place-items:center}
+.source-row.selected .icon.ch{background:rgba(255,255,255,0.9);color:var(--accent)}
+.source-row .muted{color:var(--mac-text-2);margin-left:auto;font-size:11px}
+.nested{margin-left:22px;border-left:0.5px solid var(--mac-sep-soft);padding-left:2px}
+.nested .source-row{height:26px;font-size:12.5px}
+.sidebar-footer{
+  padding:10px 12px;border-top:0.5px solid var(--mac-sep);
+  display:flex;gap:6px;
+}
+.new-menu{flex:1}
+
+/* Main */
+.main{
+  flex:1;min-width:0;background:#fff;display:flex;flex-direction:column;overflow:hidden;
+}
+.main-topbar{
+  height:36px;border-bottom:0.5px solid var(--mac-sep);display:flex;align-items:center;
+  padding:0 16px;background:#fcfcfd;gap:12px;
+}
+.breadcrumb{font-size:12.5px;color:var(--mac-text-2);display:flex;gap:6px;align-items:center}
+.breadcrumb b{color:var(--mac-text);font-weight:600}
+.content-scroll{flex:1;overflow:auto}
+.view{display:none}
+.view.active{display:block}
+
+/* Brief builder */
+.brief-wrap{max-width:660px;margin:0 auto;padding:20px 28px 40px}
+.chapter-head{margin-bottom:18px;padding-bottom:14px;border-bottom:0.5px solid var(--mac-sep-soft)}
+.ch-label{font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--mac-text-3);margin-bottom:6px}
+.ch-title{font-size:22px;font-weight:700;letter-spacing:-0.02em;line-height:1.15;margin:0}
+.ch-meta{font-size:12.5px;color:var(--mac-text-2);margin-top:6px;display:flex;gap:12px}
+.form-block{margin:18px 0}
+.form-label{font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--mac-text-2);margin-bottom:8px;display:flex;justify-content:space-between}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{
+  height:26px;padding:0 10px;border-radius:6px;border:0.5px solid var(--mac-sep);
+  background:#fff;font-size:12.5px;font-weight:500;color:var(--mac-text-2);cursor:pointer;
+  display:inline-flex;align-items:center;gap:6px;transition:all var(--motion-fast) var(--ease-standard);
+}
+.chip:hover{border-color:var(--mac-text-3);background:#fbfbfd}
+.chip.selected{background:var(--accent);border-color:var(--accent);color:white;box-shadow:0 0.5px 1px rgba(0,0,0,0.15)}
+.themes-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.theme-card{
+  border:0.5px solid var(--mac-sep);border-radius:8px;padding:10px 11px;background:#fff;cursor:pointer;
+  transition:all var(--motion-fast) var(--ease-standard);
+}
+.theme-card:hover{border-color:var(--mac-text-3);background:#fcfcfd}
+.theme-card.selected{border-color:var(--accent);background:color-mix(in oklab, var(--accent), white 93%);box-shadow:0 0 0 3px color-mix(in oklab, var(--accent), transparent 86%) inset}
+.theme-card .t-name{font-size:13px;font-weight:600;letter-spacing:-0.01em}
+.theme-card .t-desc{font-size:11.5px;color:var(--mac-text-2);margin-top:3px;line-height:1.35}
+.textarea-mac{
+  width:100%;min-height:132px;border-radius:8px;border:0.5px solid var(--mac-sep);
+  padding:12px 12px;font-size:13px;line-height:1.5;font-family:inherit;resize:vertical;background:#fff;
+  outline:none;
+}
+.textarea-mac:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in oklab, var(--accent), transparent 78%)}
+.meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.field-mac label{font-size:11px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:var(--mac-text-2);display:block;margin-bottom:5px}
+.input-mac{
+  width:100%;height:28px;border-radius:6px;border:0.5px solid var(--mac-sep);background:#fff;
+  padding:0 10px;font-size:13px;font-family:inherit;outline:none;
+}
+.input-mac:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in oklab, var(--accent), transparent 80%)}
+.criteria-list{display:flex;flex-direction:column;gap:6px}
+.crit-row{
+  display:flex;align-items:center;gap:10px;padding:8px 10px;border:0.5px solid var(--mac-sep-soft);
+  border-radius:7px;background:#fbfbfd;
+}
+.crit-row input[type="checkbox"]{width:14px;height:14px;accent-color:var(--accent)}
+.crit-name{font-size:12.5px;font-weight:500;flex:1}
+.crit-th{font-size:11px;color:var(--mac-text-2);background:rgba(0,0,0,0.06);border-radius:4px;padding:2px 6px}
+.readiness{
+  margin-top:16px;display:flex;align-items:center;gap:10px;padding:10px 12px;
+  background:#f5f5f7;border:0.5px solid var(--mac-sep-soft);border-radius:8px;
+}
+.readiness-bar{flex:1;height:4px;background:#e8e8ed;border-radius:2px;overflow:hidden}
+.readiness-fill{height:100%;background:var(--accent);width:78%;border-radius:2px;transition:width 600ms var(--ease-standard)}
+/* Inspector */
+.inspector{
+  width:300px;min-width:300px;background:#fbfbfd;border-left:0.5px solid var(--mac-sep);
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.ins-scroll{flex:1;overflow:auto;padding:14px}
+.ins-section{margin-bottom:20px}
+.ins-label{font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--mac-text-3);margin-bottom:10px}
+.stepper{position:relative;padding-left:22px}
+.stepper::before{content:"";position:absolute;left:7px;top:6px;bottom:12px;width:1px;background:var(--mac-sep-soft)}
+.step{display:flex;gap:10px;margin-bottom:14px;position:relative}
+.step-dot{
+  position:absolute;left:-22px;top:2px;width:14px;height:14px;border-radius:50%;
+  background:#fff;border:1.5px solid var(--mac-sep);display:grid;place-items:center;
+}
+.step-dot.done{background:var(--success);border-color:var(--success);color:white}
+.step-dot.active{background:var(--accent);border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in oklab, var(--accent), transparent 82%);animation:pulse 1.6s infinite}
+.step-dot.queued{background:#fff;border-color:var(--mac-sep)}
+@keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in oklab, var(--accent), transparent 65%)}70%{box-shadow:0 0 0 8px color-mix(in oklab, var(--accent), transparent 100%)}100%{box-shadow:0 0 0 0 color-mix(in oklab, var(--accent), transparent 100%)}}
+.step-content{flex:1;min-width:0}
+.step-title{font-size:12.5px;font-weight:600;letter-spacing:-0.01em}
+.step-meta{font-size:11px;color:var(--mac-text-2);margin-top:2px}
+.agent-list{display:flex;flex-direction:column;gap:6px}
+.agent-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:#fff;border:0.5px solid var(--mac-sep-soft)}
+.agent-av{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:700;color:white}
+.av-p{background:#6e6e73}.av-r{background:var(--accent)}.av-w{background:#5e5ce6}.av-j{background:#ff9f0a}
+.agent-name{font-size:12px;font-weight:500;flex:1}
+.agent-stat{width:8px;height:8px;border-radius:50%}
+.stat-green{background:#30d158}.stat-amber{background:#ffd60a}.stat-gray{background:#c7c7cc}
+.console{
+  background:#1e1e22;border-radius:8px;padding:8px 10px;font-family:var(--font-mono);font-size:11px;line-height:1.5;color:#cfd0d3;
+  max-height:160px;overflow:auto;border:0.5px solid rgba(0,0,0,0.2);
+}
+.log-line{display:flex;gap:8px}
+.log-time{color:#7a7a80}
+.log-tag{color:var(--accent);font-weight:600}
+.scores{display:flex;flex-direction:column;gap:8px}
+.score-row{display:flex;align-items:center;gap:8px}
+.score-label{font-size:11px;color:var(--mac-text-2);width:88px}
+.score-track{flex:1;height:5px;background:#e8e8ed;border-radius:3px;overflow:hidden}
+.score-fill{height:100%;background:#1d1d1f;border-radius:3px}
+.score-fill.good{background:#30d158}
+.score-val{font-size:11px;font-weight:600;min-width:28px;text-align:right}
+.ins-footer{
+  padding:12px;border-top:0.5px solid var(--mac-sep);background:#fff;
+}
+
+/* Draft view */
+.article-canvas{max-width:640px;margin:0 auto;padding:12px 28px 40px}
+.article-toolbar{display:flex;align-items:center;gap:8px;padding:10px 18px;border-bottom:0.5px solid var(--mac-sep-soft);background:#fcfcfd}
+.draft h1{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display";font-size:28px;letter-spacing:-0.02em;font-weight:700;line-height:1.15;margin:18px 0 8px}
+.draft h2{font-size:19px;font-weight:700;letter-spacing:-0.01em;margin:24px 0 8px}
+.draft h3{font-size:15px;font-weight:600;margin:18px 0 6px}
+.draft p{font-size:13.5px;line-height:1.6;color:#1f1f24;margin:0 0 12px}
+.callout{
+  border-left:3px solid var(--accent);background:color-mix(in oklab, var(--accent), white 93%);border-radius:0 8px 8px 0;
+  padding:12px 14px;margin:14px 0;font-size:12.5px;line-height:1.5;
+}
+.code-block{
+  background:#1e1e22;border-radius:8px;overflow:hidden;border:0.5px solid rgba(0,0,0,0.2);margin:14px 0;
+}
+.code-head{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#2c2c2e;color:#a1a1a6;font-size:11px;font-family:var(--font-mono)}
+.code-body{padding:12px;font-family:var(--font-mono);font-size:11.5px;line-height:1.5;color:#e6e6e8;overflow:auto}
+.code-body .out{color:#9ae6a0}
+.table-mac{width:100%;border-collapse:collapse;font-size:12.5px;margin:12px 0;border:0.5px solid var(--mac-sep);border-radius:8px;overflow:hidden}
+.table-mac th{background:#f5f5f7;text-align:left;padding:8px 10px;font-weight:600;font-size:11px;letter-spacing:0.04em;text-transform:uppercase;color:var(--mac-text-2)}
+.table-mac td{padding:8px 10px;border-top:0.5px solid var(--mac-sep-soft)}
+.diag{
+  border:1.5px dashed var(--mac-sep);border-radius:8px;height:148px;display:grid;place-items:center;background:#fbfbfd;margin:14px 0;
+  font-size:12px;color:var(--mac-text-3)
+}
+
+/* Empty state */
+.empty{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:40px;text-align:center;
+}
+.empty-illo{
+  width:72px;height:72px;border-radius:16px;background:linear-gradient(#f5f5f7,#e8e8ed);border:0.5px solid var(--mac-sep);
+  display:grid;place-items:center;margin-bottom:16px;color:var(--mac-text-3)
+}
+.empty h3{font-size:16px;font-weight:600;margin:0 0 6px}
+.empty p{font-size:13px;color:var(--mac-text-2);max-width:320px;line-height:1.45}
+
+/* CmdK */
+.cmdk-overlay{
+  position:absolute;inset:0;z-index:50;background:rgba(20,20,24,0.18);
+  -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
+  display:flex;align-items:flex-start;justify-content:center;padding-top:120px;
+}
+.cmdk-overlay.hidden{display:none}
+.cmdk{
+  width:560px;background:rgba(255,255,255,0.96);border-radius:10px;
+  box-shadow:0 0 0 0.5px rgba(0,0,0,0.12),0 24px 48px rgba(0,0,0,0.22);
+  overflow:hidden;border:0.5px solid rgba(0,0,0,0.08);
+}
+.cmdk-input{
+  display:flex;align-items:center;gap:10px;padding:14px 14px;border-bottom:0.5px solid var(--mac-sep-soft);
+}
+.cmdk-input input{
+  flex:1;border:0;background:transparent;font-size:15px;font-family:inherit;outline:none;
+}
+.cmdk-list{padding:6px;max-height:280px;overflow:auto}
+.cmdk-item{
+  display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;font-size:13px;cursor:pointer;
+}
+.cmdk-item:hover,.cmdk-item.active{background:var(--accent);color:white}
+.cmdk-item kbd{margin-left:auto}
+.cmdk-icon{
+  width:16px;height:16px;display:grid;place-items:center;opacity:0.85;
+}
+.cmdk-foot{padding:8px 12px;border-top:0.5px solid var(--mac-sep-soft);display:flex;gap:12px;font-size:11px;color:var(--mac-text-3)}
+
+/* Utilities */
+.hidden{display:none!important}
+.shimmer{background:linear-gradient(90deg, #eee 25%, #f5f5f7 50%, #eee 75%);background-size:200% 100%;animation:shimmer 1.2s infinite}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+</style>
+</head>
+<body>
+<div class="window" id="appWindow">
+  <div class="titlebar">
+    <div class="traffic-lights">
+      <div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div>
+    </div>
+    <div class="titlebar-center" id="windowTitle">
+      <div class="doc-icon">Q</div><span>Quill — Distributed Systems • Chapter 3</span>
+    </div>
+    <div class="titlebar-right">
+      <span class="kbd">⌘K</span>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <div style="display:flex;align-items:center;gap:8px">
+      <button class="btn-mac ghost icon-only" title="Toggle Sidebar" id="toggleSidebar">
+        <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="3" width="16" height="14" rx="2"/><path d="M7 3v14"/></svg>
+      </button>
+      <div class="toolbar-sep"></div>
+      <div class="search-wrap">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="6"/><path d="M21 21l-4.2-4.2"/></svg>
+        <input placeholder="Search books, chapters…" id="globalSearch"/>
+      </div>
+    </div>
+
+    <div style="margin:0 auto;display:flex;align-items:center;gap:10px">
+      <div class="segmented" id="mainSeg" role="tablist">
+        <button class="active" data-view="brief" role="tab" aria-selected="true">Brief</button>
+        <button data-view="pipeline" role="tab">Pipeline</button>
+        <button data-view="draft" role="tab">Draft</button>
+      </div>
+      <div class="status-pill" id="statusPill" title="Toggle Mock / Live mode"><span class="dot-live" id="liveDot"></span><span id="statusText">Live</span></div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="kbd">⌘1 Brief</span><span class="kbd">⌘2 Pipe</span><span class="kbd">⌘3 Draft</span>
+      <div class="toolbar-sep"></div>
+      <button class="btn-mac ghost icon-only" title="History">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M10 3a7 7 0 100 14"/><path d="M10 7v4l3 2"/></svg>
+      </button>
+      <button class="btn-mac primary" id="fire-btn"><svg width="12" height="12" viewBox="0 0 20 20" fill="none"><path d="M10 18a8 8 0 100-16 8 8 0 000 16z" fill="white" opacity="0.2"/><path d="M8 7l5 3-5 3V7z" fill="white"/></svg>Fire Agents</button>
+    </div>
+  </div>
+
+  <div class="workspace">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-search">
+        <div class="search-wrap">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="6"/><path d="M21 21l-4.2-4.2"/></svg>
+          <input placeholder="Filter source list…" id="sidebarSearch"/>
+        </div>
+      </div>
+      <div class="sidebar-scroll">
+        <div class="sidebar-section">
+          <div class="sidebar-label">Library</div>
+          <ul class="source-list" id="books-list">
+            <li class="source-row" data-book="dist" data-expanded="true">
+              <span class="disc open">›</span>
+              <span class="icon book">DS</span><span>Distributed Systems</span><span class="muted">5</span>
+            </li>
+            <div class="nested" data-parent="dist">
+              <div class="source-row" data-chapter="1"><span class="icon ch">1</span><span>Time &amp; Order</span></div>
+              <div class="source-row" data-chapter="2"><span class="icon ch">2</span><span>Gossip &amp; Membership</span></div>
+              <div class="source-row selected" data-chapter="3"><span class="icon ch">3</span><span>Consensus &amp; Commit</span></div>
+              <div class="source-row" data-chapter="4"><span class="icon ch">4</span><span>Replication Log</span></div>
+              <div class="source-row" data-chapter="5"><span class="icon ch">5</span><span>Anti-Entropy</span></div>
+            </div>
+
+            <li class="source-row" data-book="agentic" data-expanded="false">
+              <span class="disc">›</span>
+              <span class="icon book" style="background:#30d158">AG</span><span>Agentic Patterns</span><span class="muted">12</span>
+            </li>
+            <div class="nested hidden" data-parent="agentic">
+              <div class="source-row"><span class="icon ch">1</span><span>Planner-Executor</span></div>
+              <div class="source-row"><span class="icon ch">2</span><span>Toolformer Loop</span></div>
+            </div>
+
+            <li class="source-row" data-book="ml" data-expanded="false">
+              <span class="disc">›</span>
+              <span class="icon book" style="background:#af52de">ML</span><span>ML for Systems</span><span class="muted">8</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="sidebar-section">
+          <div class="sidebar-label">Articles</div>
+          <ul class="source-list">
+            <li class="source-row"><span class="icon ch">◐</span><span>CRDTs at the Edge</span><span class="muted">Draft</span></li>
+            <li class="source-row"><span class="icon ch">◑</span><span>Raft Visualized</span><span class="muted">Judge 0.82</span></li>
+            <li class="source-row"><span class="icon ch">◒</span><span>Backpressure Cookbook</span><span class="muted">New</span></li>
+          </ul>
+        </div>
+
+        <div class="sidebar-section">
+          <div class="sidebar-label">Smart Groups</div>
+          <ul class="source-list">
+            <li class="source-row"><span style="width:16px;text-align:center">◑</span>Needs review<span class="muted">3</span></li>
+            <li class="source-row"><span style="width:16px">◐</span>Failed judge<span class="muted">1</span></li>
+          </ul>
+        </div>
+      </div>
+      <div class="sidebar-footer">
+        <button class="btn-mac ghost new-menu"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M10 4v12M4 10h12"/></svg>+ New</button>
+        <button class="btn-mac ghost icon-only"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="10" cy="10" r="1.5"/><circle cx="10" cy="5" r="1.2"/><circle cx="10" cy="15" r="1.2"/></svg></button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="main-topbar" id="mainTopbar">
+        <div class="breadcrumb"><span>Distributed Systems</span><span>›</span><b>Chapter 3 — Consensus &amp; Commit</b><span style="margin-left:8px;padding:2px 6px;border-radius:4px;background:#e8f2ff;color:var(--accent);font-size:10px;font-weight:700;letter-spacing:0.04em">DRAFT</span></div>
+        <div style="margin-left:auto;display:flex;gap:6px">
+          <button class="btn-mac ghost" style="height:24px;font-size:12px">Preview</button>
+          <button class="btn-mac ghost" style="height:24px;font-size:12px">Export .qmd</button>
+        </div>
+      </div>
+
+      <div class="content-scroll">
+        <!-- BRIEF VIEW -->
+        <div class="view active" id="briefView">
+          <div class="brief-wrap" id="agent-form">
+            <div class="chapter-head">
+              <div class="ch-label">Chapter Brief</div>
+              <h2 class="ch-title">Design consensus without soft exits: how real systems avoid lying to themselves</h2>
+              <div class="ch-meta"><span>Loop 2 of 5 • Threshold 0.78</span><span>•</span><span>Last judged 12 min ago — clarity 0.71 ↓</span></div>
+            </div>
+
+            <div class="form-block">
+              <div class="form-label"><span>Writing goal — what reader should do after reading</span><span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--mac-text-3)">Select up to 2</span></div>
+              <div class="chips" id="goals-selector">
+                <button class="chip selected" data-goal="thought">Thought Leadership</button>
+                <button class="chip selected" data-goal="deep">Technical Deep Dive</button>
+                <button class="chip" data-goal="playbook">Operator Playbook</button>
+                <button class="chip" data-goal="eli5">Explain Like I'm Five</button>
+                <button class="chip" data-goal="narrative">Narrative Memoir</button>
+              </div>
+            </div>
+
+            <div class="form-block">
+              <div class="form-label">Theme &amp; Voice — how it should read</div>
+              <div class="themes-grid" id="themes-selector">
+                <div class="theme-card selected" data-theme="command"><div class="t-name">Agentic Command</div><div class="t-desc">Dense, imperative, no-fluff. For operators who ship.</div></div>
+                <div class="theme-card" data-theme="trace"><div class="t-name">Technical Trace</div><div class="t-desc">Show reasoning, logs, failure modes inline.</div></div>
+                <div class="theme-card" data-theme="editorial"><div class="t-name">Editorial Signal</div><div class="t-desc">Tight narrative, strong point of view, minimal code.</div></div>
+                <div class="theme-card" data-theme="narr"><div class="t-name">Narrative Pulse</div><div class="t-desc">Human story, then system lesson. Empathy first.</div></div>
+                <div class="theme-card" data-theme="exec"><div class="t-name">Executive Crisp</div><div class="t-desc">Headline → implication → decision. 5 min read.</div></div>
+                <div class="theme-card selected" data-theme="oreilly"><div class="t-name">O'Reilly Book Chapter</div><div class="t-desc">Textbook clarity, diagrams, callouts, exercises.</div></div>
+              </div>
+            </div>
+
+            <div class="form-block">
+              <div class="form-label"><span>Brief — delegating without soft exits</span><span style="font-weight:400;text-transform:none;color:var(--mac-text-3)">⌘+Enter to fire</span></div>
+              <textarea class="textarea-mac" id="brief-input" placeholder="Describe the exact argument, evidence, and non-goals...">You are writing Chapter 3 of Distributed Systems: Consensus & Commit.
+
+Non-negotiable: Paxos is not explained as 'voting'. It is explained as a series of ownership claims over a log with fencing. Raft is explained as single-owner lease with log compaction tradeoff. No anthropomorphism for nodes.
+
+Viewer must leave able to implement a correct single-decree Paxos with N=3 on paper, list 3 liveness pitfalls, and sketch why 2PC is not consensus.
+
+Anti-goals: No Kubernetes analogies. No 'imagine a club'. No moral lessons. Just machinery.</textarea>
+            </div>
+
+            <div class="form-block meta-grid">
+              <div class="field-mac"><label>Audience</label><input class="input-mac" id="audience-input" value="Staff engineers, PL researchers"/></div>
+              <div class="field-mac"><label>Tone</label><input class="input-mac" id="tone-input" value="Crisp, mechanical, candid"/></div>
+              <div class="field-mac"><label>Format</label><input class="input-mac" id="format-input" value="Quarto .qmd, ~1800 words"/></div>
+              <div class="field-mac"><label>Chapter length</label><input class="input-mac" id="length-input" value="Long read + 2 diagrams"/></div>
+            </div>
+
+            <div class="form-block">
+              <div class="form-label">Judging criteria — hard gates</div>
+              <div class="criteria-list" id="criteria-selector">
+                <div class="crit-row"><input type="checkbox" checked/><span class="crit-name">Correctness — protocol claims are mechanically accurate</span><span class="crit-th">≥ 0.85</span></div>
+                <div class="crit-row"><input type="checkbox" checked/><span class="crit-name">Clarity — implementation decisions are unambiguous</span><span class="crit-th">≥ 0.75</span></div>
+                <div class="crit-row"><input type="checkbox" checked/><span class="crit-name">Helpfulness — gives action-ready guidance for operators</span><span class="crit-th">≥ 0.70</span></div>
+                <div class="crit-row"><input type="checkbox" checked/><span class="crit-name">Code_output — includes runnable code and expected output</span><span class="crit-th">must</span></div>
+                <div class="crit-row"><input type="checkbox"/><span class="crit-name">Visual_feedback — diagram/callout explains key transition</span><span class="crit-th">must</span></div>
+                <div class="crit-row"><input type="checkbox"/><span class="crit-name">Addictive — opening hooks and momentum keep reading</span><span class="crit-th">≥ 0.70</span></div>
+              </div>
+
+              <div class="readiness">
+                <div style="width:28px;height:28px;border-radius:6px;background:white;border:0.5px solid #d2d2d7;display:grid;place-items:center;font-size:13px;font-weight:700;color:#30d158">78%</div>
+                <div style="flex:1"><div style="font-size:12.5px;font-weight:600">Ready to fire</div><div style="font-size:11px;color:var(--mac-text-2)">All required criteria, brief, and theme selected</div></div>
+                <div class="readiness-bar"><div class="readiness-fill"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PIPELINE VIEW -->
+        <div class="view" id="pipelineView">
+          <div style="max-width:660px;margin:0 auto;padding:20px 28px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+              <div><div style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--mac-text-3)">Pipeline</div><div style="font-size:18px;font-weight:700;letter-spacing:-0.01em">Loop 2 / 5 — judging clarity gate</div></div>
+              <span class="status-pill" style="background:var(--accent);color:white">Running</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">
+              <div style="border:0.5px solid var(--mac-sep);border-radius:8px;padding:12px;background:white">
+                <div style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--mac-text-3);margin-bottom:8px">Plan</div>
+                <div style="font-size:12.5px;line-height:1.5">Outline now locked: 1) Ownership claim model 2) Paxos prepare/promise/accept 3) N=3 trace 4) 2PC vs Consensus 5) 3 liveness pitfalls + fencing. All sections mapped to criteria. Research queries generated: 9.</div>
+              </div>
+              <div style="border:0.5px solid var(--mac-sep);border-radius:8px;padding:12px;background:white">
+                <div style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--mac-text-3);margin-bottom:8px">Research ×3</div>
+                <div style="display:flex;flex-direction:column;gap:6px">
+                  <div style="display:flex;gap:8px;align-items:center;font-size:12px"><span style="width:6px;height:6px;border-radius:50%;background:#30d158"></span>Raft log compaction — done • 3 sources</div>
+                  <div style="display:flex;gap:8px;align-items:center;font-size:12px"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse 1.2s infinite"></span>Paxos liveness (FLP) — streaming</div>
+                  <div style="display:flex;gap:8px;align-items:center;font-size:12px"><span style="width:6px;height:6px;border-radius:50%;background:#ffd60a"></span>Fencing tokens — queued</div>
+                </div>
+              </div>
+            </div>
+            <div style="margin-top:12px;border:0.5px solid var(--mac-sep);border-radius:8px;background:#fff;padding:12px">
+              <div style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--mac-text-3);margin-bottom:8px">Live Stream — [Research]</div>
+              <div id="stream-box-inline" style="font-family:var(--font-mono);font-size:11px;line-height:1.6;color:#2c2c2e;background:#f5f5f7;border-radius:6px;padding:10px;max-height:200px;overflow:auto">
+                <div>[00:00:02] PLANNER → outline v3 locked, promoting fencing as first-class</div>
+                <div>[00:00:07] RESEARCH.A → fetched Raft dissertation §7.2 log compaction proof</div>
+                <div>[00:00:11] RESEARCH.B → FLP paper + Lynch 1996 summary ingested</div>
+                <div>[00:00:18] RESEARCH.A → cross-check: 2PC blocking vs Paxos progress — table emerging</div>
+                <div>[00:00:23] RESEARCH.B → streaming ··· token match 0.81 on fencing</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- DRAFT VIEW -->
+        <div class="view" id="draftView">
+          <div class="article-toolbar">
+            <button class="btn-mac ghost" style="height:24px;font-size:12px">Save</button>
+            <button class="btn-mac ghost" style="height:24px;font-size:12px">Publish</button>
+            <div class="toolbar-sep"></div>
+            <button class="btn-mac ghost" style="height:24px;font-size:12px">History</button>
+            <button class="btn-mac ghost" style="height:24px;font-size:12px">Export .qmd</button>
+            <div style="margin-left:auto;display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:var(--mac-text-2)">Last edit 3 min ago • autosaved</span><span style="width:7px;height:7px;border-radius:50%;background:#30d158"></span></div>
+          </div>
+          <div class="article-canvas draft" id="article-canvas">
+            <h1>Chapter 3 — Consensus &amp; Commit: Ownership, Not Voting</h1>
+            <p style="font-size:13px;color:var(--mac-text-2)"><em>Quarto draft • 1,742 words • judging 0.79 • Loop 2</em></p>
+
+            <p>Most textbooks start with voting. That metaphor hides the actual invariant: consensus is a mechanism for assigning exclusive ownership over positions in a shared log, with fencing that prevents stale owners from corrupting history. Get that wrong and you get systems that “agree” but still lose writes.</p>
+
+            <div class="callout"><strong>Invariant — single owner per log position.</strong> At any time, at most one proposer can consider itself owner of position <code>n</code>. Ownership is granted by a quorum of acceptors and revoked only by a higher proposal number. This is what prepare/promise enforces.</div>
+
+            <h2>1. Prepare / Promise as ownership claim</h2>
+            <p>Think of <code>prepare(n)</code> as: “I am attempting to become owner of all unowned positions ≥ n”. An acceptor promises not to accept anything < n and returns the highest accepted value it has. This is not a vote — it is a fence.</p>
+
+            <div class="code-block"><div class="code-head"><span>python — paxos.py</span><span>⌘C Run</span></div><div class="code-body">def prepare(proposal_id, quorum):
+    promises = []
+    for acc in quorum:
+        p = acc.on_prepare(proposal_id)  # returns (ok, highest_accepted)
+        if not p.ok: return None
+        promises.append(p)
+    # owner candidate: pick highest accepted value or own value
+    chosen = max(promises, key=lambda x: x.accepted_id).value or own_value
+    return chosen
+
+<span class="out"># trace N=3, prop 5 → promise(1,None), promise(2,None), promise(3,v=2) → picks v=2</span></div></div>
+
+            <h2>2. Why 2PC is not consensus</h2>
+            <p>Two-phase commit blocks on coordinator failure because it optimizes for atomicity with a single decision maker, not for progress under partition. Paxos guarantees that some value will eventually be chosen if a majority lives, even if previous owners die mid-protocol. The table makes it explicit:</p>
+            <table class="table-mac"><thead><tr><th>Property</th><th>2PC</th><th>Single-decree Paxos</th></tr></thead><tbody><tr><td>Blocks on coordinator death?</td><td>Yes — participants hang</td><td>No — new proposer can take ownership</td></tr><tr><td>Quorum</td><td>All</td><td>Majority</td></tr><tr><td>Liveness</td><td>Requires coordinator recovery</td><td>FLP bound — eventual progress needs stable leader</td></tr></tbody></table>
+
+            <h3>Diagram — fencing tokens prevent stale writes</h3>
+            <div class="diag">[ draw.io placeholder: timeline of proposer A=4, B=5, fencing token monotonic ↑, acceptor rejects A after promise(B) ]</div>
+
+            <h2>3. Three liveness pitfalls you will actually hit</h2>
+            <p><strong>1) Dueling proposers.</strong> Without leader election, proposal numbers chase each other and no value stabilizes. Fix: stable leader lease.</p>
+            <p><strong>2) Unbounded prepare storm after partition heal.</strong> Every node retries prepare(n++) — acceptors do O(n) work. Fix: exponential backoff + prepare coalescing.</p>
+            <p><strong>3) Log hole on owner crash before accept.</strong> Quorum saw promise but not accept; next owner must discover nothing chosen and propose no-op. Fix: explicit no-op filler on leader change.</p>
+
+            <div class="callout" style="border-left-color:#30d158;background:rgba(48,209,88,0.08)"><strong>Takeaway — implement fencing, not voting.</strong> If your system cannot show, for every write path, which fencing token was checked and what happens if the check fails, you don't have consensus — you have hope.</div>
+          </div>
+        </div>
+
+        <!-- EMPTY VIEW -->
+        <div class="view" id="emptyView">
+          <div class="empty">
+            <div class="empty-illo"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v15H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg></div>
+            <h3>No Book Selected</h3>
+            <p>Select a chapter from the sidebar to edit its brief, or create a new book to start the Planner → Research → Writer → Judge loop.</p>
+            <div style="margin-top:14px;display:flex;gap:8px"><button class="btn-mac primary">Create Book</button><button class="btn-mac ghost">Import YAML</button></div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+
+    <aside class="inspector" id="inspector">
+      <div class="ins-scroll">
+        <div class="ins-section">
+          <div class="ins-label">Pipeline — loop 2 of 5</div>
+          <div class="stepper" id="pipelineStepper">
+            <div class="step"><div class="step-dot done"><svg width="8" height="8" viewBox="0 0 12 12" fill="none"><path d="M2 6l2 2 5-5" stroke="white" stroke-width="1.6" stroke-linecap="round"/></svg></div><div class="step-content"><div class="step-title">Planner</div><div class="step-meta">Outline v3 • 9 queries • done 00:03</div></div></div>
+            <div class="step"><div class="step-dot active"></div><div class="step-content"><div class="step-title">Research ×3</div><div class="step-meta">A done • B streaming • C queued</div></div></div>
+            <div class="step"><div class="step-dot queued"></div><div class="step-content"><div class="step-title">Writer</div><div class="step-meta">Quarto template ready, waiting for research</div></div></div>
+            <div class="step"><div class="step-dot queued"></div><div class="step-content"><div class="step-title">Judge</div><div class="step-meta">Gates: correctness 0.85, clarity 0.75, helpfulness 0.70</div></div></div>
+            <div class="step"><div class="step-dot queued"></div><div class="step-content"><div class="step-title">Revise or Ship</div><div class="step-meta">Loop threshold 0.78</div></div></div>
+          </div>
+        </div>
+
+        <div class="ins-section">
+          <div class="ins-label">Agents</div>
+          <div class="agent-list">
+            <div class="agent-row"><div class="agent-av av-p">P</div><div class="agent-name">Planner</div><div class="agent-stat stat-green"></div><span style="font-size:11px;color:var(--mac-text-2)">done</span></div>
+            <div class="agent-row"><div class="agent-av av-r">R</div><div class="agent-name">Research › Raft log</div><div class="agent-stat stat-green"></div><span style="font-size:11px;color:var(--mac-text-2)">done</span></div>
+            <div class="agent-row"><div class="agent-av av-r">R</div><div class="agent-name">Research › FLP bound</div><div class="agent-stat stat-amber" style="animation:pulse 1.5s infinite"></div><span style="font-size:11px;color:var(--mac-text-2)">streaming</span></div>
+            <div class="agent-row"><div class="agent-av av-r">R</div><div class="agent-name">Research › Fencing</div><div class="agent-stat stat-gray"></div><span style="font-size:11px;color:var(--mac-text-3)">queued</span></div>
+            <div class="agent-row"><div class="agent-av av-w">W</div><div class="agent-name">Writer</div><div class="agent-stat stat-gray"></div><span style="font-size:11px;color:var(--mac-text-3)">waiting</span></div>
+            <div class="agent-row"><div class="agent-av av-j">J</div><div class="agent-name">Judge</div><div class="agent-stat stat-gray"></div><span style="font-size:11px;color:var(--mac-text-3)">queued</span></div>
+          </div>
+        </div>
+
+        <div class="ins-section" id="consoleSection">
+          <div class="ins-label">Live console — sse stream</div>
+          <div class="console" id="stream-box">
+            <div class="log-line"><span class="log-time">[00:00:00]</span><span class="log-tag">SYS</span><span>Quill daemon live • Railway • model=gpt-5</span></div>
+            <div class="log-line"><span class="log-time">[00:00:02]</span><span class="log-tag">PLAN</span><span>outline locked, queries=9</span></div>
+            <div class="log-line"><span class="log-time">[00:00:07]</span><span class="log-tag">RES.A</span><span>fetched Raft §7.2 compaction, summary 312 tok</span></div>
+            <div class="log-line"><span class="log-time">[00:00:18]</span><span class="log-tag">RES.B</span><span>FLP + Lynch 1996 — progress proof ingested</span></div>
+          </div>
+          <div style="display:flex;gap:6px;margin-top:8px">
+            <button class="btn-mac ghost" style="height:22px;font-size:11px;flex:1">Copy log</button>
+            <button class="btn-mac ghost" style="height:22px;font-size:11px;flex:1">Toggle console</button>
+          </div>
+        </div>
+
+        <div class="ins-section">
+          <div class="ins-label">Quality gates</div>
+          <div class="scores" id="scores">
+            <div class="score-row"><span class="score-label">Correctness</span><div class="score-track"><div class="score-fill good" style="width:88%"></div></div><span class="score-val">0.88</span></div>
+            <div class="score-row"><span class="score-label">Clarity</span><div class="score-track"><div class="score-fill" style="width:71%;background:#ff9f0a"></div></div><span class="score-val">0.71</span></div>
+            <div class="score-row"><span class="score-label">Helpfulness</span><div class="score-track"><div class="score-fill good" style="width:76%"></div></div><span class="score-val">0.76</span></div>
+            <div class="score-row"><span class="score-label">Code+output</span><div class="score-track"><div class="score-fill good" style="width:100%"></div></div><span class="score-val">pass</span></div>
+            <div class="score-row"><span class="score-label">Visual</span><div class="score-track"><div class="score-fill" style="width:40%;background:#c7c7cc"></div></div><span class="score-val">—</span></div>
+            <div class="score-row"><span class="score-label">Pull</span><div class="score-track"><div class="score-fill" style="width:68%;background:#ff9f0a"></div></div><span class="score-val">0.68</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="ins-footer">
+        <div style="display:flex;gap:8px">
+          <button class="btn-mac ghost" style="flex:1">Save Draft</button>
+          <button class="btn-mac primary" style="flex:1.2" id="fire-btn-2">Fire Agents ↩</button>
+        </div>
+        <div style="font-size:10.5px;color:var(--mac-text-3);margin-top:8px;display:flex;justify-content:space-between"><span>⌘↵ quick fire</span><span id="loopBadge">Loop 2/5 • 0.78 thresh</span></div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- CmdK palette -->
+  <div class="cmdk-overlay hidden" id="cmdk">
+    <div class="cmdk">
+      <div class="cmdk-input">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8e8e93" stroke-width="1.6"><circle cx="11" cy="11" r="6"/><path d="M21 21l-4.2-4.2"/></svg>
+        <input id="cmdkInput" placeholder="Search books, run agents, jump to draft…" autocomplete="off"/>
+        <span class="kbd">ESC</span>
+      </div>
+      <div class="cmdk-list" id="cmdkList">
+        <div class="cmdk-item active" data-action="fire"><span class="cmdk-icon">▶</span>Fire agents — Chapter 3<div><kbd>⌘ ↵</kbd></div></div>
+        <div class="cmdk-item" data-action="search"><span class="cmdk-icon">⌕</span>Search books — Distributed Systems</div>
+        <div class="cmdk-item" data-action="console"><span class="cmdk-icon">▤</span>Toggle console — stream-box</div>
+        <div class="cmdk-item" data-action="new"><span class="cmdk-icon">＋</span>New chapter — append to Distributed Systems</div>
+        <div class="cmdk-item" data-action="draft"><span class="cmdk-icon">▣</span>Open draft — article-canvas</div>
+        <div class="cmdk-item" data-action="empty"><span class="cmdk-icon">○</span>Show empty state</div>
+      </div>
+      <div class="cmdk-foot"><span>↑↓ navigate</span><span>↵ select</span><span>⌘K toggle</span><span style="margin-left:auto">Quill 0.4.1 • Mock mode</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const statusPill = $('#statusPill');
+const statusText = $('#statusText');
+const liveDot = $('#liveDot');
+let runState = 'idle';
+let runtimeMode = 'live';
+
+function renderStatusPill() {
+  if (runState === 'running') {
+    statusText.textContent = 'Running';
+    liveDot.classList.remove('mock');
+    statusPill.style.background = 'var(--accent)';
+    statusPill.style.color = 'white';
+    statusPill.style.borderColor = 'transparent';
+    return;
+  }
+
+  statusPill.style.background = 'rgba(0,0,0,0.06)';
+  statusPill.style.color = 'var(--mac-text)';
+  statusPill.style.borderColor = 'rgba(0,0,0,0.08)';
+  if (runtimeMode === 'mock') {
+    statusText.textContent = 'Mock';
+    liveDot.classList.add('mock');
+  } else {
+    statusText.textContent = 'Live';
+    liveDot.classList.remove('mock');
+  }
+}
+
+statusPill.addEventListener('click', () => {
+  if (runState === 'running') return;
+  runtimeMode = runtimeMode === 'live' ? 'mock' : 'live';
+  renderStatusPill();
+});
+renderStatusPill();
+
+// Sidebar expand/collapse
+$$('.source-row[data-book]').forEach(row=>{
+  row.addEventListener('click', ()=>{
+    const book = row.dataset.book;
+    const expanded = row.dataset.expanded === 'true';
+    row.dataset.expanded = (!expanded).toString();
+    const disc = row.querySelector('.disc');
+    disc.classList.toggle('open', !expanded);
+    disc.textContent = '›';
+    const nested = document.querySelector(`.nested[data-parent="${book}"]`);
+    if(nested) nested.classList.toggle('hidden', expanded);
+  });
+});
+
+// Chapter select → update title, show content, hide empty
+$$('.source-row[data-chapter]').forEach(row=>{
+  row.addEventListener('click', ()=>{
+    $$('.source-row[data-chapter]').forEach(r=>r.classList.remove('selected'));
+    row.classList.add('selected');
+    const ch = row.dataset.chapter;
+    const titleMap = {
+      '1':'Chapter 1 — Time & Order',
+      '2':'Chapter 2 — Gossip & Membership',
+      '3':'Chapter 3 — Consensus & Commit',
+      '4':'Chapter 4 — Replication Log',
+      '5':'Chapter 5 — Anti-Entropy'
+    };
+    $('#windowTitle span').textContent = `Quill — Distributed Systems • ${titleMap[ch]||'Chapter '+ch}`;
+    $('.breadcrumb b').textContent = titleMap[ch]||'Chapter '+ch;
+    // hide empty, show brief
+    $('#emptyView').classList.remove('active');
+    switchView('brief');
+    setSegActive('brief');
+  });
+});
+
+// Segmented control
+function setSegActive(name){
+  $$('#mainSeg button').forEach(b=>b.classList.toggle('active', b.dataset.view===name));
+}
+function switchView(name){
+  $$('.view').forEach(v=>v.classList.remove('active'));
+  if(name==='brief') $('#briefView').classList.add('active');
+  if(name==='pipeline') $('#pipelineView').classList.add('active');
+  if(name==='draft') $('#draftView').classList.add('active');
+  // inspector visibility could change but keep
+}
+$$('#mainSeg button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    setSegActive(btn.dataset.view);
+    switchView(btn.dataset.view);
+  });
+});
+
+// Goals chips toggle
+$('#goals-selector').addEventListener('click', e=>{
+  const chip = e.target.closest('.chip');
+  if(!chip) return;
+  chip.classList.toggle('selected');
+});
+
+// Theme cards toggle (multi)
+$('#themes-selector').addEventListener('click', e=>{
+  const card = e.target.closest('.theme-card');
+  if(!card) return;
+  card.classList.toggle('selected');
+});
+
+// CmdK logic
+const cmdk = $('#cmdk');
+const cmdkInput = $('#cmdkInput');
+function openCmdK(){
+  cmdk.classList.remove('hidden');
+  cmdkInput.focus();
+  cmdkInput.select();
+}
+function closeCmdK(){
+  cmdk.classList.add('hidden');
+}
+$$('.cmdk-item').forEach(it=>{
+  it.addEventListener('click', ()=>{
+    handleCmdk(it.dataset.action);
+    closeCmdK();
+  });
+});
+function handleCmdk(action){
+  if(action==='fire') fireAgents();
+  if(action==='draft'){ setSegActive('draft'); switchView('draft'); }
+  if(action==='search'){ $('#globalSearch').focus(); }
+  if(action==='console'){
+    const section = $('#consoleSection');
+    if (section) section.classList.toggle('hidden');
+  }
+  if(action==='new'){ appendNewChapter(); }
+  if(action==='empty'){ $$('.view').forEach(v=>v.classList.remove('active')); $('#emptyView').classList.add('active'); }
+}
+document.addEventListener('keydown', e=>{
+  if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==='k'){ e.preventDefault(); cmdk.classList.contains('hidden')?openCmdK():closeCmdK(); }
+  if(e.key==='Escape' && !cmdk.classList.contains('hidden')){ closeCmdK(); }
+  if((e.metaKey||e.ctrlKey) && ['1','2','3'].includes(e.key)){
+    e.preventDefault();
+    const map={ '1':'brief','2':'pipeline','3':'draft'};
+    const v=map[e.key]; setSegActive(v); switchView(v);
+  }
+  if((e.metaKey||e.ctrlKey) && e.key==='Enter'){ e.preventDefault(); fireAgents(); }
+});
+document.getElementById('appWindow').addEventListener('click', e=>{
+  if(e.target===cmdk) closeCmdK();
+});
+
+// Fire Agents simulation
+let firing=false;
+function fireAgents(){
+  if(firing) return;
+  firing=true;
+  runState = 'running';
+  renderStatusPill();
+  setSegActive('pipeline'); switchView('pipeline');
+  const stream = $('#stream-box');
+  const inline = $('#stream-box-inline');
+  const steps = [
+    '[00:00:24] RES.B → FLP bound validated ··· match 0.94',
+    '[00:00:28] RES.C → fencing token survey — 4 patterns found',
+    '[00:00:33] RES.C → done • 5 sources, summary 412 tok',
+    '[00:00:35] PLAN → promotion: all research ≥ 0.80, kicking Writer',
+    '[00:00:36] WRITER → drafting intro — ownership claim framing',
+    '[00:00:41] WRITER → code block paxos.py + trace N=3 rendered',
+    '[00:00:44] WRITER → table 2PC vs Paxos + fencing diagram placeholder',
+    '[00:00:48] JUDGE → scoring correctness 0.91 ··· pass',
+    '[00:00:52] JUDGE → clarity 0.71 → 0.78 after rewrite, near threshold 0.75',
+    '[00:00:56] JUDGE → helpfulness 0.84 pass, pull 0.74 pass',
+    '[00:01:02] JUDGE → loop 2 verdict: PASS — promote to Draft (0.81 avg)'
+  ];
+  let i=0;
+  const timer = setInterval(()=>{
+    if(i>=steps.length){
+      clearInterval(timer);
+      firing=false;
+      runState = 'idle';
+      renderStatusPill();
+      $$('.step-dot.queued').forEach((d,idx)=>{
+        if(idx<2){
+          d.className='step-dot done';
+          d.innerHTML='<svg width="8" height="8" viewBox="0 0 12 12" fill="none"><path d="M2 6l2 2 5-5" stroke="white" stroke-width="1.6" stroke-linecap="round"/></svg>';
+        }
+      });
+      $('#loopBadge').textContent='Loop 2/5 • PASS 0.81';
+      setTimeout(()=>{ setSegActive('draft'); switchView('draft'); }, 800);
+      return;
+    }
+    const line=steps[i];
+    const div=document.createElement('div'); div.className='log-line';
+    const t=line.match(/\[.*?\]/)?.[0]||''; const rest=line.replace(/\[.*?\]\s*/,'');
+    div.innerHTML=`<span class="log-time">${t}</span><span style="margin-left:6px">${rest}</span>`;
+    stream.appendChild(div); stream.scrollTop=stream.scrollHeight;
+    if(inline){
+      const d2=div.cloneNode(true); inline.appendChild(d2); inline.scrollTop=inline.scrollHeight;
+    }
+    i++;
+  }, 700);
+}
+$('#fire-btn').addEventListener('click', fireAgents);
+$('#fire-btn-2').addEventListener('click', fireAgents);
+
+// Sidebar toggle (collapse)
+let sidebarHidden=false;
+$('#toggleSidebar').addEventListener('click', ()=>{
+  sidebarHidden=!sidebarHidden;
+  $('#sidebar').style.display=sidebarHidden?'none':'flex';
+});
+
+// Filter books via search
+$('#globalSearch').addEventListener('input', e=>{
+  const q=e.target.value.toLowerCase();
+  $$('#books-list .source-row, .nested .source-row').forEach(r=>{
+    const txt=r.textContent.toLowerCase();
+    r.style.display= q && !txt.includes(q) ? 'none':'';
+  });
+});
+
+// Sidebar scoped source-list search
+$('#sidebarSearch').addEventListener('input', e=>{
+  const q=e.target.value.toLowerCase().trim();
+  $$('#books-list .source-row, .nested .source-row').forEach(r=>{
+    const txt=r.textContent.toLowerCase();
+    r.style.display= q && !txt.includes(q) ? 'none':'';
+  });
+});
+
+// Add chapter utility for command palette + new button behavior
+function appendNewChapter() {
+  const nested = document.querySelector('.nested[data-parent="dist"]');
+  if (!nested) return;
+  const chapterRows = nested.querySelectorAll('.source-row[data-chapter]');
+  const next = chapterRows.length + 1;
+  const row = document.createElement('div');
+  row.className = 'source-row';
+  row.dataset.chapter = String(next);
+  row.innerHTML = `<span class="icon ch">${next}</span><span>Chapter ${next} — New Outline</span>`;
+  row.addEventListener('click', ()=>{
+    $$('.source-row[data-chapter]').forEach(r=>r.classList.remove('selected'));
+    row.classList.add('selected');
+    $('#windowTitle span').textContent = `Quill — Distributed Systems • Chapter ${next} — New Outline`;
+    $('.breadcrumb b').textContent = `Chapter ${next} — New Outline`;
+    $('#emptyView').classList.remove('active');
+    setSegActive('brief');
+    switchView('brief');
+  });
+  nested.appendChild(row);
+  const counter = document.querySelector('.source-row[data-book="dist"] .muted');
+  if (counter) counter.textContent = String(next);
+}
+
+document.querySelector('.new-menu').addEventListener('click', appendNewChapter);
+
+// Completion readiness visual: textarea input changes fill width
+$('#brief-input').addEventListener('input', e=>{
+  const len=e.target.value.length;
+  const pct=Math.min(100, 40+len/30);
+  $('.readiness-fill').style.width=pct+'%';
+});
+</script>
+</body>
+</html>
