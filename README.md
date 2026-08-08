@@ -7,6 +7,7 @@ Multi-agent writing pipeline: **plan → research → write → manager**, loopi
 ```bash
 cp .env.example .env
 # set CURSOR_API_KEY=...   or leave unset for mock mode
+# set GEMINI_API_KEY=...   for live brief suggestions
 npm install
 npm run dev
 ```
@@ -32,9 +33,11 @@ Templates support `{{var}}`, `{% if var %}…{% endif %}`, and `{% for c in crit
 Env interpolation: `${VAR}` and `${VAR:-default}`.
 
 Suggestion tuning (fast brief generation):
-- `api.suggest_model` (default `composer-2.5-fast`)
+- `api.suggest_key_env` (default `GEMINI_API_KEY`)
+- `api.suggest_base_url` (default `https://generativelanguage.googleapis.com/v1beta`)
+- `api.suggest_model` (default `gemini-flash-latest`)
 - `api.suggest_timeout_ms` (default `30000`)
-- env overrides: `CURSOR_SUGGEST_MODEL`, `QUILL_SUGGEST_TIMEOUT_MS`
+- env overrides: `GEMINI_API_KEY`, `GEMINI_SUGGEST_MODEL`, `QUILL_SUGGEST_TIMEOUT_MS`
 
 ## API
 

@@ -163,6 +163,13 @@ export class WritingOrchestrator {
           : "",
     };
 
+    // Firing a fresh run for an existing chapter keeps ONLY the prior draft
+    // as revision context — plan, research, feedback, and routing all start
+    // clean. Explicit checkpoint resumes below still override this.
+    if (!reviseMode && options.brief.existingDraft?.trim()) {
+      state.draft = options.brief.existingDraft;
+    }
+
     if (options.resume?.state && typeof options.resume.state === "object") {
       Object.assign(state, options.resume.state);
     }

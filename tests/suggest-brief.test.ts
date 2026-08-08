@@ -83,7 +83,6 @@ test("suggestBrief uses mock path when mock=true", async () => {
       chapterTitle: "Chapter 1",
     },
     mock: true,
-    client: null,
     config: { defaults: { model: { id: "x" } }, api: {} } as PipelineConfig,
   });
   assert.equal(suggestion.theme, "O'Reilly Book Chapter");
@@ -92,29 +91,37 @@ test("suggestBrief uses mock path when mock=true", async () => {
 test("suggestModelCandidates includes fallback models without duplicates", () => {
   const candidates = suggestModelCandidates({
     api: {
-      suggest_model: "composer-2.5-fast",
-    },
-    defaults: {
-      model: { id: "composer-2.5-fast" },
-    },
-  } as PipelineConfig);
-  assert.deepEqual(candidates, [
-    { id: "composer-2.5", params: [{ id: "fast", value: "true" }] },
-    { id: "composer-2.5" },
-  ]);
-});
-
-test("suggestModelCandidates parses bracket syntax for params", () => {
-  const candidates = suggestModelCandidates({
-    api: {
-      suggest_model: "composer-2.5[fast=false]",
+      suggest_model: "gemini-flash-latest",
     },
     defaults: {
       model: { id: "composer-2.5" },
     },
   } as PipelineConfig);
-  assert.deepEqual(candidates[0], {
-    id: "composer-2.5",
-    params: [{ id: "fast", value: "false" }],
-  });
+  assert.deepEqual(candidates, [
+    { id: "gemini-flash-latest" },
+    { id: "gemini-3.6-flash" },
+    { id: "gemini-2.5-flash" },
+    { id: "gemini-2.5-flash-lite" },
+    { id: "gemini-2.0-flash" },
+    { id: "gemini-1.5-flash" },
+  ]);
+});
+
+test("suggestModelCandidates deduplicates configured fallback model", () => {
+  const candidates = suggestModelCandidates({
+    api: {
+      suggest_model: "gemini-2.0-flash",
+    },
+    defaults: {
+      model: { id: "composer-2.5" },
+    },
+  } as PipelineConfig);
+  assert.deepEqual(candidates, [
+    { id: "gemini-2.0-flash" },
+    { id: "gemini-flash-latest" },
+    { id: "gemini-3.6-flash" },
+    { id: "gemini-2.5-flash" },
+    { id: "gemini-2.5-flash-lite" },
+    { id: "gemini-1.5-flash" },
+  ]);
 });

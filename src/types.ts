@@ -44,7 +44,12 @@ export const PipelineConfigSchema = z.object({
     poll_interval_ms: z.coerce.number().int().positive().default(2000),
     request_timeout_ms: z.coerce.number().int().positive().default(120000),
     run_timeout_ms: z.coerce.number().int().positive().default(600000),
-    suggest_model: z.string().min(1).default("composer-2.5-fast"),
+    suggest_key_env: z.string().min(1).default("GEMINI_API_KEY"),
+    suggest_base_url: z
+      .string()
+      .url()
+      .default("https://generativelanguage.googleapis.com/v1beta"),
+    suggest_model: z.string().min(1).default("gemini-flash-latest"),
     suggest_timeout_ms: z.coerce.number().int().positive().default(30000),
   }),
   defaults: z.object({

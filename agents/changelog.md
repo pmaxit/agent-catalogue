@@ -27,6 +27,48 @@ Append-only log for agent work in this repository.
 
 ---
 
+## 2026-08-08 04:10 UTC-7 - Fresh chapter runs keep only the draft, reset all other state
+- Summary:
+  - Firing the agents for an existing chapter now starts the pipeline with clean state (plan, research, feedback, iteration, routing) while carrying over ONLY the chapter's saved draft: the orchestrator seeds `state.draft` from `brief.existingDraft` on fresh compose runs so the Writer revises the existing chapter instead of ignoring it.
+  - New runs supersede any still-active pipeline run for the same chapter (abort + close with the draft preserved) via `supersedeActiveChapterRuns` in both `/api/chapters/:id/run` and `/api/run`.
+  - Interactive `/api/run` compose requests with a `chapterId` now default `existingDraft` from the chapter's saved body (local store or remote data API) when the client does not send one.
+  - Explicit checkpoint resume (`/api/runs/:id/resume`) is unchanged — it intentionally restores full state for interrupted runs.
+- Files:
+  - `src/orchestrator.ts`
+  - `src/server.ts`
+  - `tests/chapter-rerun.test.ts` (new)
+- Validation:
+  - `npm run typecheck` -> pass
+  - `npm test` -> pass (29/29), including stub-client tests asserting the first Writer prompt contains the seeded draft + fresh plan and no stale feedback, and that revise_blocks mode is unaffected
+- Deployment:
+  - not deployed
+
+## 2026-08-07 23:20 UTC-7 - Rewrite Chapter 4 in Sutton & Barto prose style
+- Summary:
+  - Overwrote the Chapter 4 qmd (SARSA / on-policy control), converting it from
+    the O'Reilly lab-manual style into the Sutton & Barto prose style specified
+    by `data/style.md`, continuous with the already-rewritten Chapters 1-3
+    (opens from Chapter 3's cliffhanger; reuses Priya, the update template,
+    reader's-eye vs agent's-eye, exploration tax).
+  - Twelve numbered sections plus unheaded opening: on-policy idea, SARSA
+    update, the name, on-/off-policy contrast, meaning of the two value tables,
+    GLIE convergence, expected SARSA, temperament, limitations/scope, cliff-walk
+    extended example, 3-paragraph summary, historical remarks as threads.
+  - Extended example uses a pure-stdlib Python cliff-walk script (SARSA vs
+    Q-learning, epsilon=0.1 fixed, alpha=0.5, gamma=1.0, 500 episodes, seeded);
+    the embedded listing and printed output were verified byte-identical to an
+    actual run. Exercise arithmetic verified numerically.
+- Files:
+  - `data/chapter-4-sarsa-and-on-policy-tabular-control.qmd`
+- Validation:
+  - Content-only change (no app code touched); typecheck/tests not applicable.
+  - Ran the embedded script with python3; embedded output diff-matches the run.
+  - Mechanical style checks: 0 exclamation marks, 0 contractions, no bullet
+    lists in exposition, 2 displayed equations, "Now think again" and
+    "In our opinion" present, ~7,900 words.
+- Deployment:
+  - Not deployed in this step.
+
 ## 2026-08-07 22:25 UTC-7 - Deploy style-guide enforcement to Railway
 - Summary:
   - Deployed the style-guide enforcement change to Railway production.

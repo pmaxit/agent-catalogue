@@ -12,7 +12,9 @@ test("PipelineConfigSchema coerces numeric strings in config", () => {
       poll_interval_ms: "2000",
       request_timeout_ms: "120000",
       run_timeout_ms: "600000",
-      suggest_model: "composer-2.5-fast",
+      suggest_key_env: "GEMINI_API_KEY",
+      suggest_base_url: "https://generativelanguage.googleapis.com/v1beta",
+      suggest_model: "gemini-flash-latest",
       suggest_timeout_ms: "30000",
     },
     defaults: {
@@ -59,6 +61,11 @@ test("PipelineConfigSchema coerces numeric strings in config", () => {
   });
 
   assert.equal(parsed.api.suggest_timeout_ms, 30000);
+  assert.equal(parsed.api.suggest_key_env, "GEMINI_API_KEY");
+  assert.equal(
+    parsed.api.suggest_base_url,
+    "https://generativelanguage.googleapis.com/v1beta",
+  );
   assert.equal(parsed.api.poll_interval_ms, 2000);
   assert.equal(parsed.goal.max_iterations, 6);
   assert.equal(parsed.goal.criteria[0]?.weight, 1);

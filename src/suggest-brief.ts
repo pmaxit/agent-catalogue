@@ -2,11 +2,6 @@
  * AI suggestions that pre-fill studio brief & parameters from book/chapter context.
  */
 
-import {
-  CursorApiError,
-  type CursorClient,
-  type CursorModel,
-} from "./cursor-client.js";
 import type { PipelineConfig } from "./types.js";
 import { isOreillyChapterTheme } from "./themes.js";
 
@@ -38,6 +33,11 @@ export type SuggestBriefResult = {
   rationale: string;
 };
 
+export type SuggestModelSelection = {
+  id: string;
+  params?: Array<{ id: string; value: string }>;
+};
+
 export type SuggestTraceEvent =
   | {
       phase: "mock";
@@ -49,20 +49,20 @@ export type SuggestTraceEvent =
     }
   | {
       phase: "model_attempt";
-      model: CursorModel;
+      model: SuggestModelSelection;
       attempt: number;
       totalAttempts: number;
     }
   | {
       phase: "model_error";
-      model: CursorModel;
+      model: SuggestModelSelection;
       attempt: number;
       totalAttempts: number;
       error: string;
     }
   | {
       phase: "model_response";
-      model: CursorModel;
+      model: SuggestModelSelection;
       attempt: number;
       totalAttempts: number;
       runStatus: string;
@@ -218,44 +218,11 @@ theme must be one of:
 goal must match a studio goal label (use "O'Reilly-Style Technical Book Chapter" when theme is O'Reilly).`;
 }
 
-function suggestModel(config: PipelineConfig): { id: string } {
-  // Keep suggest-brief on a fast model path, independently from writer models.
-  return { id: config.api.suggest_model };
+function suggestModel(config: PipelineConfig): string {
+  return config.api.suggest_model;
 }
 
-function parseBracketModel(raw: string): CursorModel | null {
-  const m = raw.match(/^([^\[\]]+)\[([^\]]*)\]$/);
-  if (!m) return null;
-  const id = m[1]?.trim();
-  const paramsRaw = m[2]?.trim() ?? "";
-  if (!id) return null;
-  if (!paramsRaw) return { id };
-  const params = paramsRaw
-    .split(",")
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .map((part) => {
-      const eq = part.indexOf("=");
-      if (eq < 0) return { id: part, value: "true" };
-      const key = part.slice(0, eq).trim();
-      const value = part.slice(eq + 1).trim();
-      return { id: key, value };
-    })
-    .filter((p) => p.id);
-  return { id, ...(params.length ? { params } : {}) };
-}
-
-function normalizeModelSelection(raw: string): CursorModel {
-  const parsed = parseBracketModel(raw);
-  if (parsed) return parsed;
-  if (/^composer-[\d.]+-fast$/i.test(raw)) {
-    const baseId = raw.replace(/-fast$/i, "");
-    return { id: baseId, params: [{ id: "fast", value: "true" }] };
-  }
-  return { id: raw };
-}
-
-function modelSelectionKey(model: CursorModel): string {
+function modelSelectionKey(model: SuggestModelSelection): string {
   const params = (model.params || [])
     .map((p) => `${p.id}=${p.value}`)
     .sort()
@@ -263,25 +230,40 @@ function modelSelectionKey(model: CursorModel): string {
   return `${model.id}|${params}`;
 }
 
-export function suggestModelCandidates(config: PipelineConfig): CursorModel[] {
+export function suggestModelCandidates(config: PipelineConfig): SuggestModelSelection[] {
   const orderedIds = [
-    suggestModel(config).id,
-    config.defaults.model.id,
-    "composer-2.5-fast",
-    "composer-2.5",
+    suggestModel(config),
+    "gemini-flash-latest",
+    "gemini-3.6-flash",
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
   ]
     .map((id) => String(id || "").trim())
     .filter(Boolean);
   const seen = new Set<string>();
-  const unique: CursorModel[] = [];
+  const unique: SuggestModelSelection[] = [];
   for (const id of orderedIds) {
-    const model = normalizeModelSelection(id);
+    const model = { id };
     const key = modelSelectionKey(model);
     if (seen.has(key)) continue;
     seen.add(key);
     unique.push(model);
   }
   return unique;
+}
+
+export function resolveSuggestApiKey(
+  config: PipelineConfig,
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  const key = env[config.api.suggest_key_env]?.trim();
+  return key || undefined;
+}
+
+function suggestBaseUrl(config: PipelineConfig): string {
+  return config.api.suggest_base_url.replace(/\/$/, "");
 }
 
 function suggestTimeoutMs(config: PipelineConfig): number {
@@ -296,7 +278,10 @@ function ensureContextSpecificity(
   const book = input.bookTitle?.trim();
   const chapter = input.chapterTitle?.trim();
   let brief = suggestion.brief;
-  if (book && !new RegExp(book.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(brief)) {
+  if (
+    book &&
+    !new RegExp(book.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(brief)
+  ) {
     brief = `${brief} Anchor this chapter explicitly to the book “${book}”.`;
   }
   if (
@@ -308,14 +293,48 @@ function ensureContextSpecificity(
   return { ...suggestion, brief: brief.trim() };
 }
 
+function extractGeminiText(payload: unknown): string {
+  const root = (payload && typeof payload === "object"
+    ? payload
+    : {}) as {
+    candidates?: Array<{
+      content?: {
+        parts?: Array<{ text?: unknown }>;
+      };
+    }>;
+    promptFeedback?: { blockReason?: unknown };
+  };
+  const texts =
+    root.candidates
+      ?.flatMap((candidate) =>
+        (candidate?.content?.parts || [])
+          .map((part) => (typeof part?.text === "string" ? part.text : ""))
+          .filter(Boolean),
+      )
+      .filter(Boolean) || [];
+  if (texts.length) return texts.join("\n").trim();
+  const blocked =
+    typeof root.promptFeedback?.blockReason === "string"
+      ? root.promptFeedback.blockReason
+      : "";
+  if (blocked) throw new Error(`Gemini blocked response: ${blocked}`);
+  throw new Error("Gemini did not return text candidates");
+}
+
 async function runSuggestModel(args: {
-  client: CursorClient;
   config: PipelineConfig;
   prompt: string;
   onTrace?: (event: SuggestTraceEvent) => void;
 }): Promise<unknown> {
+  const apiKey = resolveSuggestApiKey(args.config);
+  if (!apiKey) {
+    throw new Error(
+      `Gemini API key is missing. Set ${args.config.api.suggest_key_env} in the environment.`,
+    );
+  }
   const candidates = suggestModelCandidates(args.config);
   const failures: string[] = [];
+
   for (let i = 0; i < candidates.length; i += 1) {
     const model = candidates[i]!;
     const attempt = i + 1;
@@ -326,42 +345,87 @@ async function runSuggestModel(args: {
       attempt,
       totalAttempts: candidates.length,
     });
+
     try {
-      const created = await args.client.createAgent({
-        prompt: { text: args.prompt },
-        model,
-        name: "Quill brief suggest",
-        mode: "agent",
+      const endpoint =
+        `${suggestBaseUrl(args.config)}/models/${encodeURIComponent(model.id)}:generateContent` +
+        `?key=${encodeURIComponent(apiKey)}`;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), suggestTimeoutMs(args.config));
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: args.prompt }],
+            },
+          ],
+          generationConfig: {
+            responseMimeType: "application/json",
+            temperature: 0.2,
+          },
+        }),
       });
-      const agentId = created.agent.id;
-      const runId = created.run.id;
-      const run = await args.client.waitForRun(agentId, runId, {
-        pollIntervalMs: Math.min(args.config.api.poll_interval_ms, 1000),
-        timeoutMs: suggestTimeoutMs(args.config),
-      });
-      const rawResponse = run.result ?? "";
+      clearTimeout(timer);
+
+      const rawResponse = await res.text();
+      if (!res.ok) {
+        const detail = `Gemini API ${res.status}: ${rawResponse || "(empty body)"}`;
+        const retriable =
+          (
+            res.status === 400 ||
+            res.status === 404 ||
+            res.status === 422 ||
+            res.status === 429 ||
+            res.status === 500 ||
+            res.status === 502 ||
+            res.status === 503 ||
+            res.status === 504
+          ) &&
+          i < candidates.length - 1;
+        args.onTrace?.({
+          phase: "model_error",
+          model,
+          attempt,
+          totalAttempts: candidates.length,
+          error: detail,
+        });
+        failures.push(`${modelLabel}: ${detail}`);
+        if (retriable) continue;
+        throw new Error(
+          `Suggest request failed after trying models (${candidates.map(modelSelectionKey).join(", ")}). Attempts: ${failures.join(" || ")}`,
+        );
+      }
+
       args.onTrace?.({
         phase: "model_response",
         model,
         attempt,
         totalAttempts: candidates.length,
-        runStatus: run.status,
+        runStatus: "FINISHED",
         rawResponse,
       });
-      if (run.status !== "FINISHED") {
-        throw new Error(`Suggest run ended with ${run.status}`);
+
+      let payload: unknown;
+      try {
+        payload = rawResponse ? JSON.parse(rawResponse) : {};
+      } catch {
+        throw new Error(`Gemini returned invalid JSON envelope: ${rawResponse}`);
       }
-      return extractJsonObject(rawResponse);
+      return extractJsonObject(extractGeminiText(payload));
     } catch (err) {
-      const isApiErr = err instanceof CursorApiError;
+      const detail = err instanceof Error ? err.message : String(err);
       const retriable =
-        isApiErr &&
-        (err.status === 400 || err.status === 404 || err.status === 422);
-      const detail = isApiErr
-        ? `${err.message}${err.body ? `: ${err.body}` : ""}`
-        : err instanceof Error
-          ? err.message
-          : String(err);
+        i < candidates.length - 1 &&
+        /Gemini API (400|404|422|429|500|502|503|504)|unavailable|timeout|invalid|not found/i.test(
+          detail,
+        );
       args.onTrace?.({
         phase: "model_error",
         model,
@@ -370,35 +434,43 @@ async function runSuggestModel(args: {
         error: detail,
       });
       failures.push(`${modelLabel}: ${detail}`);
-      if (!retriable || i === candidates.length - 1) {
+      if (retriable) continue;
+      if (i === candidates.length - 1) {
         throw new Error(
           `Suggest request failed after trying models (${candidates.map(modelSelectionKey).join(", ")}). Attempts: ${failures.join(" || ")}`,
         );
       }
+      throw new Error(detail);
     }
   }
+
   throw new Error("Suggest request failed: no model candidates available");
 }
 
 export async function suggestBrief(options: {
   input: SuggestBriefInput;
   mock: boolean;
-  client: CursorClient | null;
   config: PipelineConfig;
   onTrace?: (event: SuggestTraceEvent) => void;
 }): Promise<SuggestBriefResult> {
-  const { input, mock, client, config, onTrace } = options;
-  if (mock || !client) {
+  const { input, mock, config, onTrace } = options;
+  const key = resolveSuggestApiKey(config);
+  if (mock && !key) {
     onTrace?.({
       phase: "mock",
-      detail: mock ? "mock mode enabled" : "client unavailable",
+      detail: "mock mode enabled",
     });
     return mockSuggestBrief(input);
+  }
+  if (!key) {
+    throw new Error(
+      `Gemini API key is missing. Set ${config.api.suggest_key_env} in the environment.`,
+    );
   }
 
   const prompt = buildSuggestPrompt(input);
   onTrace?.({ phase: "prompt", prompt });
-  const parsed = await runSuggestModel({ client, config, prompt, onTrace });
+  const parsed = await runSuggestModel({ config, prompt, onTrace });
   const normalized = ensureContextSpecificity(
     normalizeSuggestResult(parsed, input),
     input,

@@ -14,11 +14,7 @@ import {
   renderChapterPage,
 } from "./book-pages.js";
 import { isMockMode, loadConfig, resolveApiKey } from "./config.js";
-import {
-  CursorClient,
-  type CursorModel,
-  type CursorModelCatalogItem,
-} from "./cursor-client.js";
+import { CursorClient } from "./cursor-client.js";
 import { resolveDataApiBase, usesRemoteDataApi } from "./data-api.js";
 import { startSseHeartbeat } from "./sse.js";
 import {
@@ -42,6 +38,7 @@ import {
   suggestFilename,
 } from "./quarto.js";
 import {
+  resolveSuggestApiKey,
   suggestModelCandidates,
   suggestBrief,
   type SuggestBriefInput,
@@ -78,86 +75,33 @@ const runSubscribers = new Map<string, Set<RunSubscriber>>();
 const activeRunControllers = new Map<string, AbortController>();
 const activeRunPromises = new Map<string, Promise<unknown>>();
 
-function modelParamsKey(params?: Array<{ id: string; value: string }>): string {
-  if (!params?.length) return "";
-  return params
-    .map((p) => `${p.id}=${p.value}`)
-    .sort()
-    .join("&");
-}
-
-function modelSelectionLabel(model: CursorModel): string {
-  const key = modelParamsKey(model.params);
-  return key ? `${model.id}[${key}]` : model.id;
-}
-
-function modelItemMatchesSelection(
-  item: CursorModelCatalogItem,
-  target: CursorModel,
-): boolean {
-  const ids = new Set([item.id, ...(item.aliases || [])].filter(Boolean));
-  if (!ids.has(target.id)) return false;
-  const wanted = modelParamsKey(target.params);
-  if (!wanted) return true;
-  const variants = item.variants || [];
-  if (
-    variants.some((variant) => modelParamsKey(variant.params || []) === wanted)
-  ) {
-    return true;
+function validateSuggestModelConfigOnStartup(): void {
+  const desired = suggestModelCandidates(config)[0];
+  const apiKey = resolveSuggestApiKey(config);
+  if (!desired) {
+    app.log.warn("startup suggest model check skipped: no configured Gemini model");
+    return;
   }
-  const allowedByParameters = (item.parameters || []).every((paramDef) => {
-    const desired = target.params?.find((p) => p.id === paramDef.id)?.value;
-    if (desired == null) return true;
-    const values = paramDef.values || [];
-    if (!values.length) return true;
-    return values.some((v) => v.value === desired);
-  });
-  return allowedByParameters;
-}
-
-async function validateSuggestModelConfigOnStartup(): Promise<void> {
-  if (!client || mock) return;
-  try {
-    const catalog = await client.listModels();
-    const items = catalog?.items || [];
-    if (!items.length) {
-      app.log.warn("startup suggest model check skipped: /v1/models returned no items");
-      return;
-    }
-    const desired = suggestModelCandidates(config)[0];
-    if (!desired) {
-      app.log.warn("startup suggest model check skipped: no configured suggest model");
-      return;
-    }
-    const matched = items.some((item) => modelItemMatchesSelection(item, desired));
-    if (matched) {
-      app.log.info(
-        {
-          suggestModel: modelSelectionLabel(desired),
-        },
-        "startup suggest model check passed",
-      );
-      return;
-    }
-    const available = items
-      .slice(0, 8)
-      .map((item) => item.id)
-      .filter(Boolean);
+  if (!apiKey) {
     app.log.warn(
       {
-        configuredSuggestModel: modelSelectionLabel(desired),
-        availableModelIds: available,
-        tip: "Use GET /v1/models and pick an exact model.id (+ params) for this API key.",
+        suggestKeyEnv: config.api.suggest_key_env,
+        suggestModel: desired.id,
+        tip: `Set ${config.api.suggest_key_env} to enable live brief suggestions.`,
       },
-      "startup suggest model check failed; configured model not in /v1/models catalog",
+      "startup suggest model check failed; Gemini API key missing",
     );
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    app.log.warn(
-      { error: message },
-      "startup suggest model check failed; could not read /v1/models",
-    );
+    return;
   }
+  app.log.info(
+    {
+      provider: "gemini",
+      suggestModel: desired.id,
+      suggestBaseUrl: config.api.suggest_base_url,
+      suggestKeyEnv: config.api.suggest_key_env,
+    },
+    "startup suggest model check passed",
+  );
 }
 
 function normalizeBriefInput(body: BriefInput): BriefInput {
@@ -693,6 +637,35 @@ function supersedeRunningRun(runId: string, message: string): void {
     state,
     error: message,
   });
+}
+
+/**
+ * Firing a fresh run for a chapter must clear all previous run state for
+ * that chapter (except the saved draft, which travels via existingDraft).
+ * Abort + close any still-active pipeline runs targeting the same chapter.
+ */
+function supersedeActiveChapterRuns(chapterId: string, message: string): void {
+  for (const run of store.listActivePipelineRuns(50)) {
+    const brief = parseRunBrief(run.brief_json);
+    if (!brief?.chapterId || String(brief.chapterId) !== String(chapterId)) {
+      continue;
+    }
+    const controller = activeRunControllers.get(run.id);
+    if (controller && !controller.signal.aborted) controller.abort();
+    activeRunControllers.delete(run.id);
+    activeRunPromises.delete(run.id);
+    supersedeRunningRun(run.id, message);
+  }
+}
+
+async function resolveChapterDraftMarkdown(chapterId: string): Promise<string> {
+  if (remoteData) {
+    const payload = await fetchRemoteJson<{ chapter?: ChapterRecord }>(
+      `/api/chapters/${encodeURIComponent(chapterId)}`,
+    );
+    return payload?.chapter?.body_markdown ?? "";
+  }
+  return store.getChapter(chapterId)?.body_markdown ?? "";
 }
 
 app.get("/api/health", async () => ({
@@ -1836,7 +1809,6 @@ app.post<{ Body: SuggestBriefInput }>("/api/suggest-brief", async (req, reply) =
         existingChapterBriefs,
       },
       mock,
-      client,
       config,
       onTrace: logSuggestTrace,
     });
@@ -1908,6 +1880,13 @@ app.post<{
     runMode: "background_chapter",
   });
 
+  // New chapter run supersedes any previous in-flight run for this chapter:
+  // only the saved draft (existingDraft above) carries over.
+  supersedeActiveChapterRuns(
+    chapter.id,
+    "Run superseded by a new chapter run.",
+  );
+
   const run = store.createPipelineRun(brief);
   launchPipelineRun(run.id, brief, {
     onDraft: async (draft) => {
@@ -1947,10 +1926,23 @@ app.post<{ Body: BriefInput }>("/api/run", async (req, reply) => {
   if (!body.brief || typeof body.brief !== "string" || !body.brief.trim()) {
     return reply.code(400).send({ error: "brief is required" });
   }
-  const brief = normalizeBriefInput({
+  let brief = normalizeBriefInput({
     ...body,
     runMode: body.runMode ?? "interactive",
   });
+  if (brief.mode !== "revise_blocks" && brief.chapterId) {
+    // Fresh chapter run: drop all previous run state except the saved draft.
+    supersedeActiveChapterRuns(
+      brief.chapterId,
+      "Run superseded by a new chapter run.",
+    );
+    if (!brief.existingDraft?.trim()) {
+      brief = {
+        ...brief,
+        existingDraft: await resolveChapterDraftMarkdown(brief.chapterId),
+      };
+    }
+  }
   const run = store.createPipelineRun(brief);
   const canPersistChapterDraft =
     brief.mode !== "revise_blocks" && typeof brief.chapterId === "string";
