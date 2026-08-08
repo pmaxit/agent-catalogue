@@ -64,7 +64,9 @@ Append-only log for agent work in this repository.
   - `npm test` -> pass (26/26)
   - Mock end-to-end pipeline run -> status completed, style_fidelity 0.995, style guide present in state
 - Deployment:
-  - not deployed
+  - Deployed to Railway production (writing-agent), deployment 7d8d2f0e-8a3f-4833-9e3b-1a40e82db09a -> SUCCESS; /api/health ok
+  - Required Dockerfile `COPY data/style.md` + .gitignore un-ignore of data/style.md (first attempt a34cbd3e lacked the file in the image; c37493ad failed on the COPY step before the ignore fix)
+  - Committed as 229e21a
 
 ## 2026-08-07 22:02 UTC-7 - Rewrite Chapter 1 in Sutton & Barto prose style
 - Summary:
