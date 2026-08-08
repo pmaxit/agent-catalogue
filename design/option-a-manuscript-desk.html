@@ -1,0 +1,2121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Quill — Manuscript Desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --ink: #1a1f2c;
+    --ink-soft: #3d4556;
+    --muted: #6b7280;
+    --mist: #e8eaef;
+    --mist-deep: #d4d8e0;
+    --paper: #fbfbfd;
+    --surface: #f3f4f7;
+    --surface-raised: #ffffff;
+    --border: rgba(26, 31, 44, 0.08);
+    --border-strong: rgba(26, 31, 44, 0.14);
+    --accent: #0f766e;
+    --accent-soft: #ccfbf1;
+    --accent-mid: #14b8a6;
+    --success: #15803d;
+    --warn: #b45309;
+    --danger: #b91c1c;
+    --idle: #94a3b8;
+
+    --font-display: "Fraunces", "Source Serif 4", Georgia, serif;
+    --font-body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+    --font-serif: "Source Serif 4", Georgia, serif;
+    --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+
+    --sidebar-w: 240px;
+    --dock-h: 252px;
+    --header-h: 56px;
+    --radius: 10px;
+    --radius-sm: 6px;
+    --ease: cubic-bezier(0.23, 1, 0.32, 1);
+    --shadow-soft: 0 1px 2px rgba(26, 31, 44, 0.04), 0 8px 24px rgba(26, 31, 44, 0.05);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: var(--font-body);
+    color: var(--ink);
+    background: var(--paper);
+    font-size: 15px;
+    line-height: 1.5;
+    letter-spacing: 0;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button, input, textarea, select {
+    font: inherit;
+    color: inherit;
+  }
+  button {
+    cursor: pointer;
+    border: none;
+    background: none;
+    padding: 0;
+  }
+  button:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* Atmosphere */
+  .app-shell {
+    position: relative;
+    height: 100%;
+    display: grid;
+    grid-template-rows: var(--header-h) 1fr auto;
+    background:
+      radial-gradient(1200px 600px at 12% -10%, rgba(15, 118, 110, 0.06), transparent 55%),
+      radial-gradient(900px 500px at 88% 0%, rgba(26, 31, 44, 0.04), transparent 50%),
+      linear-gradient(180deg, #f7f8fb 0%, var(--paper) 40%, #f4f5f8 100%);
+  }
+  .app-shell::before {
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    opacity: 0.35;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+    mix-blend-mode: multiply;
+    z-index: 0;
+  }
+  .app-shell > * { position: relative; z-index: 1; }
+
+  /* Header */
+  .app-header {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(251, 251, 253, 0.82);
+    backdrop-filter: blur(12px);
+  }
+  .brand {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-shrink: 0;
+    min-width: 160px;
+  }
+  .brand-mark {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 28px;
+    letter-spacing: -0.03em;
+    line-height: 1;
+    color: var(--ink);
+  }
+  .brand-mark span { color: var(--accent); }
+  .brand-sub {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .header-search {
+    flex: 1;
+    max-width: 420px;
+    position: relative;
+  }
+  .header-search input {
+    width: 100%;
+    height: 36px;
+    padding: 0 12px 0 36px;
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    background: var(--surface-raised);
+    transition: border-color 160ms var(--ease), box-shadow 160ms var(--ease);
+  }
+  .header-search input::placeholder { color: var(--muted); }
+  .header-search input:focus {
+    outline: none;
+    border-color: color-mix(in oklab, var(--accent) 55%, var(--mist-deep));
+    box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+  }
+  .header-search svg {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+    pointer-events: none;
+  }
+  .header-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  #health-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  #health-pill .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent-mid);
+    box-shadow: 0 0 0 0 rgba(20, 184, 166, 0.5);
+    animation: pulse-dot 2s var(--ease) infinite;
+  }
+  #mode-badge {
+    display: inline-flex;
+    align-items: center;
+    height: 28px;
+    padding: 0 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--ink-soft);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  .kbd-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--muted);
+    margin-right: 4px;
+  }
+  .kbd-hint kbd {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    padding: 2px 5px;
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    background: var(--surface-raised);
+  }
+  #fire-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 36px;
+    padding: 0 16px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: 0.02em;
+    box-shadow: 0 1px 2px rgba(15, 118, 110, 0.25);
+    transition: transform 140ms var(--ease), background 160ms var(--ease), box-shadow 160ms var(--ease);
+  }
+  #fire-btn:hover { background: #0d665f; transform: translateY(-1px); }
+  #fire-btn:active { transform: translateY(1px); }
+  #fire-btn.is-running {
+    background: var(--ink);
+    pointer-events: none;
+  }
+  #fire-btn svg { width: 14px; height: 14px; }
+
+  /* Main workspace */
+  .workspace {
+    display: grid;
+    grid-template-columns: var(--sidebar-w) 1fr;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    background: rgba(243, 244, 247, 0.72);
+    backdrop-filter: blur(8px);
+    min-height: 0;
+  }
+  .sidebar-head {
+    padding: 14px 12px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .sidebar-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 4px;
+  }
+  .sidebar-title h2 {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .side-filter {
+    position: relative;
+  }
+  .side-filter input {
+    width: 100%;
+    height: 32px;
+    padding: 0 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-raised);
+    font-size: 13px;
+  }
+  .side-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .side-actions button {
+    height: 30px;
+    border-radius: var(--radius-sm);
+    border: 1px dashed var(--border-strong);
+    background: transparent;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    transition: background 140ms var(--ease), border-color 140ms var(--ease);
+  }
+  .side-actions button:hover {
+    background: var(--surface-raised);
+    border-style: solid;
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  #books-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 8px 16px;
+    list-style: none;
+    margin: 0;
+  }
+  .book-item { margin-bottom: 2px; }
+  .book-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 8px 8px;
+    border-radius: var(--radius-sm);
+    text-align: left;
+    transition: background 140ms var(--ease);
+  }
+  .book-row:hover { background: rgba(255, 255, 255, 0.7); }
+  .book-row.is-open { background: rgba(255, 255, 255, 0.85); }
+  .disclose {
+    width: 16px;
+    height: 16px;
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+    transition: transform 180ms var(--ease);
+    flex-shrink: 0;
+  }
+  .book-item.is-expanded .disclose { transform: rotate(90deg); }
+  .book-title {
+    font-family: var(--font-display);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .book-meta {
+    font-size: 11px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  #book-chapter-list {
+    list-style: none;
+    margin: 0;
+    padding: 0 0 4px 22px;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: max-height 220ms var(--ease), opacity 180ms var(--ease);
+  }
+  .book-item.is-expanded #book-chapter-list,
+  .book-item.is-expanded .chapter-list {
+    max-height: 320px;
+    opacity: 1;
+  }
+  .chapter-list {
+    list-style: none;
+    margin: 0;
+    padding: 0 0 4px 22px;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: max-height 220ms var(--ease), opacity 180ms var(--ease);
+  }
+  .chapter-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 8px;
+    border-radius: var(--radius-sm);
+    text-align: left;
+    font-size: 13px;
+    color: var(--ink-soft);
+    transition: background 140ms var(--ease), color 140ms var(--ease);
+  }
+  .chapter-btn:hover { background: rgba(255, 255, 255, 0.8); color: var(--ink); }
+  .chapter-btn.is-active {
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .ch-num {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--muted);
+    width: 18px;
+  }
+  .chapter-btn.is-active .ch-num { color: var(--accent); }
+
+  /* Center */
+  .center {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .center-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 28px 36px 32px;
+  }
+
+  /* Dashboard */
+  #view-dashboard[hidden],
+  #view-write[hidden] { display: none !important; }
+
+  .dash-hero {
+    max-width: 640px;
+    margin-bottom: 40px;
+    animation: fade-up 420ms var(--ease) both;
+  }
+  .dash-kicker {
+    margin: 0 0 10px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .dash-hero h1 {
+    margin: 0 0 12px;
+    font-family: var(--font-display);
+    font-size: clamp(36px, 4.2vw, 48px);
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    line-height: 1.08;
+    color: var(--ink);
+  }
+  .dash-hero p {
+    margin: 0 0 22px;
+    font-size: 17px;
+    line-height: 1.55;
+    color: var(--ink-soft);
+    max-width: 48ch;
+  }
+  .dash-ctas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 40px;
+    padding: 0 18px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    transition: transform 140ms var(--ease), background 160ms var(--ease);
+  }
+  .btn-primary:hover { background: #0d665f; transform: translateY(-1px); }
+  .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    height: 40px;
+    padding: 0 16px;
+    border-radius: 999px;
+    border: 1px solid var(--border-strong);
+    background: var(--surface-raised);
+    font-weight: 600;
+    color: var(--ink-soft);
+    transition: border-color 140ms var(--ease), color 140ms var(--ease);
+  }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+  .dash-section {
+    margin-bottom: 36px;
+    animation: fade-up 480ms var(--ease) both;
+  }
+  .dash-section:nth-child(3) { animation-delay: 60ms; }
+  .dash-section:nth-child(4) { animation-delay: 100ms; }
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 14px;
+    gap: 12px;
+  }
+  .section-head h2 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  .section-head .linkish {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+  }
+  .recent-list {
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--border);
+  }
+  .recent-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 16px;
+    align-items: center;
+    padding: 14px 4px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    transition: background 140ms var(--ease);
+  }
+  .recent-row:hover { background: rgba(255, 255, 255, 0.55); }
+  .recent-title {
+    font-family: var(--font-serif);
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .recent-book {
+    display: block;
+    margin-top: 2px;
+    font-family: var(--font-body);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+  }
+  .recent-status {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: var(--surface);
+  }
+  .recent-status.drafting { background: var(--accent-soft); color: var(--accent); }
+  .recent-time {
+    font-size: 12px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    min-width: 72px;
+    text-align: right;
+  }
+
+  .progress-block {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 24px;
+    align-items: center;
+    padding: 20px 22px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: rgba(255, 255, 255, 0.65);
+  }
+  .progress-book-name {
+    font-family: var(--font-display);
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    margin: 0 0 6px;
+  }
+  .progress-meta {
+    margin: 0 0 14px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .progress-track {
+    height: 6px;
+    border-radius: 999px;
+    background: var(--mist);
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    width: 42%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--accent), var(--accent-mid));
+    transition: width 500ms var(--ease);
+  }
+  .progress-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    text-align: center;
+  }
+  .progress-stats strong {
+    display: block;
+    font-family: var(--font-display);
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+  .progress-stats span {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .write-options {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+  .write-opt {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: rgba(255, 255, 255, 0.7);
+    text-align: left;
+    transition: border-color 160ms var(--ease), transform 160ms var(--ease), box-shadow 160ms var(--ease);
+  }
+  .write-opt:hover {
+    border-color: color-mix(in oklab, var(--accent) 40%, var(--border-strong));
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-soft);
+  }
+  .write-opt svg { color: var(--accent); }
+  .write-opt strong {
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .write-opt span {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.4;
+  }
+
+  /* Empty state overlay variant */
+  .empty-library {
+    max-width: 420px;
+    margin: 48px auto;
+    text-align: center;
+    padding: 40px 24px;
+  }
+  .empty-library[hidden] { display: none !important; }
+  .empty-library h2 {
+    font-family: var(--font-display);
+    font-size: 28px;
+    letter-spacing: -0.02em;
+    margin: 0 0 10px;
+  }
+  .empty-library p {
+    margin: 0 0 20px;
+    color: var(--ink-soft);
+  }
+
+  /* Write mode */
+  .write-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .write-context {
+    min-width: 0;
+  }
+  .write-context .crumb {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .write-context h1 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+  }
+  .seg {
+    display: inline-flex;
+    padding: 3px;
+    border-radius: 999px;
+    background: var(--mist);
+    border: 1px solid var(--border);
+  }
+  .seg button {
+    height: 32px;
+    padding: 0 16px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    transition: background 160ms var(--ease), color 160ms var(--ease), box-shadow 160ms var(--ease);
+  }
+  .seg button.is-active {
+    background: var(--surface-raised);
+    color: var(--ink);
+    box-shadow: 0 1px 2px rgba(26, 31, 44, 0.06);
+  }
+
+  #pane-brief[hidden],
+  #pane-draft[hidden] { display: none !important; }
+
+  #agent-form {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    max-width: 760px;
+  }
+  .field-label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .chip {
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border-strong);
+    background: var(--surface-raised);
+    font-size: 13px;
+    font-weight: 550;
+    color: var(--ink-soft);
+    transition: background 140ms var(--ease), border-color 140ms var(--ease), color 140ms var(--ease);
+  }
+  .chip:hover { border-color: var(--accent); color: var(--accent); }
+  .chip.is-selected {
+    background: var(--accent-soft);
+    border-color: transparent;
+    color: var(--accent);
+  }
+  .theme-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .theme-card {
+    padding: 12px 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.75);
+    text-align: left;
+    transition: border-color 140ms var(--ease), background 140ms var(--ease);
+  }
+  .theme-card strong {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+  .theme-card span {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.35;
+  }
+  .theme-card.is-selected {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .theme-card.is-selected span { color: color-mix(in oklab, var(--accent) 70%, var(--muted)); }
+
+  .meta-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .meta-field label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .meta-field input,
+  .meta-field select {
+    width: 100%;
+    height: 38px;
+    padding: 0 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface-raised);
+  }
+  .brief-wrap textarea {
+    width: 100%;
+    min-height: 180px;
+    padding: 14px 16px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--surface-raised);
+    resize: vertical;
+    line-height: 1.55;
+  }
+  .brief-wrap textarea:focus {
+    outline: none;
+    border-color: color-mix(in oklab, var(--accent) 50%, var(--mist-deep));
+    box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.1);
+  }
+  .brief-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+  }
+
+  #article-canvas {
+    max-width: 720px;
+    padding: 8px 4px 40px;
+  }
+  #article-canvas .draft-meta {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 18px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  #article-canvas .draft-meta code {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--surface);
+  }
+  #article-canvas h2 {
+    font-family: var(--font-display);
+    font-size: 32px;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    line-height: 1.15;
+    margin: 0 0 8px;
+  }
+  #article-canvas .lede {
+    font-family: var(--font-serif);
+    font-size: 18px;
+    line-height: 1.55;
+    color: var(--ink-soft);
+    margin: 0 0 24px;
+  }
+  #article-canvas h3 {
+    font-family: var(--font-display);
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    margin: 28px 0 10px;
+  }
+  #article-canvas p {
+    font-family: var(--font-serif);
+    font-size: 16px;
+    line-height: 1.7;
+    margin: 0 0 14px;
+    max-width: 65ch;
+  }
+  #article-canvas pre {
+    margin: 16px 0;
+    padding: 14px 16px;
+    border-radius: var(--radius-sm);
+    background: var(--ink);
+    color: #e8eaef;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.55;
+    overflow-x: auto;
+  }
+  #article-canvas .callout {
+    margin: 20px 0;
+    padding: 14px 16px;
+    border-left: 2px solid var(--accent);
+    background: rgba(15, 118, 110, 0.05);
+    font-family: var(--font-serif);
+    font-size: 15px;
+    color: var(--ink-soft);
+  }
+
+  /* Agent dock */
+  .agent-dock {
+    border-top: 1px solid var(--border-strong);
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(14px);
+    height: var(--dock-h);
+    display: grid;
+    grid-template-rows: auto 1fr;
+    transition: height 240ms var(--ease), transform 240ms var(--ease);
+    box-shadow: 0 -8px 28px rgba(26, 31, 44, 0.04);
+  }
+  .agent-dock.is-collapsed {
+    height: 44px;
+  }
+  .agent-dock.is-collapsed .dock-body { display: none; }
+  .dock-bar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    height: 44px;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--border);
+    cursor: default;
+  }
+  .dock-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .pipeline {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+  }
+  .pipe-step {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    white-space: nowrap;
+    position: relative;
+  }
+  .pipe-step::after {
+    content: "";
+    width: 18px;
+    height: 1px;
+    background: var(--mist-deep);
+    margin-left: 6px;
+  }
+  .pipe-step:last-child::after { display: none; }
+  .pipe-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--idle);
+    transition: background 200ms var(--ease), box-shadow 200ms var(--ease);
+  }
+  .pipe-step.is-active { color: var(--accent); }
+  .pipe-step.is-active .pipe-dot {
+    background: var(--accent);
+    box-shadow: 0 0 0 0 rgba(15, 118, 110, 0.45);
+    animation: pulse-dot 1.4s var(--ease) infinite;
+  }
+  .pipe-step.is-done { color: var(--ink-soft); }
+  .pipe-step.is-done .pipe-dot { background: var(--success); animation: none; }
+
+  .loop-badge {
+    display: inline-flex;
+    align-items: center;
+    height: 24px;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--ink-soft);
+  }
+  .dock-toggle {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+    transition: background 140ms var(--ease), color 140ms var(--ease);
+  }
+  .dock-toggle:hover { background: var(--surface); color: var(--ink); }
+  .agent-dock.is-collapsed .dock-toggle svg { transform: rotate(180deg); }
+  .dock-toggle svg { transition: transform 200ms var(--ease); }
+
+  .dock-body {
+    display: grid;
+    grid-template-columns: 220px 1fr 220px;
+    gap: 12px;
+    padding: 12px 16px 14px;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .dock-col-title {
+    margin: 0 0 8px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  #agent-roster-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    overflow-y: auto;
+  }
+  .agent-card {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 8px;
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    border: 1px solid transparent;
+  }
+  .agent-card.is-running {
+    background: var(--accent-soft);
+    border-color: rgba(15, 118, 110, 0.18);
+  }
+  .agent-card.is-done { opacity: 0.85; }
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--idle);
+    flex-shrink: 0;
+  }
+  .agent-card.is-running .status-dot {
+    background: var(--accent-mid);
+    animation: pulse-dot 1.2s var(--ease) infinite;
+  }
+  .agent-card.is-done .status-dot { background: var(--success); animation: none; }
+  .agent-card.is-error .status-dot { background: var(--danger); }
+  .agent-name {
+    font-size: 12px;
+    font-weight: 600;
+    flex: 1;
+    min-width: 0;
+  }
+  .agent-role {
+    font-size: 10px;
+    color: var(--muted);
+    font-weight: 500;
+  }
+
+  #stream-box {
+    height: 100%;
+    margin: 0;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    background: var(--ink);
+    color: #c8cdd8;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.55;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  #stream-box .tag { color: var(--accent-mid); }
+  #stream-box .ts { color: #7a8499; }
+
+  #criteria-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    overflow-y: auto;
+  }
+  .criterion {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 4px 8px;
+    align-items: center;
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+  }
+  .criterion-name {
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .criterion-score {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--muted);
+  }
+  .criterion-score.is-pass { color: var(--success); }
+  .criterion-score.is-fail { color: var(--warn); }
+  .criterion-bar {
+    grid-column: 1 / -1;
+    height: 3px;
+    border-radius: 999px;
+    background: var(--mist);
+    overflow: hidden;
+  }
+  .criterion-bar > i {
+    display: block;
+    height: 100%;
+    width: 0;
+    background: var(--accent);
+    border-radius: inherit;
+    transition: width 400ms var(--ease);
+  }
+
+  .dock-footer-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  #resume-run-btn {
+    height: 28px;
+    padding: 0 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-strong);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    background: var(--surface-raised);
+  }
+  #resume-run-btn:hover { border-color: var(--accent); color: var(--accent); }
+  #resume-run-btn[hidden] { display: none !important; }
+
+  /* Command palette */
+  .palette-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(26, 31, 44, 0.28);
+    backdrop-filter: blur(4px);
+    z-index: 40;
+    display: grid;
+    place-items: start center;
+    padding-top: 14vh;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 160ms var(--ease);
+  }
+  .palette-backdrop.is-open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .palette {
+    width: min(480px, calc(100vw - 32px));
+    border-radius: 12px;
+    background: var(--surface-raised);
+    border: 1px solid var(--border-strong);
+    box-shadow: 0 16px 48px rgba(26, 31, 44, 0.18);
+    overflow: hidden;
+    transform: translateY(8px) scale(0.98);
+    transition: transform 180ms var(--ease);
+  }
+  .palette-backdrop.is-open .palette {
+    transform: translateY(0) scale(1);
+  }
+  .palette input {
+    width: 100%;
+    height: 48px;
+    padding: 0 16px;
+    border: none;
+    border-bottom: 1px solid var(--border);
+    font-size: 15px;
+    background: transparent;
+  }
+  .palette input:focus { outline: none; }
+  .palette-list {
+    list-style: none;
+    margin: 0;
+    padding: 6px;
+    max-height: 280px;
+    overflow-y: auto;
+  }
+  .palette-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    text-align: left;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .palette-item:hover,
+  .palette-item.is-active {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .palette-item kbd {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--muted);
+    padding: 2px 5px;
+    border-radius: 4px;
+    background: var(--surface);
+  }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: calc(var(--dock-h) + 16px);
+    right: 20px;
+    z-index: 30;
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    background: var(--ink);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 500;
+    box-shadow: var(--shadow-soft);
+    opacity: 0;
+    transform: translateY(8px);
+    pointer-events: none;
+    transition: opacity 180ms var(--ease), transform 180ms var(--ease);
+  }
+  .toast.is-show {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .agent-dock.is-collapsed ~ .toast,
+  body:has(.agent-dock.is-collapsed) .toast {
+    bottom: 60px;
+  }
+
+  @keyframes pulse-dot {
+    0% { box-shadow: 0 0 0 0 rgba(20, 184, 166, 0.45); }
+    70% { box-shadow: 0 0 0 8px rgba(20, 184, 166, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(20, 184, 166, 0); }
+  }
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @media (max-width: 1100px) {
+    .write-options { grid-template-columns: repeat(2, 1fr); }
+    .theme-grid { grid-template-columns: 1fr 1fr; }
+    .dock-body { grid-template-columns: 180px 1fr 180px; }
+    .progress-block { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 900px) {
+    :root { --sidebar-w: 200px; --dock-h: 280px; }
+    .center-scroll { padding: 20px 18px 24px; }
+    .brand-sub { display: none; }
+    .kbd-hint { display: none; }
+    .write-options { grid-template-columns: 1fr 1fr; }
+    .meta-grid { grid-template-columns: 1fr; }
+    .dock-body {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto 1fr auto;
+      overflow-y: auto;
+    }
+    #stream-box { min-height: 80px; }
+  }
+</style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header" data-od-id="header">
+      <div class="brand">
+        <div class="brand-mark">Quill<span>.</span></div>
+        <div class="brand-sub">Manuscript</div>
+      </div>
+      <div class="header-search">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>
+        </svg>
+        <input type="search" id="global-search" placeholder="Search books, chapters, briefs…" aria-label="Search" />
+      </div>
+      <div class="header-actions">
+        <span class="kbd-hint"><kbd>⌘</kbd><kbd>K</kbd></span>
+        <span id="mode-badge">Library</span>
+        <span id="health-pill"><span class="dot" aria-hidden="true"></span> Agents ready</span>
+        <button type="button" id="fire-btn" aria-label="Fire agents">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M13 2L4 14h7l-1 8 10-14h-7l1-6z"/>
+          </svg>
+          Fire agents
+        </button>
+      </div>
+    </header>
+
+    <div class="workspace">
+      <aside class="sidebar" data-od-id="sidebar">
+        <div class="sidebar-head">
+          <div class="sidebar-title">
+            <h2>Books</h2>
+          </div>
+          <div class="side-filter">
+            <input type="search" id="book-filter" placeholder="Filter…" aria-label="Filter books" />
+          </div>
+          <div class="side-actions">
+            <button type="button" id="new-book-btn">+ New Book</button>
+            <button type="button" id="new-chapter-btn">+ Chapter</button>
+          </div>
+        </div>
+        <ul id="books-list" aria-label="Book library"></ul>
+      </aside>
+
+      <main class="center" data-od-id="center">
+        <div class="center-scroll">
+          <!-- Dashboard -->
+          <div id="view-dashboard">
+            <section class="dash-hero" data-od-id="dash-hero">
+              <p class="dash-kicker">Quill Studio</p>
+              <h1>Continue where the manuscript left off.</h1>
+              <p>Compose a brief, fire the Plan → Research → Write → Judge loop, and revise on the page — a calm desk for chapter-by-chapter work.</p>
+              <div class="dash-ctas">
+                <button type="button" class="btn-primary" id="cta-continue">Continue draft</button>
+                <button type="button" class="btn-ghost" id="cta-brief">Open brief</button>
+                <button type="button" class="btn-ghost" id="cta-new-chapter">New chapter</button>
+              </div>
+            </section>
+
+            <section class="dash-section" data-od-id="recent-chapters">
+              <div class="section-head">
+                <h2>Recent chapters</h2>
+                <button type="button" class="linkish" id="see-all-chapters">Open library tree</button>
+              </div>
+              <div class="recent-list" id="recent-list"></div>
+            </section>
+
+            <section class="dash-section" data-od-id="book-progress">
+              <div class="section-head">
+                <h2>Book progress</h2>
+              </div>
+              <div class="progress-block">
+                <div>
+                  <h3 class="progress-book-name">Reinforcement Learning</h3>
+                  <p class="progress-meta">3 chapters · last edited today · Judge threshold 0.80</p>
+                  <div class="progress-track" aria-hidden="true"><div class="progress-fill" id="progress-fill"></div></div>
+                </div>
+                <div class="progress-stats">
+                  <div><strong>42%</strong><span>Drafted</span></div>
+                  <div><strong>1</strong><span>In review</span></div>
+                  <div><strong>6</strong><span>Loops</span></div>
+                </div>
+              </div>
+            </section>
+
+            <section class="dash-section" data-od-id="write-options">
+              <div class="section-head">
+                <h2>Write options</h2>
+              </div>
+              <div class="write-options">
+                <button type="button" class="write-opt" data-action="new-book">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+                  <strong>New book</strong>
+                  <span>Start a manuscript shelf</span>
+                </button>
+                <button type="button" class="write-opt" data-action="new-chapter">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>
+                  <strong>New chapter</strong>
+                  <span>Add to the open book</span>
+                </button>
+                <button type="button" class="write-opt" data-action="continue">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+                  <strong>Continue draft</strong>
+                  <span>Jump to Temporal Difference</span>
+                </button>
+                <button type="button" class="write-opt" data-action="brief">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+                  <strong>Open brief</strong>
+                  <span>Compose before firing</span>
+                </button>
+              </div>
+            </section>
+
+            <div class="empty-library" id="empty-library" hidden>
+              <h2>Your desk is clear</h2>
+              <p>Create a book to begin the Plan → Research → Write → Judge loop.</p>
+              <button type="button" class="btn-primary" id="empty-new-book">+ New book</button>
+            </div>
+          </div>
+
+          <!-- Write mode -->
+          <div id="view-write" hidden>
+            <div class="write-toolbar">
+              <div class="write-context">
+                <div class="crumb" id="write-crumb">Reinforcement Learning</div>
+                <h1 id="write-title">Temporal-Difference Learning</h1>
+              </div>
+              <div class="seg" role="tablist" aria-label="Write mode">
+                <button type="button" role="tab" id="tab-brief" class="is-active" aria-selected="true">Brief</button>
+                <button type="button" role="tab" id="tab-draft" aria-selected="false">Draft</button>
+              </div>
+            </div>
+
+            <div id="pane-brief">
+              <form id="agent-form" autocomplete="off">
+                <div>
+                  <span class="field-label">Writing goal</span>
+                  <div class="chip-row" id="goals-selector" role="group" aria-label="Writing goals">
+                    <button type="button" class="chip is-selected" data-goal="thought">Thought Leadership</button>
+                    <button type="button" class="chip" data-goal="deep">Technical Deep Dive</button>
+                    <button type="button" class="chip" data-goal="tutorial">Tutorial</button>
+                    <button type="button" class="chip" data-goal="narrative">Narrative Chapter</button>
+                    <button type="button" class="chip" data-goal="exec">Executive Brief</button>
+                  </div>
+                </div>
+
+                <div>
+                  <span class="field-label">Theme &amp; voice</span>
+                  <div class="theme-grid" id="themes-selector">
+                    <button type="button" class="theme-card is-selected" data-theme="editorial">
+                      <strong>Editorial Signal</strong>
+                      <span>Measured prose, precise claims</span>
+                    </button>
+                    <button type="button" class="theme-card" data-theme="technical">
+                      <strong>Technical Trace</strong>
+                      <span>Equations → intuition → code</span>
+                    </button>
+                    <button type="button" class="theme-card" data-theme="oreilly">
+                      <strong>O'Reilly Chapter</strong>
+                      <span>Textbook clarity, worked examples</span>
+                    </button>
+                    <button type="button" class="theme-card" data-theme="narrative">
+                      <strong>Narrative Pulse</strong>
+                      <span>Story-led motivation first</span>
+                    </button>
+                    <button type="button" class="theme-card" data-theme="agentic">
+                      <strong>Agentic Command</strong>
+                      <span>Imperative, system-aware</span>
+                    </button>
+                    <button type="button" class="theme-card" data-theme="crisp">
+                      <strong>Executive Crisp</strong>
+                      <span>Short paragraphs, decision-ready</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="meta-grid">
+                  <div class="meta-field">
+                    <label for="audience">Audience</label>
+                    <input id="audience" name="audience" type="text" value="Graduate ML students &amp; practitioners" />
+                  </div>
+                  <div class="meta-field">
+                    <label for="tone">Tone</label>
+                    <input id="tone" name="tone" type="text" value="Authoritative, patient, example-driven" />
+                  </div>
+                  <div class="meta-field">
+                    <label for="format">Format</label>
+                    <input id="format" name="format" type="text" value="Quarto chapter · Markdown + code" />
+                  </div>
+                  <div class="meta-field">
+                    <label for="length">Length</label>
+                    <input id="length" name="length" type="text" value="2,800–3,400 words" />
+                  </div>
+                </div>
+
+                <div class="brief-wrap">
+                  <label class="field-label" for="brief">Brief</label>
+                  <textarea id="brief" name="brief" placeholder="What should this chapter accomplish?">Write Chapter 3 on temporal-difference learning. Open with the credit-assignment problem, then derive TD(0) from the Bellman equation. Include a worked random-walk example, a short Python snippet for tabular TD, and a closing note on bias–variance tradeoffs versus Monte Carlo. Avoid soft exits — end with a concrete exercise for the reader.</textarea>
+                  <div class="brief-actions">
+                    <button type="button" class="btn-ghost" id="suggest-brief-btn">Suggest brief</button>
+                    <button type="button" class="btn-primary" id="brief-fire-btn">Fire agents</button>
+                  </div>
+                </div>
+              </form>
+            </div>
+
+            <div id="pane-draft" hidden>
+              <article id="article-canvas" contenteditable="true" spellcheck="true" aria-label="Chapter draft">
+                <div class="draft-meta">
+                  <code>quarto</code>
+                  <span>Chapter 3 · draft v0.4</span>
+                  <span>·</span>
+                  <span>Last agent pass: Writer</span>
+                </div>
+                <h2>Temporal-Difference Learning</h2>
+                <p class="lede">When a learner must improve estimates before an episode ends, Monte Carlo waits too long. Temporal-difference methods update from partial experience — bootstrapping value from value.</p>
+                <h3>The credit-assignment problem</h3>
+                <p>In sequential decision problems, reward often arrives long after the actions that produced it. Assigning credit to earlier states is the central difficulty of prediction and control. Monte Carlo methods resolve the issue by waiting for returns; temporal-difference (TD) methods resolve it by guessing.</p>
+                <div class="callout">TD methods combine the sampling of Monte Carlo with the bootstrapping of dynamic programming — and need neither a model nor a finished episode.</div>
+                <h3>TD(0) from the Bellman equation</h3>
+                <p>The Bellman equation for a state-value function under policy π expresses V<sup>π</sup>(s) in terms of the expected next reward and next state value. Replacing the expectation with a sample and the next-state value with the current estimate yields the TD(0) update:</p>
+                <pre>V(S_t) ← V(S_t) + α [ R_{t+1} + γ V(S_{t+1}) − V(S_t) ]</pre>
+                <h3>Random walk — worked sketch</h3>
+                <p>Consider a five-state random walk with absorbing terminals at either end. Starting from the center, every episode is a sequence of left/right steps until absorption. After a few dozen episodes of tabular TD(0), value estimates concentrate on the true probabilities of terminating right — without ever computing full returns.</p>
+                <h3>Exercise</h3>
+                <p>Implement tabular TD(0) for the random walk. Plot V after 1, 10, and 100 episodes. What happens when α is too large?</p>
+              </article>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <section class="agent-dock" id="agent-dock" data-od-id="agent-dock" aria-label="Agent status dock">
+      <div class="dock-bar">
+        <span class="dock-title">Agent status</span>
+        <div class="pipeline" id="pipeline" aria-label="Pipeline">
+          <span class="pipe-step" data-step="plan"><span class="pipe-dot"></span>Plan</span>
+          <span class="pipe-step" data-step="research"><span class="pipe-dot"></span>Research</span>
+          <span class="pipe-step" data-step="write"><span class="pipe-dot"></span>Write</span>
+          <span class="pipe-step" data-step="judge"><span class="pipe-dot"></span>Manage</span>
+        </div>
+        <span class="loop-badge" id="loop-badge">Loop 0 / 6</span>
+        <button type="button" class="dock-toggle" id="dock-toggle" aria-label="Collapse agent panel" aria-expanded="true">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+      </div>
+      <div class="dock-body">
+        <div>
+          <p class="dock-col-title">Roster</p>
+          <div id="agent-roster-grid"></div>
+          <div class="dock-footer-actions">
+            <button type="button" id="resume-run-btn" hidden>Resume run</button>
+          </div>
+        </div>
+        <div style="min-height:0;display:flex;flex-direction:column;">
+          <p class="dock-col-title">Live console</p>
+          <pre id="stream-box" aria-live="polite">[00:00:00] <span class="tag">READY</span> Waiting for Fire agents…</pre>
+        </div>
+        <div>
+          <p class="dock-col-title">Criteria</p>
+          <div id="criteria-grid"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="palette-backdrop" id="palette" hidden>
+    <div class="palette" role="dialog" aria-modal="true" aria-label="Command palette">
+      <input type="text" id="palette-input" placeholder="Type a command…" autocomplete="off" />
+      <ul class="palette-list" id="palette-list"></ul>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status"></div>
+
+  <script>
+(function () {
+  "use strict";
+
+  const BOOKS = [
+    {
+      id: "rl",
+      title: "Reinforcement Learning",
+      chapters: [
+        { id: "ch1", num: "01", title: "Introduction & MDP Formalism", status: "Done", updated: "2d ago" },
+        { id: "ch2", num: "02", title: "Monte Carlo Methods", status: "In review", updated: "Yesterday" },
+        { id: "ch3", num: "03", title: "Temporal-Difference Learning", status: "Drafting", updated: "Today" }
+      ]
+    },
+    {
+      id: "sys",
+      title: "Distributed Systems Notes",
+      chapters: [
+        { id: "s1", num: "01", title: "Consistency Models", status: "Outline", updated: "5d ago" }
+      ]
+    }
+  ];
+
+  const AGENTS = [
+    { id: "planner", name: "Planner", role: "Outline" },
+    { id: "research-a", name: "Research A", role: "Literature" },
+    { id: "research-b", name: "Research B", role: "Examples" },
+    { id: "research-c", name: "Research C", role: "Code" },
+    { id: "writer", name: "Writer", role: "Draft" },
+    { id: "judge", name: "Judge", role: "Score" }
+  ];
+
+  const CRITERIA = [
+    { id: "correct", name: "Correctness", target: 0.85 },
+    { id: "clarity", name: "Clarity", target: 0.80 },
+    { id: "help", name: "Helpfulness", target: 0.80 },
+    { id: "code", name: "Code + output", target: 0.75 },
+    { id: "visual", name: "Visual feedback", target: 0.70 },
+    { id: "pull", name: "Reader pull", target: 0.75 }
+  ];
+
+  const COMMANDS = [
+    { id: "new-book", label: "New book", kbd: "N B" },
+    { id: "new-chapter", label: "New chapter", kbd: "N C" },
+    { id: "fire", label: "Fire agents", kbd: "↵" },
+    { id: "toggle-dock", label: "Toggle agent panel", kbd: "\\" },
+    { id: "dashboard", label: "Go to dashboard", kbd: "G D" }
+  ];
+
+  const CHAPTER_COPY = {
+    ch1: {
+      crumb: "Reinforcement Learning",
+      title: "Introduction & MDP Formalism",
+      brief: "Open the book with agents, environments, and the MDP tuple. Define states, actions, rewards, and the Markov property with one concrete gridworld. End with a forward reference to value functions.",
+      draftTitle: "Introduction & MDP Formalism",
+      lede: "Reinforcement learning studies how an agent improves behavior from interaction. The Markov decision process is the mathematical stage on which that drama plays."
+    },
+    ch2: {
+      crumb: "Reinforcement Learning",
+      title: "Monte Carlo Methods",
+      brief: "Explain Monte Carlo estimation of value from complete episode returns. Contrast first-visit and every-visit estimators. Include a blackjack vignette and note the variance cost of waiting for termination.",
+      draftTitle: "Monte Carlo Methods",
+      lede: "When the model is unknown but episodes terminate, Monte Carlo methods estimate values from sampled returns — patient, unbiased, and often noisy."
+    },
+    ch3: {
+      crumb: "Reinforcement Learning",
+      title: "Temporal-Difference Learning",
+      brief: "Write Chapter 3 on temporal-difference learning. Open with the credit-assignment problem, then derive TD(0) from the Bellman equation. Include a worked random-walk example, a short Python snippet for tabular TD, and a closing note on bias–variance tradeoffs versus Monte Carlo. Avoid soft exits — end with a concrete exercise for the reader.",
+      draftTitle: "Temporal-Difference Learning",
+      lede: "When a learner must improve estimates before an episode ends, Monte Carlo waits too long. Temporal-difference methods update from partial experience — bootstrapping value from value."
+    },
+    s1: {
+      crumb: "Distributed Systems Notes",
+      title: "Consistency Models",
+      brief: "Survey linearizability, sequential consistency, and causal consistency with one diagram placeholder and practical failure examples.",
+      draftTitle: "Consistency Models",
+      lede: "Consistency models tell programmers what they may assume when replicas diverge. The strongest guarantees are also the most expensive under partition."
+    }
+  };
+
+  const state = {
+    selectedChapterId: null,
+    expanded: new Set(["rl"]),
+    writePane: "brief",
+    running: false,
+    dockCollapsed: false,
+    loop: 0,
+    filter: "",
+    paletteIndex: 0
+  };
+
+  const el = {
+    booksList: document.getElementById("books-list"),
+    bookFilter: document.getElementById("book-filter"),
+    viewDash: document.getElementById("view-dashboard"),
+    viewWrite: document.getElementById("view-write"),
+    modeBadge: document.getElementById("mode-badge"),
+    healthPill: document.getElementById("health-pill"),
+    fireBtn: document.getElementById("fire-btn"),
+    briefFire: document.getElementById("brief-fire-btn"),
+    dock: document.getElementById("agent-dock"),
+    dockToggle: document.getElementById("dock-toggle"),
+    roster: document.getElementById("agent-roster-grid"),
+    stream: document.getElementById("stream-box"),
+    criteria: document.getElementById("criteria-grid"),
+    loopBadge: document.getElementById("loop-badge"),
+    resumeBtn: document.getElementById("resume-run-btn"),
+    pipeline: document.getElementById("pipeline"),
+    tabBrief: document.getElementById("tab-brief"),
+    tabDraft: document.getElementById("tab-draft"),
+    paneBrief: document.getElementById("pane-brief"),
+    paneDraft: document.getElementById("pane-draft"),
+    writeCrumb: document.getElementById("write-crumb"),
+    writeTitle: document.getElementById("write-title"),
+    brief: document.getElementById("brief"),
+    recentList: document.getElementById("recent-list"),
+    palette: document.getElementById("palette"),
+    paletteInput: document.getElementById("palette-input"),
+    paletteList: document.getElementById("palette-list"),
+    toast: document.getElementById("toast"),
+    article: document.getElementById("article-canvas")
+  };
+
+  function toast(msg) {
+    el.toast.textContent = msg;
+    el.toast.classList.add("is-show");
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => el.toast.classList.remove("is-show"), 2200);
+  }
+
+  function pad(n) { return String(n).padStart(2, "0"); }
+  function stamp(sec) {
+    const h = pad(Math.floor(sec / 3600));
+    const m = pad(Math.floor((sec % 3600) / 60));
+    const s = pad(sec % 60);
+    return `${h}:${m}:${s}`;
+  }
+
+  function findChapter(id) {
+    for (const book of BOOKS) {
+      const ch = book.chapters.find((c) => c.id === id);
+      if (ch) return { book, ch };
+    }
+    return null;
+  }
+
+  function renderBooks() {
+    const q = state.filter.trim().toLowerCase();
+    el.booksList.innerHTML = "";
+    BOOKS.forEach((book, bookIdx) => {
+      const chapters = book.chapters.filter((c) =>
+        !q || book.title.toLowerCase().includes(q) || c.title.toLowerCase().includes(q)
+      );
+      if (q && !chapters.length && !book.title.toLowerCase().includes(q)) return;
+
+      const li = document.createElement("li");
+      li.className = "book-item" + (state.expanded.has(book.id) ? " is-expanded" : "");
+      li.dataset.bookId = book.id;
+
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "book-row" + (state.expanded.has(book.id) ? " is-open" : "");
+      row.innerHTML = `
+        <span class="disclose" aria-hidden="true">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5l10 7-10 7z"/></svg>
+        </span>
+        <span class="book-title">${book.title}</span>
+        <span class="book-meta">${book.chapters.length}</span>
+      `;
+      row.addEventListener("click", () => {
+        if (state.expanded.has(book.id)) state.expanded.delete(book.id);
+        else state.expanded.add(book.id);
+        renderBooks();
+      });
+
+      const ul = document.createElement("ul");
+      ul.className = "chapter-list";
+      if (book.id === "rl" || bookIdx === 0) ul.id = "book-chapter-list";
+      (q ? chapters : book.chapters).forEach((ch) => {
+        const cli = document.createElement("li");
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "chapter-btn" + (state.selectedChapterId === ch.id ? " is-active" : "");
+        btn.innerHTML = `<span class="ch-num">${ch.num}</span><span>${ch.title}</span>`;
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          selectChapter(ch.id, "brief");
+        });
+        cli.appendChild(btn);
+        ul.appendChild(cli);
+      });
+
+      li.appendChild(row);
+      li.appendChild(ul);
+      el.booksList.appendChild(li);
+    });
+  }
+
+  function renderRecent() {
+    const rows = [];
+    BOOKS.forEach((book) => {
+      book.chapters.forEach((ch) => rows.push({ book, ch }));
+    });
+    rows.sort((a, b) => {
+      const order = { Today: 0, Yesterday: 1, "2d ago": 2, "5d ago": 3 };
+      return (order[a.ch.updated] ?? 9) - (order[b.ch.updated] ?? 9);
+    });
+    el.recentList.innerHTML = "";
+    rows.slice(0, 4).forEach(({ book, ch }) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "recent-row";
+      const statusClass = ch.status === "Drafting" ? "drafting" : "";
+      btn.innerHTML = `
+        <span>
+          <span class="recent-title">${ch.title}</span>
+          <span class="recent-book">${book.title}</span>
+        </span>
+        <span class="recent-status ${statusClass}">${ch.status}</span>
+        <span class="recent-time">${ch.updated}</span>
+      `;
+      btn.addEventListener("click", () => selectChapter(ch.id, "draft"));
+      el.recentList.appendChild(btn);
+    });
+  }
+
+  function renderRoster(statuses) {
+    el.roster.innerHTML = "";
+    AGENTS.forEach((a) => {
+      const st = (statuses && statuses[a.id]) || "idle";
+      const card = document.createElement("div");
+      card.className = "agent-card" + (st === "running" || st === "streaming" ? " is-running" : "") + (st === "done" ? " is-done" : "");
+      card.innerHTML = `
+        <span class="status-dot" aria-hidden="true"></span>
+        <span class="agent-name">${a.name}</span>
+        <span class="agent-role">${st === "idle" ? a.role : st}</span>
+      `;
+      el.roster.appendChild(card);
+    });
+  }
+
+  function renderCriteria(scores) {
+    el.criteria.innerHTML = "";
+    CRITERIA.forEach((c) => {
+      const score = scores ? scores[c.id] : null;
+      const row = document.createElement("div");
+      row.className = "criterion";
+      let scoreClass = "";
+      let scoreText = "—";
+      let width = 0;
+      if (score != null) {
+        scoreText = score.toFixed(2);
+        scoreClass = score >= c.target ? "is-pass" : "is-fail";
+        width = Math.round(score * 100);
+      }
+      row.innerHTML = `
+        <span class="criterion-name">${c.name}</span>
+        <span class="criterion-score ${scoreClass}">${scoreText}<span style="color:var(--muted);font-weight:400"> / ${c.target.toFixed(2)}</span></span>
+        <div class="criterion-bar"><i style="width:${width}%"></i></div>
+      `;
+      el.criteria.appendChild(row);
+    });
+  }
+
+  function setPipeline(active, doneThrough) {
+    const steps = ["plan", "research", "write", "judge"];
+    el.pipeline.querySelectorAll(".pipe-step").forEach((node) => {
+      const key = node.dataset.step;
+      node.classList.remove("is-active", "is-done");
+      const idx = steps.indexOf(key);
+      if (doneThrough >= 0 && idx <= doneThrough) node.classList.add("is-done");
+      if (active && key === active) {
+        node.classList.remove("is-done");
+        node.classList.add("is-active");
+      }
+    });
+  }
+
+  function showDashboard() {
+    state.selectedChapterId = null;
+    el.viewDash.hidden = false;
+    el.viewWrite.hidden = true;
+    el.modeBadge.textContent = "Library";
+    renderBooks();
+  }
+
+  function selectChapter(id, pane) {
+    const found = findChapter(id);
+    if (!found) return;
+    state.selectedChapterId = id;
+    state.expanded.add(found.book.id);
+    state.writePane = pane || "brief";
+    el.viewDash.hidden = true;
+    el.viewWrite.hidden = false;
+    el.modeBadge.textContent = "Writing";
+
+    const copy = CHAPTER_COPY[id] || {
+      crumb: found.book.title,
+      title: found.ch.title,
+      brief: "",
+      draftTitle: found.ch.title,
+      lede: ""
+    };
+    el.writeCrumb.textContent = copy.crumb;
+    el.writeTitle.textContent = copy.title;
+    el.brief.value = copy.brief;
+
+    if (copy.lede) {
+      const h2 = el.article.querySelector("h2");
+      const lede = el.article.querySelector(".lede");
+      if (h2) h2.textContent = copy.draftTitle;
+      if (lede) lede.textContent = copy.lede;
+    }
+
+    setWritePane(state.writePane);
+    renderBooks();
+  }
+
+  function setWritePane(pane) {
+    state.writePane = pane;
+    const brief = pane === "brief";
+    el.tabBrief.classList.toggle("is-active", brief);
+    el.tabDraft.classList.toggle("is-active", !brief);
+    el.tabBrief.setAttribute("aria-selected", brief ? "true" : "false");
+    el.tabDraft.setAttribute("aria-selected", !brief ? "true" : "false");
+    el.paneBrief.hidden = !brief;
+    el.paneDraft.hidden = brief;
+  }
+
+  function setDockCollapsed(collapsed) {
+    state.dockCollapsed = collapsed;
+    el.dock.classList.toggle("is-collapsed", collapsed);
+    el.dockToggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    el.dockToggle.setAttribute("aria-label", collapsed ? "Expand agent panel" : "Collapse agent panel");
+  }
+
+  function appendStream(sec, tag, msg) {
+    const line = document.createElement("div");
+    line.innerHTML = `<span class="ts">[${stamp(sec)}]</span> <span class="tag">${tag}</span> ${msg}`;
+    el.stream.appendChild(line);
+    el.stream.scrollTop = el.stream.scrollHeight;
+  }
+
+  function sleep(ms) {
+    return new Promise((r) => setTimeout(r, ms));
+  }
+
+  async function fireAgents() {
+    if (state.running) return;
+    if (!state.selectedChapterId) {
+      selectChapter("ch3", "brief");
+    }
+    setDockCollapsed(false);
+    state.running = true;
+    state.loop = 1;
+    el.loopBadge.textContent = "Loop 1 / 6";
+    el.fireBtn.classList.add("is-running");
+    el.fireBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Running…`;
+    el.healthPill.innerHTML = `<span class="dot"></span> Run active`;
+    el.resumeBtn.hidden = true;
+    el.stream.textContent = "";
+    renderCriteria(null);
+    setPipeline(null, -1);
+
+    const script = [
+      { t: 0, tag: "PLAN", msg: "Planner opened brief · goal=Thought Leadership", agents: { planner: "running" }, pipe: "plan", done: -1 },
+      { t: 1, tag: "PLAN", msg: "Outline: credit-assignment → TD(0) → random walk → exercise", agents: { planner: "streaming" }, pipe: "plan", done: -1 },
+      { t: 2, tag: "PLAN", msg: "Planner done · 4 section targets", agents: { planner: "done" }, pipe: "plan", done: 0 },
+      { t: 3, tag: "RESEARCH", msg: "Spawning Research A/B/C", agents: { planner: "done", "research-a": "running", "research-b": "running", "research-c": "running" }, pipe: "research", done: 0 },
+      { t: 5, tag: "RESEARCH", msg: "A: Sutton & Barto §6.1–6.2 excerpts indexed", agents: { planner: "done", "research-a": "streaming", "research-b": "running", "research-c": "running" }, pipe: "research", done: 0 },
+      { t: 7, tag: "RESEARCH", msg: "B: random-walk diagram + value table stub", agents: { planner: "done", "research-a": "done", "research-b": "streaming", "research-c": "running" }, pipe: "research", done: 0 },
+      { t: 8, tag: "RESEARCH", msg: "C: tabular TD(0) Python skeleton ready", agents: { planner: "done", "research-a": "done", "research-b": "done", "research-c": "streaming" }, pipe: "research", done: 0 },
+      { t: 9, tag: "RESEARCH", msg: "Research pack sealed", agents: { planner: "done", "research-a": "done", "research-b": "done", "research-c": "done" }, pipe: "research", done: 1 },
+      { t: 10, tag: "WRITE", msg: "Writer composing Quarto draft…", agents: { planner: "done", "research-a": "done", "research-b": "done", "research-c": "done", writer: "running" }, pipe: "write", done: 1 },
+      { t: 12, tag: "WRITE", msg: "Streaming § credit-assignment + TD(0) derivation", agents: { planner: "done", "research-a": "done", "research-b": "done", "research-c": "done", writer: "streaming" }, pipe: "write", done: 1 },
+      { t: 14, tag: "WRITE", msg: "Draft v0.5 written · 3,120 words", agents: { planner: "done", "research-a": "done", "research-b": "done", "research-c": "done", writer: "done" }, pipe: "write", done: 2 },
+      { t: 15, tag: "JUDGE", msg: "Judge scoring against criteria…", agents: { planner: "done", "research-a": "done", "research-b": "done", "research-c": "done", writer: "done", judge: "running" }, pipe: "judge", done: 2 },
+      { t: 17, tag: "JUDGE", msg: "Scores ready · threshold gate", agents: { planner: "done", "research-a": "done", "research-b": "done", "research-c": "done", writer: "done", judge: "done" }, pipe: "judge", done: 3, scores: { correct: 0.91, clarity: 0.86, help: 0.84, code: 0.78, visual: 0.72, pull: 0.81 } }
+    ];
+
+    let lastAgents = {};
+    for (let i = 0; i < script.length; i++) {
+      if (!state.running) break;
+      const step = script[i];
+      const prevT = i === 0 ? 0 : script[i - 1].t;
+      await sleep((step.t - prevT) * 420);
+      if (!state.running) break;
+      lastAgents = step.agents;
+      renderRoster(step.agents);
+      setPipeline(step.pipe, step.done);
+      appendStream(step.t, step.tag, step.msg);
+      if (step.scores) renderCriteria(step.scores);
+    }
+
+    state.running = false;
+    el.fireBtn.classList.remove("is-running");
+    el.fireBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L4 14h7l-1 8 10-14h-7l1-6z"/></svg> Fire agents`;
+    el.healthPill.innerHTML = `<span class="dot"></span> Agents ready`;
+    el.resumeBtn.hidden = false;
+    setWritePane("draft");
+    toast("Run complete — draft updated");
+  }
+
+  function newBook() {
+    const n = BOOKS.length + 1;
+    BOOKS.push({
+      id: "book-" + n,
+      title: "Untitled Manuscript " + n,
+      chapters: [{ id: "book-" + n + "-c1", num: "01", title: "Chapter 1", status: "Outline", updated: "Just now" }]
+    });
+    state.expanded.add("book-" + n);
+    renderBooks();
+    renderRecent();
+    toast("Book created");
+  }
+
+  function newChapter() {
+    const book = BOOKS.find((b) => state.expanded.has(b.id)) || BOOKS[0];
+    if (!book) return;
+    const num = String(book.chapters.length + 1).padStart(2, "0");
+    const id = book.id + "-c" + (book.chapters.length + 1);
+    book.chapters.push({ id, num, title: "Untitled chapter", status: "Outline", updated: "Just now" });
+    CHAPTER_COPY[id] = {
+      crumb: book.title,
+      title: "Untitled chapter",
+      brief: "",
+      draftTitle: "Untitled chapter",
+      lede: "Begin the chapter here."
+    };
+    state.expanded.add(book.id);
+    renderBooks();
+    renderRecent();
+    selectChapter(id, "brief");
+    toast("Chapter added");
+  }
+
+  /* Palette */
+  function openPalette() {
+    el.palette.hidden = false;
+    requestAnimationFrame(() => el.palette.classList.add("is-open"));
+    el.paletteInput.value = "";
+    state.paletteIndex = 0;
+    renderPalette();
+    el.paletteInput.focus();
+  }
+  function closePalette() {
+    el.palette.classList.remove("is-open");
+    setTimeout(() => { el.palette.hidden = true; }, 160);
+  }
+  function filteredCommands() {
+    const q = el.paletteInput.value.trim().toLowerCase();
+    return COMMANDS.filter((c) => !q || c.label.toLowerCase().includes(q));
+  }
+  function renderPalette() {
+    const items = filteredCommands();
+    if (state.paletteIndex >= items.length) state.paletteIndex = 0;
+    el.paletteList.innerHTML = "";
+    items.forEach((c, i) => {
+      const li = document.createElement("li");
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "palette-item" + (i === state.paletteIndex ? " is-active" : "");
+      btn.innerHTML = `<span>${c.label}</span><kbd>${c.kbd}</kbd>`;
+      btn.addEventListener("click", () => runCommand(c.id));
+      li.appendChild(btn);
+      el.paletteList.appendChild(li);
+    });
+  }
+  function runCommand(id) {
+    closePalette();
+    if (id === "new-book") newBook();
+    else if (id === "new-chapter") newChapter();
+    else if (id === "fire") fireAgents();
+    else if (id === "toggle-dock") setDockCollapsed(!state.dockCollapsed);
+    else if (id === "dashboard") showDashboard();
+  }
+
+  /* Chips / themes */
+  document.getElementById("goals-selector").addEventListener("click", (e) => {
+    const chip = e.target.closest(".chip");
+    if (!chip) return;
+    document.querySelectorAll("#goals-selector .chip").forEach((c) => c.classList.remove("is-selected"));
+    chip.classList.add("is-selected");
+  });
+  document.getElementById("themes-selector").addEventListener("click", (e) => {
+    const card = e.target.closest(".theme-card");
+    if (!card) return;
+    document.querySelectorAll("#themes-selector .theme-card").forEach((c) => c.classList.remove("is-selected"));
+    card.classList.add("is-selected");
+  });
+
+  document.getElementById("suggest-brief-btn").addEventListener("click", () => {
+    el.brief.value = "Derive TD(0) carefully, then show the random-walk intuition before any code. Prefer one crisp figure description over three. Close with an exercise that forces the reader to tune α.";
+    toast("Brief suggestion applied");
+  });
+
+  el.fireBtn.addEventListener("click", fireAgents);
+  el.briefFire.addEventListener("click", (e) => { e.preventDefault(); fireAgents(); });
+  document.getElementById("agent-form").addEventListener("submit", (e) => { e.preventDefault(); fireAgents(); });
+
+  el.dockToggle.addEventListener("click", () => setDockCollapsed(!state.dockCollapsed));
+  el.resumeBtn.addEventListener("click", fireAgents);
+
+  el.tabBrief.addEventListener("click", () => setWritePane("brief"));
+  el.tabDraft.addEventListener("click", () => setWritePane("draft"));
+
+  el.bookFilter.addEventListener("input", () => {
+    state.filter = el.bookFilter.value;
+    renderBooks();
+  });
+
+  document.getElementById("new-book-btn").addEventListener("click", newBook);
+  document.getElementById("new-chapter-btn").addEventListener("click", newChapter);
+  document.getElementById("empty-new-book").addEventListener("click", newBook);
+  document.getElementById("cta-continue").addEventListener("click", () => selectChapter("ch3", "draft"));
+  document.getElementById("cta-brief").addEventListener("click", () => selectChapter("ch3", "brief"));
+  document.getElementById("cta-new-chapter").addEventListener("click", newChapter);
+  document.getElementById("see-all-chapters").addEventListener("click", () => {
+    state.expanded.add("rl");
+    renderBooks();
+    toast("Library tree expanded");
+  });
+
+  document.querySelectorAll(".write-opt").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const a = btn.dataset.action;
+      if (a === "new-book") newBook();
+      else if (a === "new-chapter") newChapter();
+      else if (a === "continue") selectChapter("ch3", "draft");
+      else if (a === "brief") selectChapter("ch3", "brief");
+    });
+  });
+
+  document.addEventListener("keydown", (e) => {
+    const meta = e.metaKey || e.ctrlKey;
+    if (meta && e.key.toLowerCase() === "k") {
+      e.preventDefault();
+      if (!el.palette.hidden && el.palette.classList.contains("is-open")) closePalette();
+      else openPalette();
+      return;
+    }
+    if (e.key === "Escape" && el.palette.classList.contains("is-open")) {
+      closePalette();
+      return;
+    }
+    if (el.palette.classList.contains("is-open")) {
+      const items = filteredCommands();
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        state.paletteIndex = (state.paletteIndex + 1) % Math.max(items.length, 1);
+        renderPalette();
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        state.paletteIndex = (state.paletteIndex - 1 + items.length) % Math.max(items.length, 1);
+        renderPalette();
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        if (items[state.paletteIndex]) runCommand(items[state.paletteIndex].id);
+      }
+    }
+  });
+
+  el.palette.addEventListener("click", (e) => {
+    if (e.target === el.palette) closePalette();
+  });
+  el.paletteInput.addEventListener("input", () => {
+    state.paletteIndex = 0;
+    renderPalette();
+  });
+
+  /* Init */
+  renderBooks();
+  renderRecent();
+  renderRoster({});
+  renderCriteria(null);
+  setPipeline(null, -1);
+})();
+  </script>
+</body>
+</html>
