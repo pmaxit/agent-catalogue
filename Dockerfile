@@ -24,6 +24,8 @@ RUN npm install --omit=dev \
 COPY --from=build /app/dist ./dist
 COPY config ./config
 COPY public ./public
+# Mandatory writing style guide read at runtime by src/style-guide.ts
+COPY data/style.md ./data/style.md
 RUN mkdir -p /data
 EXPOSE 8080
 CMD ["node", "dist/server.js"]

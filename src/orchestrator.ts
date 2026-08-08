@@ -1,6 +1,7 @@
 import type { CursorClient } from "./cursor-client.js";
 import { buildFlowMxfile } from "./diagrams.js";
 import { analyzeDraftHeuristics, enforceStrictJudgment } from "./judge.js";
+import { loadStyleGuide } from "./style-guide.js";
 import { renderTemplate } from "./template.js";
 import { isOreillyChapterTheme, resolveThemePlaybook } from "./themes.js";
 import type {
@@ -165,6 +166,10 @@ export class WritingOrchestrator {
     if (options.resume?.state && typeof options.resume.state === "object") {
       Object.assign(state, options.resume.state);
     }
+
+    // Always re-read the style guide (even on resume) so agents follow the
+    // current data/style.md, which the manager judges style fidelity against.
+    state.style_guide = loadStyleGuide();
 
     let iteration =
       typeof options.resume?.iteration === "number" &&
@@ -1197,6 +1202,7 @@ ${feedback ? `\n<!-- addressed feedback: ${feedback.slice(0, 200)} -->` : ""}
             code_output: 0.9,
             visual_feedback: 0.9,
             addictive: 0.85,
+            style_fidelity: 0.995,
           },
           passed: true,
           route: "done",
@@ -1222,6 +1228,7 @@ ${feedback ? `\n<!-- addressed feedback: ${feedback.slice(0, 200)} -->` : ""}
       visual_feedback:
         report.hasDrawio && report.hasImageBrief ? 0.9 : 0.4,
       addictive: report.hasAddictiveHooks ? 0.86 : 0.45,
+      style_fidelity: draftSection && chapterOk ? 0.995 : 0.5,
     };
     const thresholds: Record<string, number> = {
       correctness: 0.85,
@@ -1230,6 +1237,7 @@ ${feedback ? `\n<!-- addressed feedback: ${feedback.slice(0, 200)} -->` : ""}
       code_output: 0.85,
       visual_feedback: 0.85,
       addictive: 0.8,
+      style_fidelity: 0.99,
     };
     const passed = Object.entries(scores).every(
       ([k, s]) => s >= (thresholds[k] ?? 0.85),

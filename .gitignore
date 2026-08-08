@@ -5,4 +5,7 @@ dist/
 *.log
 .DS_Store
 .railway/
-data/
+# Ignore local data (DBs, renders, PDFs) but keep the mandatory style guide,
+# which is read at runtime and must be uploaded/deployed with the app.
+data/*
+!data/style.md
