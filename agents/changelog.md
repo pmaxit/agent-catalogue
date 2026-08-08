@@ -27,6 +27,23 @@ Append-only log for agent work in this repository.
 
 ---
 
+## 2026-08-08 15:30 UTC - Set up Cursor Cloud dev environment
+- Summary:
+  - Documented Cursor Cloud dev setup: mock mode, required `.env` for `npm run dev`, local-vs-prod persistence gotcha, and health/pipeline endpoints.
+  - Configured startup update script (`npm install`; create `.env` from `.env.example` if missing). No application code changed.
+- Files:
+  - AGENTS.md
+  - agents/changelog.md
+- Validation:
+  - `npm run typecheck` -> pass
+  - `npm test` -> pass (29/29)
+  - `npm run build` -> pass
+  - `npm run dev` -> server listening on :8080 (mock mode); `GET /api/health` ok; `POST /api/run` streamed full pipeline to `pipeline_finished`; Studio UI generated a draft end-to-end.
+- Deployment:
+  - not deployed
+
+---
+
 ## 2026-08-08 14:08 UTC - Wire Option C Library Dashboard into live Studio
 - Summary:
   - Replaced macOS Studio chrome with Option C (Library Dashboard): mint tokens, dashboard-first home, book write workspace with chapter nav + Brief/Draft tabs, and a bottom agent dock for pipeline/roster/stream/scores.

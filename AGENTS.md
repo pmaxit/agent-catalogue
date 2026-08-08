@@ -95,6 +95,15 @@ before claiming task completion.
      - `curl https://writing-agent-production-b61f.up.railway.app/api/health`
 - If model-related runtime issues appear, inspect startup logs for suggest model validation and `/v1/models` compatibility.
 
+## Cursor Cloud specific instructions
+
+Standard commands live in "Development Commands" above (`npm install`, `npm run dev`, `npm run typecheck`, `npm test`, `npm run build`, `npm start`). The update script already runs `npm install` on startup. Non-obvious caveats:
+
+- Mock mode: with no `CURSOR_API_KEY`, the app runs fully offline in mock mode. The whole pipeline (`plan -> research -> write -> manage`) executes and returns a generated draft with zero external calls, so it is safe to test locally without any secrets. Set `CURSOR_API_KEY` (and `GEMINI_API_KEY` for live brief suggestions) in `.env` only when you need live provider calls.
+- `.env` is required to start dev: `npm run dev` runs `tsx watch --env-file=.env ...`, which errors if `.env` is missing. `.env` is gitignored, so the update script recreates it from `.env.example` when absent. `npm start` (built app) does not require `.env`.
+- Persistence gotcha — local dev proxies to PRODUCTION by default: with no Railway env vars, `remoteData` is `true` and `dataApiBase` points at the production Railway URL, so Publish/Save of books/chapters/articles writes to production. Generating/previewing a draft via the pipeline does NOT persist and is safe. To persist fully locally instead, set `RAILWAY_ENVIRONMENT=local` (makes `remoteData:false`, same-origin SQLite) plus optionally `QUILL_DB_PATH=./data/quill-local.db`. Avoid clicking Publish/Save during local testing unless you intend to hit prod.
+- Server binds `0.0.0.0` on `PORT` (default `8080`). Verify liveness/mode via `GET /api/health`; core pipeline is `POST /api/run` (SSE stream). There is no separate lint step — `npm run typecheck` is the type/lint gate.
+
 ## Mandatory Handoff Rule
 
 Every change must be recorded in `agents/changelog.md` before finishing work.
