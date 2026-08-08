@@ -4,154 +4,119 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>Quill Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Geist+Mono:wght@500;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="/tokens.css"/>
 <link rel="stylesheet" href="/styles.css"/>
 </head>
 <body class="page-studio">
-<div class="mac-app" id="appWindow">
-  <div class="toolbar">
-    <div class="toolbar-cluster">
-      <a class="rail-brand" href="/" title="Quill home" aria-label="Quill home">
-        <span class="doc-icon">Q</span>
-      </a>
-      <div class="toolbar-sep"></div>
-      <button type="button" class="btn-mac ghost icon-only" id="toggleSidebar" title="Toggle sidebar" aria-label="Toggle sidebar">
-        <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="3" width="16" height="14" rx="2"/><path d="M7 3v14"/></svg>
-      </button>
-      <div class="toolbar-sep"></div>
-      <label class="search-wrap" for="studio-search">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M21 21l-4.2-4.2"/></svg>
-        <input id="studio-search" type="search" placeholder="Search books, goals…"/>
-      </label>
+<div class="mac-app app" id="appWindow">
+  <header class="topbar">
+    <button type="button" class="brand" id="brand-home" aria-label="Quill library home">
+      <span class="brand-mark" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 12.5L8.2 2.5h1.4L4.4 12.5H3zm4.2 0L12.4 2.5H14L8.8 12.5H7.2z" fill="#18E299"/></svg>
+      </span>
+      <span class="brand-word">Quill<em>.</em></span>
+    </button>
+    <div class="topbar-spacer"></div>
+    <button type="button" class="cmd-hint" id="cmd-open" aria-label="Open command palette">
+      <span>Search books, commands…</span>
+      <kbd>⌘K</kbd>
+    </button>
+    <div class="top-actions">
+      <span id="mode-badge">Library</span>
+      <span id="model-badge" class="mono-stamp muted" hidden>—</span>
+      <span id="health-pill"><span class="dot" aria-hidden="true"></span>Checking…</span>
+      <button type="button" class="btn btn-ghost sm" id="resume-run-btn" hidden disabled><span>Resume run</span></button>
+      <button type="submit" form="agent-form" class="btn btn-accent" id="fire-btn"><span>Fire agents</span></button>
     </div>
+  </header>
 
-    <div class="toolbar-cluster center">
-      <div class="segmented" id="mainSeg" role="tablist" aria-label="Studio views">
-        <button type="button" class="active" role="tab" aria-selected="true" data-center-tab="brief">Brief</button>
-        <button type="button" role="tab" aria-selected="false" data-center-tab="pipeline">Pipeline</button>
-        <button type="button" role="tab" aria-selected="false" data-center-tab="draft">Draft</button>
-      </div>
-      <span class="status-pill" id="health-pill">Checking…</span>
-    </div>
-
-    <div class="toolbar-cluster end">
-      <span class="kbd" title="Command palette">⌘K</span>
-      <div class="toolbar-sep"></div>
-      <button type="button" class="btn-mac ghost" id="resume-run-btn" hidden disabled>
-        <span>Resume run</span>
-      </button>
-      <button type="submit" form="agent-form" class="btn-mac primary" id="fire-btn">
-        <span>Fire agents</span>
-      </button>
-    </div>
-  </div>
-
-  <div class="studio-shell workspace">
-    <aside class="sidebar sidebar-ab" id="sidebar" aria-label="Library">
-      <nav class="activity-rail" aria-hidden="true">
-        <button type="button" class="rail-btn active" data-activity="library" aria-pressed="true">Books</button>
-        <button type="button" class="rail-btn" data-activity="compose" aria-pressed="false">Write</button>
-        <button type="button" class="rail-btn" data-activity="run" aria-pressed="false">Run</button>
-      </nav>
-
-      <div class="sidebar-drawer" id="sidebar-drawer">
-        <section class="drawer-panel" data-panel="library" id="drawer-library">
-          <div class="sidebar-search">
-            <div class="search-wrap">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M21 21l-4.2-4.2"/></svg>
-              <input id="sidebar-filter" type="search" placeholder="Filter source list…"/>
-            </div>
+  <main class="stage" id="stage">
+    <!-- LIBRARY DASHBOARD -->
+    <div id="view-dashboard" class="view-dashboard">
+      <div class="dash">
+        <header class="hero">
+          <p class="hero-brand">Quill Studio</p>
+          <h1>Your books</h1>
+          <p>A calm home for multi-agent drafting — pick a book, resume a chapter, or fire the pipeline.</p>
+          <div class="cta-row">
+            <button type="button" class="btn btn-primary" id="btn-new-book">New book</button>
+            <button type="button" class="btn btn-ghost" id="btn-continue">Continue writing</button>
+            <button type="button" class="btn btn-accent" id="fire-btn-dash">Fire agents</button>
           </div>
+        </header>
 
+        <div class="section-head">
+          <h2>Library</h2>
           <div class="library-tabs" role="tablist" aria-label="Library">
             <button type="button" class="library-tab active" role="tab" data-lib-tab="books" aria-selected="true">Books</button>
             <button type="button" class="library-tab" role="tab" data-lib-tab="articles" aria-selected="false">Articles</button>
           </div>
-
-          <div class="sidebar-scroll">
-            <div id="books-list" class="library-pane" data-lib-pane="books" aria-live="polite">
-              <p class="side-hint">Loading…</p>
-            </div>
-            <div id="articles-list" class="library-pane" data-lib-pane="articles" hidden>
-              <p class="side-hint">Loading…</p>
-            </div>
-
-            <div class="book-context-bar" id="book-rail" hidden aria-hidden="true">
-              <div class="book-context-copy">
-                <p class="eyebrow" id="book-rail-title" style="margin:0">Book</p>
-                <p class="book-context-meta" id="book-rail-meta">Chapters</p>
-              </div>
-              <div style="display:flex;gap:6px;margin-top:8px">
-                <a class="btn btn-ghost sm" id="book-public-link" href="/books" target="_blank" rel="noopener">Open</a>
-                <button type="button" class="btn btn-ghost sm" id="book-add-chapter-btn">+ Chapter</button>
-              </div>
-              <ol class="book-chapter-list" id="book-chapter-list" hidden></ol>
-            </div>
-          </div>
-
-          <div class="sidebar-footer">
-            <a
-              class="drawer-quiet-link sidebar-open-book-link"
-              id="sidebar-open-book-link"
-              href="/books"
-              target="_blank"
-              rel="noopener"
-              hidden
-            >Open published book ↗</a>
-            <div class="sidebar-footer-row">
-              <div class="new-menu" id="new-menu">
-                <button type="button" class="btn-mac ghost" id="new-menu-btn" aria-haspopup="menu" aria-expanded="false">
-                  <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg>
-                  New
-                </button>
-                <div class="new-menu-pop" id="new-menu-pop" role="menu" hidden>
-                  <button type="button" role="menuitem" id="menu-new-book">Book</button>
-                  <button type="button" role="menuitem" id="menu-new-chapter" hidden>Chapter</button>
-                  <button type="button" role="menuitem" id="menu-new-piece">Article</button>
-                </div>
-              </div>
-              <span class="mono-stamp" id="mode-badge">READY</span>
-              <span class="mono-stamp muted" id="model-badge">—</span>
-            </div>
-          </div>
-        </section>
-
-        <section class="drawer-panel" data-panel="compose" id="drawer-compose" hidden>
-          <div class="sidebar-label">Write</div>
-          <div style="display:grid;gap:4px;padding:8px">
-            <button type="button" class="side-link" id="nav-compose-brief">→ Brief</button>
-            <button type="button" class="side-link" id="nav-compose-theme">→ Theme</button>
-          </div>
-        </section>
-
-        <section class="drawer-panel" data-panel="run" id="drawer-run" hidden>
-          <div class="sidebar-label">Run</div>
-          <div style="display:grid;gap:4px;padding:8px">
-            <button type="button" class="side-link" id="nav-pipeline">→ Pipeline</button>
-            <button type="button" class="side-link" id="nav-draft">→ Draft</button>
-          </div>
-        </section>
-      </div>
-    </aside>
-
-    <div class="studio-main main">
-      <div class="main-topbar">
-        <div class="breadcrumb">
-          <span id="crumb-book">Library</span>
-          <span>›</span>
-          <b id="crumb-chapter">Compose a brief</b>
         </div>
-        <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
-          <span class="mono-stamp" id="selected-theme-label">—</span>
-          <span class="mono-stamp muted" id="selected-audience-label">—</span>
+        <div class="dash-filter">
+          <input id="studio-search" type="search" placeholder="Search books…"/>
+          <input id="sidebar-filter" type="search" placeholder="Filter…" hidden/>
+        </div>
+        <div id="books-list" class="library-pane books-list" data-lib-pane="books" aria-live="polite">
+          <p class="side-hint">Loading…</p>
+        </div>
+        <div id="articles-list" class="library-pane" data-lib-pane="articles" hidden>
+          <p class="side-hint">Loading…</p>
         </div>
       </div>
+    </div>
 
-      <div class="content-scroll gitbook-layout">
-        <div style="min-width:0">
-          <!-- Brief -->
+    <!-- BOOK WRITE WORKSPACE -->
+    <div id="view-book" class="view-book" hidden aria-hidden="true">
+      <aside class="chapter-nav" aria-label="Chapter outline">
+        <button type="button" class="nav-back" id="btn-back">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M8.5 3L4.5 7l4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Library
+        </button>
+        <h2 class="book-nav-title" id="book-nav-title">—</h2>
+        <p class="book-nav-sub" id="book-nav-sub">—</p>
+        <p class="eyebrow" id="book-rail-title" hidden>Book</p>
+        <p id="book-rail-meta" hidden>Chapters</p>
+        <ol class="book-chapter-list" id="book-chapter-list"></ol>
+        <div class="nav-actions">
+          <button type="button" class="btn btn-ghost btn-sm" id="book-add-chapter-btn">+ Chapter</button>
+          <a class="btn btn-ghost btn-sm" id="book-public-link" href="/books" target="_blank" rel="noopener">Open ↗</a>
+          <a class="drawer-quiet-link" id="sidebar-open-book-link" href="/books" target="_blank" rel="noopener" hidden>Open published book ↗</a>
+        </div>
+        <div class="book-context-bar" id="book-rail" hidden aria-hidden="true"></div>
+      </aside>
+
+      <div class="write-pane">
+        <div class="write-toolbar">
+          <div class="write-context">
+            <div class="crumb"><span id="crumb-book">Library</span> · <b id="crumb-chapter">Compose a brief</b></div>
+            <p class="chapter-kicker" id="chapter-kicker">Chapter</p>
+            <h1 class="chapter-heading" id="chapter-heading">—</h1>
+            <div class="write-meta">
+              <span class="mono-stamp" id="selected-theme-label">—</span>
+              <span class="mono-stamp muted" id="selected-audience-label">—</span>
+            </div>
+          </div>
+          <div class="seg" id="mainSeg" role="tablist" aria-label="Studio views">
+            <button type="button" class="active" role="tab" aria-selected="true" data-center-tab="brief">Brief</button>
+            <button type="button" role="tab" aria-selected="false" data-center-tab="draft">Draft</button>
+            <button type="button" role="tab" aria-selected="false" data-center-tab="pipeline" title="Opens agent dock">Pipeline</button>
+          </div>
+          <div class="new-menu" id="new-menu">
+            <button type="button" class="btn btn-ghost btn-sm" id="new-menu-btn" aria-haspopup="menu" aria-expanded="false">+ New</button>
+            <div class="new-menu-pop" id="new-menu-pop" role="menu" hidden>
+              <button type="button" role="menuitem" id="menu-new-book">Book</button>
+              <button type="button" role="menuitem" id="menu-new-chapter" hidden>Chapter</button>
+              <button type="button" role="menuitem" id="menu-new-piece">Article</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="write-body content-scroll">
           <div class="subtab-panel active" data-panel="brief" id="center-brief">
-            <div class="brief-wrap">
+<div class="brief-wrap">
               <div class="chapter-head">
                 <div class="ch-label">Chapter brief</div>
                 <h2 class="ch-title-display">Give the agents a point of view</h2>
@@ -320,65 +285,11 @@
             </div>
           </div>
 
-          <!-- Pipeline -->
-          <div class="subtab-panel" data-panel="pipeline" id="center-pipeline">
-            <section class="workspace-section pipeline-wrap" id="workspace-section">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-                <div>
-                  <div class="ch-label">Pipeline</div>
-                  <div style="font-size:18px;font-weight:700;letter-spacing:-.01em">Live agent graph</div>
-                </div>
-                <span class="mono-badge" id="stream-status">Idle</span>
-              </div>
-
-              <div class="pipeline-map" id="pipeline-map">
-                <div class="stage-node" id="node-plan"><span class="node-num">01</span><span class="node-name">Planner</span><span class="node-status">Pending</span></div>
-                <div class="stage-arrow" aria-hidden="true"></div>
-                <div class="stage-node" id="node-research"><span class="node-num">02</span><span class="node-name">Research ×3</span><span class="node-status">Pending</span></div>
-                <div class="stage-arrow" aria-hidden="true"></div>
-                <div class="stage-node" id="node-write"><span class="node-num">03</span><span class="node-name">Writer</span><span class="node-status">Pending</span></div>
-                <div class="stage-arrow" aria-hidden="true"></div>
-                <div class="stage-node" id="node-manage"><span class="node-num">04</span><span class="node-name">Judge</span><span class="node-status">Pending</span></div>
-              </div>
-
-              <div class="workspace-grid" id="workspace-grid">
-                <div class="console-panel" id="console-panel">
-                  <div class="panel-head">
-                    <div class="head-title">
-                      <span class="indicator-dot" id="live-dot"></span>
-                      <span>Live stream</span>
-                    </div>
-                    <button type="button" class="btn btn-ghost sm" id="toggle-console-draft">Hide</button>
-                  </div>
-                  <div class="stream-box" id="stream-box" role="log" aria-live="polite">
-                    <div class="stream-log-entry">
-                      <span class="log-time">[00:00:00]</span>
-                      <span class="log-tag system">SYSTEM</span>
-                      <span class="log-msg">Ready. Fire agents to start the pipeline.</span>
-                    </div>
-                  </div>
-                </div>
-
-                <section class="agent-roster" id="agent-roster" aria-label="Agent roster">
-                  <div class="agent-roster-head">
-                    <h3>Agents</h3>
-                    <span class="mono-stamp" id="agent-roster-meta">Idle</span>
-                  </div>
-                  <div class="agent-roster-grid" id="agent-roster-grid">
-                    <p class="side-hint">Fire agents to populate the roster.</p>
-                  </div>
-                </section>
-              </div>
-            </section>
-          </div>
-
-          <!-- Draft -->
           <div class="subtab-panel" data-panel="draft" id="center-draft">
-            <div class="draft-panel" id="draft-panel">
+<div class="draft-panel" id="draft-panel">
               <div class="article-toolbar panel-head">
                 <div class="head-title">
                   <span>Draft</span>
-                  <span class="mono-badge" id="iteration-badge">Loop: 0</span>
                   <span class="publish-badge" id="published-badge" hidden>Published</span>
                 </div>
                 <div class="draft-actions">
@@ -390,10 +301,7 @@
                   <button type="button" class="btn btn-ghost sm" id="download-btn">.qmd</button>
                 </div>
               </div>
-
-              <div class="criteria-card-grid" id="criteria-card-grid" style="padding:12px 28px 0;max-width:960px;margin:0 auto;width:100%"></div>
-
-              <div class="block-revise-bar" id="block-revise-bar" hidden style="margin:12px 28px;max-width:960px">
+<div class="block-revise-bar" id="block-revise-bar" hidden style="margin:12px 28px;max-width:960px">
                 <div class="block-revise-left">
                   <span class="mono-stamp">Block updates</span>
                   <label class="block-select-all"><input type="checkbox" id="select-all-blocks"/> All</label>
@@ -445,14 +353,78 @@
               </aside>
             </div>
           </div>
+
+          <!-- Pipeline content lives in the bottom dock; keep panel for tab routing -->
+          <div class="subtab-panel" data-panel="pipeline" id="center-pipeline" hidden>
+            <p class="side-hint">Pipeline status is in the agent dock below.</p>
+          </div>
         </div>
       </div>
     </div>
+  </main>
 
-  </div>
+  <!-- BOTTOM AGENT DOCK -->
+  <footer class="agent-dock" id="agent-dock" aria-label="Agent status">
+    <div class="agent-bar" id="agent-bar" role="button" tabindex="0" aria-expanded="false" aria-controls="workspace-section">
+      <span class="pulse-dot" id="live-dot" aria-hidden="true"></span>
+      <span class="agent-bar-title" id="agent-bar-label"><strong>Agents ready</strong> · Press Fire</span>
+      <span class="mono-badge" id="stream-status">Idle</span>
+      <span class="mono-stamp" id="agent-roster-meta">Idle</span>
+      <span class="grow"></span>
+      <svg class="chev" width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <section class="agent-panel workspace-section" id="workspace-section">
+      <div class="panel-col">
+        <p class="panel-label">Pipeline</p>
+        <div class="pipeline-map vertical" id="pipeline-map">
+          <div class="stage-node step" id="node-plan"><span class="step-dot"></span><span class="node-name">Planner</span><span class="node-status">Pending</span></div>
+          <div class="stage-node step" id="node-research"><span class="step-dot"></span><span class="node-name">Research ×3</span><span class="node-status">Pending</span></div>
+          <div class="stage-node step" id="node-write"><span class="step-dot"></span><span class="node-name">Writer</span><span class="node-status">Pending</span></div>
+          <div class="stage-node step" id="node-manage"><span class="step-dot"></span><span class="node-name">Judge</span><span class="node-status">Pending</span></div>
+        </div>
+      </div>
+      <div class="panel-col wide">
+        <p class="panel-label">Roster &amp; console</p>
+        <div class="workspace-grid" id="workspace-grid">
+          <div id="agent-roster-grid" class="agent-roster-grid"><p class="side-hint">Fire agents to populate the roster.</p></div>
+          <div class="console-panel" id="console-panel">
+            <div class="panel-head">
+              <div class="head-title"><span>Live stream</span></div>
+              <button type="button" class="btn btn-ghost sm" id="toggle-console-draft">Hide</button>
+            </div>
+            <div class="stream-box" id="stream-box" role="log" aria-live="polite">
+              <div class="stream-log-entry">
+                <span class="log-time">[00:00:00]</span>
+                <span class="log-tag system">SYSTEM</span>
+                <span class="log-msg">Ready. Fire agents to start the pipeline.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="panel-col">
+        <p class="panel-label">Quality</p>
+        <div class="criteria-card-grid" id="criteria-card-grid"></div>
+        <span class="mono-badge" id="iteration-badge" style="margin-top:8px">Loop: 0</span>
+      </div>
+    </section>
+  </footer>
 
-  <!-- Hidden sinks for app.js config hydration -->
-  <div class="kpi-row" aria-hidden="true">
+  <!-- Hidden sinks for app.js -->
+  <nav class="activity-rail" aria-hidden="true" hidden>
+    <button type="button" class="rail-btn active" data-activity="library" aria-pressed="true">Books</button>
+    <button type="button" class="rail-btn" data-activity="compose" aria-pressed="false">Write</button>
+    <button type="button" class="rail-btn" data-activity="run" aria-pressed="false">Run</button>
+  </nav>
+  <button type="button" id="nav-compose-brief" hidden>Brief</button>
+  <button type="button" id="nav-compose-theme" hidden>Theme</button>
+  <button type="button" id="nav-pipeline" hidden>Pipeline</button>
+  <button type="button" id="nav-draft" hidden>Draft</button>
+  <button type="button" id="menu-new-piece-compose" hidden></button>
+  <button type="button" id="menu-publish-toggle" hidden></button>
+  <button type="button" id="menu-toggle-console" hidden></button>
+  <button type="button" id="toggleSidebar" hidden></button>
+  <div class="kpi-row" aria-hidden="true" hidden>
     <span id="kpi-agents">4</span>
     <span id="kpi-iters">5</span>
     <span id="kpi-threshold">0.75</span>
@@ -460,23 +432,19 @@
     <span id="kpi-runtime-delta">—</span>
   </div>
 
-  <!-- Optional menu hooks used by app.js -->
-  <button type="button" id="menu-new-piece-compose" hidden></button>
-  <button type="button" id="menu-publish-toggle" hidden></button>
-  <button type="button" id="menu-toggle-console" hidden></button>
-
   <!-- ⌘K palette -->
   <div class="cmdk-overlay hidden" id="cmdk" hidden>
     <div class="cmdk" role="dialog" aria-label="Command palette">
       <div class="cmdk-input">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8e8e93" stroke-width="1.6" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M21 21l-4.2-4.2"/></svg>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M21 21l-4.2-4.2"/></svg>
         <input id="cmdkInput" placeholder="Search books, fire agents, jump…" autocomplete="off"/>
         <span class="kbd">ESC</span>
       </div>
       <div class="cmdk-list" id="cmdkList">
         <button type="button" class="cmdk-item active" data-cmd="fire">Fire agents <kbd>⌘↵</kbd></button>
+        <button type="button" class="cmdk-item" data-cmd="library">Go to Library</button>
         <button type="button" class="cmdk-item" data-cmd="brief">Go to Brief <kbd>⌘1</kbd></button>
-        <button type="button" class="cmdk-item" data-cmd="pipeline">Go to Pipeline <kbd>⌘2</kbd></button>
+        <button type="button" class="cmdk-item" data-cmd="pipeline">Open agent dock <kbd>⌘2</kbd></button>
         <button type="button" class="cmdk-item" data-cmd="draft">Go to Draft <kbd>⌘3</kbd></button>
         <button type="button" class="cmdk-item" data-cmd="new-book">New book</button>
       </div>
@@ -487,43 +455,107 @@
 
 <script>
 (function () {
+  const dash = document.getElementById("view-dashboard");
+  const book = document.getElementById("view-book");
+  const dock = document.getElementById("agent-dock");
+  const agentBar = document.getElementById("agent-bar");
+  const modeBadge = document.getElementById("mode-badge");
   const subtabBtns = document.querySelectorAll("[data-center-tab]");
   const subtabPanels = document.querySelectorAll(".subtab-panel");
 
+  function showDashboard() {
+    if (dash) { dash.hidden = false; }
+    if (book) { book.hidden = true; book.setAttribute("aria-hidden", "true"); }
+    if (modeBadge) modeBadge.textContent = "Library";
+    try { localStorage.setItem("quill-studio-view", "dashboard"); } catch {}
+  }
+
+  function showWriteWorkspace() {
+    if (dash) { dash.hidden = true; }
+    if (book) { book.hidden = false; book.setAttribute("aria-hidden", "false"); }
+    if (modeBadge) modeBadge.textContent = "Write";
+    try { localStorage.setItem("quill-studio-view", "write"); } catch {}
+  }
+
+  function openDock(running) {
+    if (!dock) return;
+    dock.classList.add("open");
+    if (running) dock.classList.add("running");
+    agentBar?.setAttribute("aria-expanded", "true");
+  }
+
+  function closeDock() {
+    if (!dock) return;
+    dock.classList.remove("open");
+    agentBar?.setAttribute("aria-expanded", "false");
+  }
+
+  function toggleDock() {
+    if (!dock) return;
+    if (dock.classList.contains("open")) closeDock();
+    else openDock(dock.classList.contains("running"));
+  }
+
   function setCenterTab(name) {
+    showWriteWorkspace();
+    if (name === "pipeline") openDock(true);
+    const panelName = name === "pipeline" ? null : name;
     subtabBtns.forEach((b) => {
-      const on = b.dataset.centerTab === name;
-      b.classList.toggle("active", on);
-      b.setAttribute("aria-selected", on ? "true" : "false");
+      const isOn = b.dataset.centerTab === name;
+      b.classList.toggle("active", isOn);
+      b.setAttribute("aria-selected", isOn ? "true" : "false");
     });
-    subtabPanels.forEach((p) => {
-      p.classList.toggle("active", p.dataset.panel === name);
-    });
+    if (panelName) {
+      subtabPanels.forEach((p) => {
+        p.classList.toggle("active", p.dataset.panel === panelName);
+        if (p.id === "center-pipeline") p.hidden = true;
+      });
+    }
     try { localStorage.setItem("quill-center-tab-mac", name); } catch {}
   }
 
   window.setQuillCenterTab = setCenterTab;
+  window.showQuillDashboard = showDashboard;
+  window.showQuillWriteWorkspace = showWriteWorkspace;
+  window.openQuillAgentDock = openDock;
+  window.closeQuillAgentDock = closeDock;
 
   subtabBtns.forEach((btn) => {
     btn.addEventListener("click", () => setCenterTab(btn.dataset.centerTab));
   });
-  try {
-    const saved = localStorage.getItem("quill-center-tab-mac");
-    if (saved) setCenterTab(saved);
-  } catch {}
+
+  document.getElementById("brand-home")?.addEventListener("click", showDashboard);
+  document.getElementById("btn-back")?.addEventListener("click", showDashboard);
+  document.getElementById("btn-new-book")?.addEventListener("click", () => {
+    document.getElementById("menu-new-book")?.click();
+  });
+  document.getElementById("fire-btn-dash")?.addEventListener("click", () => {
+    showWriteWorkspace();
+    openDock(true);
+    document.getElementById("fire-btn")?.click();
+  });
+  document.getElementById("btn-continue")?.addEventListener("click", () => {
+    const active = document.querySelector("#books-list .book-simple-item.active .book-simple-chapters li.active, #books-list .book-simple-item.active");
+    if (active) {
+      active.click?.();
+      showWriteWorkspace();
+    } else {
+      const first = document.querySelector("#books-list .book-simple-item .book-simple-main, #books-list .book-simple-item");
+      first?.click?.();
+      showWriteWorkspace();
+    }
+  });
+
+  agentBar?.addEventListener("click", toggleDock);
+  agentBar?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleDock(); }
+  });
 
   document.getElementById("nav-compose-brief")?.addEventListener("click", () => setCenterTab("brief"));
   document.getElementById("nav-compose-theme")?.addEventListener("click", () => setCenterTab("brief"));
   document.getElementById("nav-pipeline")?.addEventListener("click", () => setCenterTab("pipeline"));
   document.getElementById("nav-draft")?.addEventListener("click", () => setCenterTab("draft"));
 
-  document.getElementById("toggleSidebar")?.addEventListener("click", () => {
-    const sb = document.getElementById("sidebar");
-    if (!sb) return;
-    sb.style.display = sb.style.display === "none" ? "" : "none";
-  });
-
-  // Sync theme/audience labels in breadcrumb strip
   const themeLabel = document.getElementById("selected-theme-label");
   const audienceLabel = document.getElementById("selected-audience-label");
   const themeEcho = document.getElementById("brief-theme-echo");
@@ -535,18 +567,11 @@
   if (themeLabel) new MutationObserver(syncLabels).observe(themeLabel, { childList: true, characterData: true, subtree: true });
   if (audienceLabel) new MutationObserver(syncLabels).observe(audienceLabel, { childList: true, characterData: true, subtree: true });
 
-  // ⌘K palette
   const cmdk = document.getElementById("cmdk");
   const cmdkInput = document.getElementById("cmdkInput");
-  const openCmdk = () => {
-    cmdk.hidden = false;
-    cmdk.classList.remove("hidden");
-    cmdkInput?.focus();
-  };
-  const closeCmdk = () => {
-    cmdk.hidden = true;
-    cmdk.classList.add("hidden");
-  };
+  const openCmdk = () => { cmdk.hidden = false; cmdk.classList.remove("hidden"); cmdkInput?.focus(); };
+  const closeCmdk = () => { cmdk.hidden = true; cmdk.classList.add("hidden"); };
+  document.getElementById("cmd-open")?.addEventListener("click", openCmdk);
 
   document.addEventListener("keydown", (e) => {
     const tag = e.target.tagName;
@@ -555,48 +580,64 @@
       if (cmdk.hidden) openCmdk(); else closeCmdk();
       return;
     }
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
+      e.preventDefault();
+      toggleDock();
+      return;
+    }
     if (e.key === "Escape") closeCmdk();
     if (tag === "INPUT" || tag === "TEXTAREA") return;
     if (e.metaKey || e.ctrlKey) {
       if (e.key === "1") { e.preventDefault(); setCenterTab("brief"); }
       if (e.key === "2") { e.preventDefault(); setCenterTab("pipeline"); }
       if (e.key === "3") { e.preventDefault(); setCenterTab("draft"); }
-      if (e.key === "Enter") {
-        e.preventDefault();
-        document.getElementById("fire-btn")?.click();
-      }
+      if (e.key === "Enter") { e.preventDefault(); document.getElementById("fire-btn")?.click(); }
     }
   });
 
-  cmdk?.addEventListener("click", (e) => {
-    if (e.target === cmdk) closeCmdk();
-  });
-
+  cmdk?.addEventListener("click", (e) => { if (e.target === cmdk) closeCmdk(); });
   document.getElementById("cmdkList")?.addEventListener("click", (e) => {
     const item = e.target.closest("[data-cmd]");
     if (!item) return;
     const cmd = item.dataset.cmd;
     closeCmdk();
     if (cmd === "fire") document.getElementById("fire-btn")?.click();
+    if (cmd === "library") showDashboard();
     if (cmd === "brief") setCenterTab("brief");
     if (cmd === "pipeline") setCenterTab("pipeline");
     if (cmd === "draft") setCenterTab("draft");
     if (cmd === "new-book") document.getElementById("menu-new-book")?.click();
   });
 
-  // When pipeline starts, jump to Pipeline tab
   const streamStatus = document.getElementById("stream-status");
   if (streamStatus) {
     new MutationObserver(() => {
       const t = (streamStatus.textContent || "").toLowerCase();
-      if (t.includes("active") || t.includes("running")) setCenterTab("pipeline");
+      if (t.includes("active") || t.includes("running")) {
+        openDock(true);
+        const label = document.getElementById("agent-bar-label");
+        if (label) label.innerHTML = "<strong>Agents running</strong> · " + streamStatus.textContent;
+      } else if (t.includes("idle") || t.includes("complete") || t.includes("done") || t.includes("error")) {
+        dock?.classList.remove("running");
+        const label = document.getElementById("agent-bar-label");
+        if (label && !t.includes("active")) label.innerHTML = "<strong>Agents ready</strong> · " + (streamStatus.textContent || "Press Fire");
+      }
     }).observe(streamStatus, { childList: true, characterData: true, subtree: true });
   }
 
-  // Form fire button in brief also triggers toolbar fire styling via same form
-  document.getElementById("fire-btn-form")?.addEventListener("click", () => setCenterTab("pipeline"));
+  document.getElementById("fire-btn")?.addEventListener("click", () => {
+    showWriteWorkspace();
+    openDock(true);
+  });
+  document.getElementById("fire-btn-form")?.addEventListener("click", () => {
+    showWriteWorkspace();
+    openDock(true);
+  });
+
+  // Start on dashboard
+  showDashboard();
 })();
 </script>
-<script type="module" src="/app.js"></script>
+<script src="/app.js"></script>
 </body>
 </html>

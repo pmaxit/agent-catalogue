@@ -199,16 +199,25 @@ document.addEventListener("DOMContentLoaded", () => {
       );
 
       const mock = Boolean(health.mock ?? config.mock);
-      modeBadge.textContent = mock ? "STATUS: MOCK" : "STATUS: LIVE";
-      modelBadge.textContent = `MODEL: ${(config.defaults?.model || "—").toUpperCase()}`;
-      if (dataApiBase) {
-        healthPill.textContent = mock
+      // Option C uses #mode-badge for Library/Write; mock/live lives on health-pill.
+      if (!isMacStudio() && modeBadge) {
+        modeBadge.textContent = mock ? "STATUS: MOCK" : "STATUS: LIVE";
+      }
+      if (modelBadge) {
+        modelBadge.textContent = `MODEL: ${(config.defaults?.model || "—").toUpperCase()}`;
+      }
+      const healthText = dataApiBase
+        ? mock
           ? "Mock · Railway DB"
-          : "API · Railway DB";
-        healthPill.title = `Books/chapters save to ${dataApiBase}`;
-      } else {
-        healthPill.textContent = mock ? "Mock mode" : "API connected";
-        healthPill.title = "Same-origin SQLite (Railway volume)";
+          : "API · Railway DB"
+        : mock
+          ? "Mock mode"
+          : "API connected";
+      if (healthPill) {
+        healthPill.innerHTML = `<span class="dot" aria-hidden="true"></span>${healthText}`;
+        healthPill.title = dataApiBase
+          ? `Books/chapters save to ${dataApiBase}`
+          : "Same-origin SQLite (Railway volume)";
       }
       healthPill.classList.toggle("mock", mock);
       healthPill.classList.toggle("live", !mock);
@@ -323,26 +332,69 @@ document.addEventListener("DOMContentLoaded", () => {
     return Boolean(document.querySelector(".mac-app, .mac-window"));
   }
 
+  function showWriteWorkspace() {
+    window.showQuillWriteWorkspace?.();
+  }
+
+  function showDashboard() {
+    window.showQuillDashboard?.();
+  }
+
+  function openAgentDock(running = true) {
+    window.openQuillAgentDock?.(running);
+  }
+
+  function syncBookNavChrome() {
+    const navTitle = document.getElementById("book-nav-title");
+    const navSub = document.getElementById("book-nav-sub");
+    const chapterHeading = document.getElementById("chapter-heading");
+    const chapterKicker = document.getElementById("chapter-kicker");
+    if (navTitle) navTitle.textContent = currentBookTitle || "Book";
+    if (navSub) {
+      navSub.textContent = currentBookId
+        ? `${bookChapters.length} chapter${bookChapters.length === 1 ? "" : "s"}`
+        : "—";
+    }
+    if (chapterHeading) {
+      chapterHeading.textContent =
+        currentChapterTitle ||
+        (composingChapter ? "New chapter" : "Select a chapter");
+    }
+    if (chapterKicker) {
+      chapterKicker.textContent = currentChapterId
+        ? "Chapter"
+        : composingChapter
+          ? "New chapter"
+          : "Book";
+    }
+  }
+
   function setActivity(name) {
     document.querySelectorAll(".rail-btn[data-activity]").forEach((btn) => {
       const on = btn.dataset.activity === name;
       btn.classList.toggle("active", on);
       btn.setAttribute("aria-pressed", on ? "true" : "false");
     });
-    // macOS shell keeps the library source list always visible
+    // macOS / Option C shell keeps library chrome outside drawer panels
     if (!isMacStudio()) {
       document.querySelectorAll(".drawer-panel").forEach((panel) => {
         panel.hidden = panel.dataset.panel !== name;
       });
     }
     if (name === "compose") {
+      showWriteWorkspace();
       window.setQuillCenterTab?.("brief");
       wizardSection?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
     if (name === "run") {
+      showWriteWorkspace();
       window.setQuillCenterTab?.("pipeline");
       if (workspaceSection) workspaceSection.hidden = false;
-      workspaceSection?.scrollIntoView({ behavior: "smooth", block: "start" });
+      openAgentDock(true);
+      workspaceSection?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+    if (name === "library") {
+      // Keep current view; library activity is also used while a book is open
     }
   }
 
@@ -509,6 +561,7 @@ document.addEventListener("DOMContentLoaded", () => {
     lengthInput.value = "4000–5500 words (full book chapter)";
     userEditedBriefAfterSuggest = false;
     setActivity("compose");
+    showWriteWorkspace();
     window.setQuillCenterTab?.("brief");
     resetEditorCanvas(`Chapter ${n} draft`);
     if (articleMeta) {
@@ -518,8 +571,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const crumbChapter = document.getElementById("crumb-chapter");
     if (crumbBook) crumbBook.textContent = currentBookTitle || "Library";
     if (crumbChapter) crumbChapter.textContent = `Chapter ${n} (new)`;
+    syncBookNavChrome();
     void refreshBooksList();
-    wizardSection.scrollIntoView({ behavior: "smooth" });
+    wizardSection?.scrollIntoView({ behavior: "smooth" });
     briefInput.focus();
     addLog("BOOK", `Composing chapter ${n} for “${currentBookTitle}”`, "system");
     updateDocumentActions();
@@ -788,6 +842,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const crumbChapter = document.getElementById("crumb-chapter");
     if (crumbBook) crumbBook.textContent = book.title;
     if (crumbChapter) crumbChapter.textContent = "Select a chapter";
+    syncBookNavChrome();
+    showWriteWorkspace();
     addLog("BOOK", `Opened “${book.title}”`, "system");
     scheduleBriefSuggestions({ reason: "book" });
   }
@@ -863,6 +919,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const crumbChapter = document.getElementById("crumb-chapter");
     if (crumbBook) crumbBook.textContent = currentBookTitle || "Library";
     if (crumbChapter) crumbChapter.textContent = chapter.title || "Chapter";
+    syncBookNavChrome();
+    showWriteWorkspace();
     // Jump straight into chapter editing context.
     window.setQuillCenterTab?.("draft");
     addLog("BOOK", `Loaded chapter “${chapter.title}”`, "system");
@@ -1127,6 +1185,8 @@ document.addEventListener("DOMContentLoaded", () => {
     streamStatus.textContent = "Resuming from checkpoint";
     liveDot.classList.add("pulsating");
     liveDot.style.backgroundColor = "";
+    showWriteWorkspace();
+    openAgentDock(true);
     addLog(
       "PIPELINE",
       `Resuming run r${String(sourceRunId).slice(0, 8)} from persisted checkpoint…`,
@@ -1365,6 +1425,8 @@ document.addEventListener("DOMContentLoaded", () => {
       streamStatus.textContent = "Pipeline active";
       liveDot.classList.add("pulsating");
       liveDot.style.backgroundColor = "";
+      showWriteWorkspace();
+      openAgentDock(true);
       addLog("PIPELINE", "Recovered active run after refresh", "system");
       setResumeRunButton(run.id, { disabled: false });
       await pollPipelineRunEvents(run.id);
@@ -1389,9 +1451,11 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
+    showWriteWorkspace();
     window.setQuillCenterTab?.("pipeline");
     if (workspaceSection) workspaceSection.hidden = false;
-    workspaceSection?.scrollIntoView({ behavior: "smooth" });
+    openAgentDock(true);
+    workspaceSection?.scrollIntoView({ behavior: "smooth", block: "nearest" });
 
     if (currentBookId) ensureComposingChapter();
     if (currentChapterId) {
@@ -1608,6 +1672,7 @@ document.addEventListener("DOMContentLoaded", () => {
       case "pipeline_finished":
         pipelineFinishedSeen = true;
         stopPipelinePolling();
+        document.getElementById("agent-dock")?.classList.remove("running");
         if (event.status === "completed") {
           addLog("SUCCESS", "Quality thresholds met. Pipeline completed.", "finish");
           streamStatus.textContent = "Completed";

@@ -27,6 +27,64 @@ Append-only log for agent work in this repository.
 
 ---
 
+## 2026-08-08 14:08 UTC - Wire Option C Library Dashboard into live Studio
+- Summary:
+  - Replaced macOS Studio chrome with Option C (Library Dashboard): mint tokens, dashboard-first home, book write workspace with chapter nav + Brief/Draft tabs, and a bottom agent dock for pipeline/roster/stream/scores.
+  - Preserved `app.js` integration IDs (`fire-btn`, form inputs, `stream-box`, node IDs, `criteria-card-grid`, menus, stubs).
+  - Restyled `.book-simple-*` and `.chapter-pick` via CSS; dock opens on Fire/resume/active stream and clears `running` on `pipeline_finished`.
+- Files:
+  - `public/tokens.css`
+  - `public/studio.html`
+  - `public/styles.css`
+  - `public/app.js`
+  - `design/README.md`
+  - `agents/changelog.md`
+- Validation:
+  - `npm run typecheck` -> pass
+  - `npm test` -> pass (29/29)
+  - Manual smoke (`/studio.html`): dashboard with Railway books → open book/chapter write workspace → Fire expands agent dock (pipeline/stream) → Library back returns home
+  - Screenshots: `/opt/cursor/artifacts/screenshots/studio-dashboard-books.png`, `studio-write-workspace.png`, `studio-agent-dock.png`
+- Deployment:
+  - not deployed (await UI confirm per plan)
+
+---
+
+## 2026-08-08 06:56 UTC-7 - Push rewritten Chapters 1–7 to Railway production DB
+- Summary:
+  - Imported local Sutton & Barto style rewrites from `data/chapter-*.qmd` into the production SQLite book via `PUT /api/chapters/:id` (strip YAML frontmatter, prepend `# title`, preserve slug/sortOrder).
+  - Updated Reinforcement Learning book chapters 1–7 only (matched by qmd filename → chapter slug). Left chapters 8–10 and the duplicate `chapter-2-multi-armed-bandits-learning-without-a-map` untouched.
+- Files:
+  - `data/chapter-1-what-is-reinforcement-learning.qmd` → prod `c6ca29fb…` r3
+  - `data/chapter-2.qmd` → prod `1e225b52…` r11
+  - `data/chapter-3-…qmd` → prod `8399fb70…` r2
+  - `data/chapter-4-…qmd` → prod `a5dd706d…` r2
+  - `data/chapter-5-…qmd` → prod `e9cc8b97…` r2
+  - `data/chapter-6-…qmd` → prod `e9fb36c5…` r2
+  - `data/chapter-7-…qmd` → prod `2798bd5e…` r2
+  - `agents/changelog.md`
+- Validation:
+  - Spot-checked chapters 1, 2, 7 bodies start with rewritten openings (bicycle / slot-machine bill / ch6 threshold)
+  - `GET /api/health` -> ok (cloud, durable sqlite at `/data/quill.db`)
+  - typecheck/tests N/A (content-only API write; no app code changed)
+- Deployment:
+  - Content written to Railway production DB (not a new code deploy)
+
+---
+
+## 2026-08-08 07:00 UTC-7 - Open Design: three Studio redesign options with bottom agent panel
+- Summary:
+  - Commissioned three Open Design explorations for a full Quill Studio redesign sharing: easy book navigation, clean dashboard, write CTAs, and a **bottom agent-status panel** (not right inspector).
+  - Option A Manuscript Desk (`quill-option-a-manuscript-desk`), Option B Writing IDE (`quill-option-b-writing-ide`), Option C Library Dashboard (`quill-option-c-library-dash`) — all runs succeeded; prototypes saved under `design/`.
+- Files:
+  - `design/option-a-manuscript-desk.html`
+  - `design/option-b-writing-ide.html`
+  - `design/option-c-library-dash.html`
+  - `design/README.md`
+- Validation:
+  - OD runs a48cd51a / bfa391fb / 1725383c → succeeded; local previews opened
+- Deployment:
+  - not deployed (design exploration only; awaiting pick to wire into `public/studio.html`)
+
 ## 2026-08-08 06:42 UTC-7 - Deploy chapter-rerun + docs to Railway production
 - Summary:
   - Pushed `01b9f7d` (AGENTS.md + design prototypes) to origin/master and redeployed writing-agent to Railway production.
