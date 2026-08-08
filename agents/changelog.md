@@ -27,6 +27,20 @@ Append-only log for agent work in this repository.
 
 ---
 
+## 2026-08-08 06:42 UTC-7 - Deploy chapter-rerun + docs to Railway production
+- Summary:
+  - Pushed `01b9f7d` (AGENTS.md + design prototypes) to origin/master and redeployed writing-agent to Railway production.
+  - Includes prior chapter-rerun work (`c8d9fe9`): fresh chapter runs keep only the draft and supersede in-flight chapter runs.
+- Files:
+  - `AGENTS.md`
+  - `design/**`
+  - (runtime) `src/orchestrator.ts`, `src/server.ts`, `tests/chapter-rerun.test.ts`
+- Validation:
+  - Railway deployment `8a004d82-4b0d-4fc1-9514-7e16c292386f` -> SUCCESS
+  - `curl https://writing-agent-production-b61f.up.railway.app/api/health` -> ok (cloud, non-mock)
+- Deployment:
+  - Deployed to Railway production (writing-agent), deployment 8a004d82-4b0d-4fc1-9514-7e16c292386f -> SUCCESS
+
 ## 2026-08-08 04:10 UTC-7 - Fresh chapter runs keep only the draft, reset all other state
 - Summary:
   - Firing the agents for an existing chapter now starts the pipeline with clean state (plan, research, feedback, iteration, routing) while carrying over ONLY the chapter's saved draft: the orchestrator seeds `state.draft` from `brief.existingDraft` on fresh compose runs so the Writer revises the existing chapter instead of ignoring it.
@@ -41,7 +55,7 @@ Append-only log for agent work in this repository.
   - `npm run typecheck` -> pass
   - `npm test` -> pass (29/29), including stub-client tests asserting the first Writer prompt contains the seeded draft + fresh plan and no stale feedback, and that revise_blocks mode is unaffected
 - Deployment:
-  - not deployed
+  - Deployed later as 8a004d82 (see entry above)
 
 ## 2026-08-07 23:20 UTC-7 - Rewrite Chapter 4 in Sutton & Barto prose style
 - Summary:
